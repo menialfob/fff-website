@@ -93,6 +93,30 @@ project.
 Navigation: a new **Klub 100** entry in the top nav (via
 `src/modules/registry.ts`), with a dashboard card like the other modules.
 
+### 5.0 Mobile-first
+
+The module — like the whole site — will primarily be used on phones, so every
+screen is designed for mobile first and merely scales up to desktop:
+
+- **Segment picker** is built for touch: the timeline window is dragged with
+  a finger, with generous handle hit areas, plus ±1 s tap buttons and direct
+  mm:ss input for precision (finger-dragging alone is too coarse on a small
+  screen).
+- **Reordering** the tracklist must not depend on desktop drag-and-drop:
+  long-press-and-drag on touch, with explicit move up/down (or "move to
+  position…") controls as the always-available fallback.
+- **Dialogs** (suggest song, cheers recorder) render as full-screen or
+  bottom-sheet panels on small screens, not floating modals.
+- **Tap targets** (vote, play cheers, accept/reject) sized ≥ 44 px; song rows
+  stack their metadata vertically on narrow screens.
+- **Cheers recording** is expected to happen on phones at parties — the
+  recorder is tested primarily on iOS Safari and Android Chrome (see §11).
+- **Spotify "Open in Spotify" links** use the track URL so they deep-link
+  into the installed mobile app; SDK in-browser playback is treated as a
+  desktop/Android nicety since iOS Safari support is limited.
+
+Acceptance for every milestone includes a pass on a ~390 px viewport.
+
 ### 5.1 `/klub100` — project list
 
 - Grid/list of projects, each showing: name, creator, created date, and a
@@ -388,6 +412,10 @@ cheers files, and ordered manifest are the shared foundation.
   unaffected.
 - **Premium requirement** — SDK playback silently excludes free-tier members;
   the manual flow must stay first-class (hybrid decision).
+- **SDK on mobile** — the Web Playback SDK is unreliable in mobile browsers
+  (iOS Safari especially), yet mobile is the primary device. The manual
+  segment flow with Spotify-app deep links is therefore the main mobile
+  experience; SDK playback is a desktop enhancement.
 - **Safari/iOS recording** — MediaRecorder output is `audio/mp4` and mic
   permission UX differs; test on iPhones early since party contributions
   will often be mobile.

@@ -9,6 +9,11 @@ Private, login-protected community website for a small friend group. Next.js
 with SQLite, Tailwind CSS v4. Deployed as a Docker container behind Caddy on a
 Hetzner Cloud server via GitHub Actions (see `docs/DEPLOYMENT.md`).
 
+**The site is mobile-first** — members access it primarily on phones. Design
+UI for small viewports (~390 px) first: touch-friendly tap targets, no
+hover-only or desktop-drag-only interactions, full-screen/bottom-sheet
+dialogs on small screens. Verify new UI at mobile widths before desktop.
+
 ## Commands
 
 ```bash
