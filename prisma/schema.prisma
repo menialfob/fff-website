@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String
+  passwordHash String
+  role         Role       @default(MEMBER)
+  bio          String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  files        FileItem[]
+}
+
+model FileItem {
+  id           String   @id @default(cuid())
+  // Original filename as uploaded, for display and download.
+  name         String
+  // Name of the file on disk inside UPLOAD_DIR (randomized, never user-controlled).
+  storedName   String   @unique
+  mimeType     String
+  size         Int
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  uploadedById String
+  createdAt    DateTime @default(now())
+}
