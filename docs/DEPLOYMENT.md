@@ -18,16 +18,61 @@ Total cost: ~€5/month (smallest CX server + IPv4).
 ## 1. Create the server
 
 1. In the [Hetzner Cloud console](https://console.hetzner.cloud/), create a
-   project and add a server: smallest shared CX instance, **Ubuntu 24.04**,
-   add your personal SSH key.
-2. Under **Firewalls**, create a firewall allowing inbound TCP **22, 80, 443**
+   project and add a server: smallest shared CX instance, and under
+   **Image → Apps** pick **Docker CE** (Ubuntu LTS with Docker
+   preinstalled).
+2. Add your **personal SSH key** — this is for logging in as root. (The
+   deploy key GitHub Actions uses is a separate one, generated in the next
+   step.)
+3. Paste this into the **Cloud config** (user data) field. It runs once on
+   first boot and replaces the manual server preparation below:
+
+   ```yaml
+   #cloud-config
+   users:
+     - name: deploy
+       groups: docker
+       shell: /bin/bash
+
+   runcmd:
+     - mkdir -p /home/deploy/.ssh /opt/fff-website
+     - chown deploy:deploy /home/deploy/.ssh /opt/fff-website
+     - chmod 700 /home/deploy/.ssh
+     # Generate the SSH key that GitHub Actions will deploy with
+     - sudo -u deploy ssh-keygen -t ed25519 -N "" -f /home/deploy/.ssh/id_deploy
+     - sudo -u deploy sh -c 'cat /home/deploy/.ssh/id_deploy.pub >> /home/deploy/.ssh/authorized_keys'
+     - chmod 600 /home/deploy/.ssh/authorized_keys
+   ```
+
+   Note: `groups: docker` works because the Docker CE image has Docker (and
+   its group) baked in before first boot. On a plain Ubuntu image, create
+   the user manually instead (see below).
+4. Under **Firewalls**, create a firewall allowing inbound TCP **22, 80, 443**
    only, and apply it to the server.
-3. Point a DNS **A record** for your domain (e.g. `fff.example.com`) at the
-   server's IP. Wait until `dig +short fff.example.com` returns it.
+
+### DNS (e.g. Cloudflare)
+
+Point an **A record** for your domain (e.g. `fff.example.com`) at the
+server's IP and wait until `dig +short fff.example.com` returns it.
+
+With Cloudflare specifically, set the record to **DNS only** (grey cloud).
+Caddy then obtains Let's Encrypt certificates itself and nothing else needs
+configuring. Proxied mode (orange cloud) also works — set SSL/TLS to
+**Full (strict)** in Cloudflare — but it hides real client IPs from the app
+unless you additionally configure Caddy's `trusted_proxies` with
+Cloudflare's IP ranges. For a private friends' site, DNS-only is the simple,
+recommended choice.
 
 ## 2. Prepare the server (one-time)
 
-SSH in as root and run:
+**If you used the cloud-init config above**, the server is already prepared.
+SSH in as root once to print the deploy key (you'll need it in step 4):
+
+```bash
+ssh root@<server-ip> cat /home/deploy/.ssh/id_deploy
+```
+
+**Otherwise** (plain Ubuntu image, no user data), SSH in as root and run:
 
 ```bash
 # Install Docker
@@ -38,6 +83,7 @@ adduser --disabled-password --gecos "" deploy
 usermod -aG docker deploy
 
 # Give the deploy user its own SSH key for GitHub Actions
+sudo -u deploy mkdir -p -m 700 /home/deploy/.ssh
 sudo -u deploy ssh-keygen -t ed25519 -N "" -f /home/deploy/.ssh/id_deploy
 sudo -u deploy sh -c 'cat /home/deploy/.ssh/id_deploy.pub >> /home/deploy/.ssh/authorized_keys'
 cat /home/deploy/.ssh/id_deploy        # <- save this private key for step 4
