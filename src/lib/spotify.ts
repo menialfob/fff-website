@@ -85,6 +85,9 @@ export async function searchTracks(
     q: query,
     type: "track",
     limit: String(limit),
+    // Dev-mode apps need a concrete market since the Nov 2024 API changes —
+    // tokens from client credentials carry no country to resolve it from.
+    market: process.env.SPOTIFY_MARKET?.trim() || "DK",
   });
   const res = await fetch(`https://api.spotify.com/v1/search?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
