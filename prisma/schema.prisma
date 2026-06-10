@@ -22,6 +22,10 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   files        FileItem[]
+  klub100Projects Klub100Project[]
+  klub100Songs    Klub100Song[]
+  klub100Cheers   Klub100Cheers[]
+  klub100Votes    Klub100Vote[]
 }
 
 model FileItem {
@@ -35,4 +39,90 @@ model FileItem {
   uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
   uploadedById String
   createdAt    DateTime @default(now())
+}
+
+enum Klub100SongStatus {
+  SUGGESTED
+  ACCEPTED
+  REJECTED
+}
+
+enum Klub100Placement {
+  EARLY
+  MIDDLE
+  LATE
+}
+
+model Klub100Project {
+  id          String        @id @default(cuid())
+  name        String
+  // Manual status flags flipped by the owner ("reordered" / "mixed").
+  reordered   Boolean       @default(false)
+  mixed       Boolean       @default(false)
+  createdBy   User          @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdById String
+  songs       Klub100Song[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Klub100Song {
+  id            String            @id @default(cuid())
+  project       Klub100Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId     String
+  suggestedBy   User              @relation(fields: [suggestedById], references: [id], onDelete: Cascade)
+  suggestedById String
+  status        Klub100SongStatus @default(SUGGESTED)
+  // 1-based tracklist position while ACCEPTED, kept contiguous; null otherwise.
+  position      Int?
+
+  // Spotify metadata snapshot taken at suggestion time, so lists render
+  // without live Spotify calls.
+  spotifyTrackId String
+  spotifyUrl     String
+  title          String
+  artist         String
+  album          String
+  durationMs     Int
+  albumArtUrl    String?
+
+  // Selected ~1 minute segment, plus an optional second one ("2×1 minute").
+  seg1StartMs Int
+  seg1EndMs   Int
+  seg2StartMs Int?
+  seg2EndMs   Int?
+
+  // Suggester's hint for where the song belongs in the mix.
+  placement     Klub100Placement?
+  placementNote String?
+
+  cheers    Klub100Cheers?
+  votes     Klub100Vote[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([projectId, spotifyTrackId])
+}
+
+model Klub100Cheers {
+  id           String      @id @default(cuid())
+  song         Klub100Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  songId       String      @unique
+  // Name of the file on disk inside UPLOAD_DIR (randomized, never user-controlled).
+  storedName   String      @unique
+  mimeType     String
+  size         Int
+  recordedBy   User        @relation(fields: [recordedById], references: [id], onDelete: Cascade)
+  recordedById String
+  createdAt    DateTime    @default(now())
+}
+
+model Klub100Vote {
+  song      Klub100Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  songId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime    @default(now())
+
+  @@id([songId, userId])
 }
