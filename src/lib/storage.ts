@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { createReadStream } from "fs";
-import { mkdir, unlink, writeFile } from "fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { Readable } from "stream";
 
@@ -21,6 +21,10 @@ export async function saveUpload(file: File): Promise<string> {
 
 export async function deleteUpload(storedName: string): Promise<void> {
   await unlink(storedPath(storedName)).catch(() => {});
+}
+
+export async function readUpload(storedName: string): Promise<Buffer> {
+  return readFile(storedPath(storedName));
 }
 
 export function uploadStream(storedName: string): ReadableStream {

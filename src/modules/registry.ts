@@ -22,6 +22,12 @@ export const modules: AppModule[] = [
     description: "Shared photos, videos and documents.",
   },
   {
+    id: "klub100",
+    label: "Klub 100",
+    href: "/klub100",
+    description: "Build the 100-song drinking mix together.",
+  },
+  {
     id: "members",
     label: "Members",
     href: "/members",
