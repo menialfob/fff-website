@@ -78,7 +78,9 @@ type SpotifyApiTrack = {
 
 export async function searchTracks(
   query: string,
-  limit = 12,
+  // Spotify's Feb 2026 dev-mode changes cap the search limit at 10
+  // (requests above that fail with a 400 "Invalid limit").
+  limit = 10,
 ): Promise<SpotifyTrack[]> {
   const token = await getAccessToken();
   const params = new URLSearchParams({
