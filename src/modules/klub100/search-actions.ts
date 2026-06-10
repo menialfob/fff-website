@@ -2,7 +2,12 @@
 
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { searchTracks, spotifyConfigured, type SpotifyTrack } from "@/lib/spotify";
+import {
+  searchTracks,
+  spotifyConfigured,
+  SpotifyAuthError,
+  type SpotifyTrack,
+} from "@/lib/spotify";
 
 export type SearchResult = SpotifyTrack & {
   /** Name of the member who already suggested this track, if any. */
@@ -23,7 +28,15 @@ export async function searchSongs(projectId: string, query: string) {
   let tracks: SpotifyTrack[];
   try {
     tracks = await searchTracks(trimmed);
-  } catch {
+  } catch (e) {
+    // Full cause lands in the server logs (`docker compose logs app`).
+    console.error("Klub 100 Spotify search failed:", e);
+    if (e instanceof SpotifyAuthError) {
+      return {
+        error:
+          "Spotify rejected the app credentials — double-check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET on the server.",
+      };
+    }
     return { error: "Spotify search failed — try again in a moment." };
   }
 

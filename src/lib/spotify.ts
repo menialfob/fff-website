@@ -19,8 +19,17 @@ export type SpotifyTrack = {
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
+/** Spotify refused the app credentials — points at SPOTIFY_CLIENT_ID/SECRET. */
+export class SpotifyAuthError extends Error {}
+
+function credential(name: "SPOTIFY_CLIENT_ID" | "SPOTIFY_CLIENT_SECRET"): string {
+  // docker compose `env_file` passes surrounding quotes through literally,
+  // so strip them (and stray whitespace) rather than fail auth confusingly.
+  return (process.env[name] ?? "").trim().replace(/^["']|["']$/g, "");
+}
+
 export function spotifyConfigured(): boolean {
-  return Boolean(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET);
+  return Boolean(credential("SPOTIFY_CLIENT_ID") && credential("SPOTIFY_CLIENT_SECRET"));
 }
 
 async function getAccessToken(): Promise<string> {
@@ -29,7 +38,7 @@ async function getAccessToken(): Promise<string> {
   }
 
   const basic = Buffer.from(
-    `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`,
+    `${credential("SPOTIFY_CLIENT_ID")}:${credential("SPOTIFY_CLIENT_SECRET")}`,
   ).toString("base64");
 
   const res = await fetch("https://accounts.spotify.com/api/token", {
@@ -42,7 +51,13 @@ async function getAccessToken(): Promise<string> {
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error(`Spotify token request failed (${res.status})`);
+    const body = await res.text().catch(() => "");
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
+      throw new SpotifyAuthError(
+        `Spotify token request rejected (${res.status}): ${body.slice(0, 200)}`,
+      );
+    }
+    throw new Error(`Spotify token request failed (${res.status}): ${body.slice(0, 200)}`);
   }
   const data = (await res.json()) as { access_token: string; expires_in: number };
   cachedToken = {
@@ -76,7 +91,8 @@ export async function searchTracks(
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error(`Spotify search failed (${res.status})`);
+    const body = await res.text().catch(() => "");
+    throw new Error(`Spotify search failed (${res.status}): ${body.slice(0, 200)}`);
   }
   const data = (await res.json()) as { tracks: { items: SpotifyApiTrack[] } };
 
