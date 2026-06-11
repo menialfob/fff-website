@@ -92,8 +92,10 @@ project.
   it travels with the song through accept/reorder. A song without a cheers is
   flagged as incomplete. The cheers progress counter counts accepted songs
   that have a cheers attached.
-- **Status flags** — `reordered` and `mixed` are manual booleans the owner
-  flips; the site does not infer them.
+- **Status flags** — ~~`reordered` and `mixed` are manual booleans the owner
+  flips; the site does not infer them.~~ *Removed in phase 2: with live
+  playback the mix is never "mixed" and runs straight off the tracklist, so
+  the manual flags lost their meaning.*
 
 ## 5. User experience
 
