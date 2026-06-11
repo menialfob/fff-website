@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createProject, deleteProject, setProjectFlag } from "./actions";
+import { createProject, deleteProject } from "./actions";
 
 export function NewProjectForm() {
   const [error, setError] = useState<string>();
@@ -42,45 +42,6 @@ export function NewProjectForm() {
         </p>
       )}
     </form>
-  );
-}
-
-export function ProjectFlags({
-  projectId,
-  reordered,
-  mixed,
-}: {
-  projectId: string;
-  reordered: boolean;
-  mixed: boolean;
-}) {
-  const [isPending, startTransition] = useTransition();
-
-  const toggle = (flag: "reordered" | "mixed", value: boolean) =>
-    startTransition(async () => {
-      await setProjectFlag(projectId, flag, value);
-    });
-
-  const flagButton = (flag: "reordered" | "mixed", value: boolean, label: string) => (
-    <button
-      type="button"
-      disabled={isPending}
-      onClick={() => toggle(flag, !value)}
-      className={`rounded-full border px-3 py-1.5 text-sm disabled:opacity-50 ${
-        value
-          ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-          : "border-stone-300 text-stone-600 hover:bg-stone-100"
-      }`}
-    >
-      {value ? "✓" : "○"} {label}
-    </button>
-  );
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {flagButton("reordered", reordered, "Reordered")}
-      {flagButton("mixed", mixed, "Mixed")}
-    </div>
   );
 }
 

@@ -73,9 +73,6 @@ enum Klub100Placement {
 model Klub100Project {
   id          String        @id @default(cuid())
   name        String
-  // Manual status flags flipped by the owner ("reordered" / "mixed").
-  reordered   Boolean       @default(false)
-  mixed       Boolean       @default(false)
   createdBy   User          @relation(fields: [createdById], references: [id], onDelete: Cascade)
   createdById String
   songs       Klub100Song[]

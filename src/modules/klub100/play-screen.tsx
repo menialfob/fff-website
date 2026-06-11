@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   PlaybackEngine,
   type EngineState,
@@ -22,7 +23,11 @@ export type PlayScreenProps = {
   tracklistTarget: number;
 };
 
-/** iOS Safari can't host (SDK unreliability — phase-1 PRD §6.3). */
+/**
+ * The Spotify SDK has a history of unreliability on iOS (and every iOS
+ * browser, Chrome included, runs Safari's WebKit engine underneath) — worth
+ * a warning, but the host is free to try.
+ */
 function isIos() {
   return /iP(hone|ad|od)/.test(navigator.userAgent);
 }
@@ -46,7 +51,7 @@ export function PlayScreen(props: PlayScreenProps) {
   // Create the SDK device during pre-flight (no gesture needed) so the
   // checklist can show it before the host presses start.
   useEffect(() => {
-    if (!hostable || songs.length === 0 || ios) return;
+    if (!hostable || songs.length === 0) return;
     const engine = new PlaybackEngine({
       songs,
       cheersUrl: (songId) => `/api/klub100/cheers/${songId}`,
@@ -73,7 +78,7 @@ export function PlayScreen(props: PlayScreenProps) {
     };
     // The song list and connection facts are fixed for the page's lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hostable, ios, projectId]);
+  }, [hostable, projectId]);
 
   // Keep the host screen awake through the party (re-grab when the tab
   // comes back to the foreground — the lock is released on tab switch).
@@ -148,25 +153,20 @@ function PreFlight({
   const missingCheers = songs.filter((s) => !s.hasCheers);
   const playPath = `/klub100/${projectId}/play`;
 
-  if (ios) {
-    return (
-      <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
-        <h2 className="font-semibold">Hosting isn&apos;t supported on iPhone/iPad</h2>
-        <p className="mt-1 text-sm">
-          Spotify&apos;s web player is unreliable on iOS Safari. Host the party
-          from a laptop (Chrome, Edge or Firefox) or an Android phone instead —
-          this page will work there.
-        </p>
-      </div>
-    );
-  }
-
   const ready =
     songs.length > 0 && spotify.connected && spotify.premium && device.status === "ready";
 
   return (
     <div className="space-y-3">
       <h2 className="text-xl font-semibold">Pre-flight</h2>
+
+      {ios && (
+        <Check
+          ok={false}
+          warn
+          label="iPhone/iPad detected — Spotify's web player can be unreliable on iOS (every iOS browser, Chrome included, uses Safari's engine). You can try, but a laptop or Android device is the safe choice."
+        />
+      )}
 
       <Check
         ok={songs.length >= tracklistTarget}
@@ -310,6 +310,7 @@ function NowPlaying({
   engine: PlaybackEngine | null;
   projectId: string;
 }) {
+  const router = useRouter();
   const song = songs[state.songIndex];
   const progress =
     state.segmentDurationMs > 0
@@ -319,6 +320,23 @@ function NowPlaying({
   // Big type on a dark screen — it sits across the room at the party.
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-stone-950 p-6 text-center text-white">
+      <button
+        type="button"
+        aria-label="Stop and leave"
+        onClick={() => {
+          if (
+            state.phase === "finished" ||
+            state.phase === "error" ||
+            confirm(`Stop the mix? You can resume from #${song?.position} later.`)
+          ) {
+            // Unmounting stops the engine; progress is already persisted.
+            router.push(`/klub100/${projectId}`);
+          }
+        }}
+        className="absolute right-4 top-4 rounded-full border border-stone-700 px-4 py-2 text-sm text-stone-400 hover:bg-stone-800"
+      >
+        ✕ Exit
+      </button>
       {state.phase === "finished" ? (
         <>
           <p className="text-6xl">🍻</p>

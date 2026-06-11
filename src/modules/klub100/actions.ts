@@ -59,22 +59,6 @@ export async function deleteProject(projectId: string) {
   return { ok: true };
 }
 
-export async function setProjectFlag(
-  projectId: string,
-  flag: "reordered" | "mixed",
-  value: boolean,
-) {
-  const curator = await requireCurator(projectId);
-  if ("error" in curator) return { error: curator.error };
-
-  await prisma.klub100Project.update({
-    where: { id: projectId },
-    data: { [flag]: value },
-  });
-  revalidatePath(projectPath(projectId));
-  return { ok: true };
-}
-
 const segmentRange = (durationMs: number) =>
   z
     .object({ startMs: z.number().int().min(0), endMs: z.number().int().min(0) })
