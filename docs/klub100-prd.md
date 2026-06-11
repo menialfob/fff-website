@@ -1,6 +1,11 @@
 # PRD: Klub 100 module
 
-Status: **Approved for implementation** · Owner: Jonas · Last updated: 2026-06-10
+Status: **Phase 1 (M1–M3) shipped** · Owner: Jonas · Last updated: 2026-06-11
+
+> Phase 1 (collaborative collection, curation and export) is implemented and
+> merged. Per-user Spotify playback and mix production are **out of scope here**
+> and will be specced in a separate phase-2 PRD when the time comes — see §10
+> and the research log in §6.3 for the inputs that should inform it.
 
 ## 1. Background
 
@@ -28,14 +33,16 @@ the final audio from.
 - The owner can export everything needed to produce the mix offline: a
   manifest (track, artist, Spotify link, segment times, order) plus all
   cheers recordings.
-- Searching and auditioning songs is pleasant: Spotify-powered search for
-  everyone; full in-browser playback and precise segment scrubbing for users
-  who connect a Spotify Premium account.
+- Searching songs is pleasant: Spotify-powered search for everyone, with
+  "Open in Spotify" deep links to audition tracks in each member's own app.
 
 ### Non-goals (phase 1)
 
 - The site does **not** produce the final mixed audio. (See §10 for the
   phase-2 options that the data model must keep open.)
+- No in-browser Spotify playback or per-user Spotify account connection.
+  Auditioning is via "Open in Spotify" deep links only. (See §10 / §6.3 for
+  why this is deferred.)
 - No downloading of audio from Spotify — legally impossible; the export
   contains metadata and cheers recordings only.
 - No public/anonymous access; everything stays behind the existing login.
@@ -112,8 +119,7 @@ screen is designed for mobile first and merely scales up to desktop:
 - **Cheers recording** is expected to happen on phones at parties — the
   recorder is tested primarily on iOS Safari and Android Chrome (see §11).
 - **Spotify "Open in Spotify" links** use the track URL so they deep-link
-  into the installed mobile app; SDK in-browser playback is treated as a
-  desktop/Android nicety since iOS Safari support is limited.
+  into the installed mobile app — this is the audition path on every device.
 
 Acceptance for every milestone includes a pass on a ~390 px viewport.
 
@@ -152,15 +158,9 @@ Two main sections (tabs or stacked):
 2. **Pick the segment** — a timeline for the full track duration with a
    draggable 60-second window (start/end handles, fine-tune with ±1 s
    buttons and direct mm:ss input). Optional "Add second minute" adds a
-   second window. Playback while picking:
-   - **Baseline (everyone):** no in-browser audio; an "Open in Spotify" link
-     lets the user audition the track in their own Spotify app and set the
-     times manually.
-   - **Connected Premium users:** full in-browser playback via the Web
-     Playback SDK — press play, seek by clicking the timeline, and a "Preview
-     segment" button that plays exactly the selected window (seek + timed
-     stop). This is the hybrid upgrade path; the form works identically with
-     or without it.
+   second window. There is no in-browser audio; an "Open in Spotify" link
+   lets the user audition the track in their own Spotify app and set the
+   times manually.
 3. **Placement hint** — pick Early / Middle / Late and optionally add a short
    note explaining the vibe ("this is a late song for when people are
    hyped").
@@ -191,7 +191,8 @@ pipeline (§10).
 
 ## 6. Spotify integration
 
-Two independent layers; the second is optional per user.
+Server-side search and metadata only — no per-user Spotify connection in
+phase 1.
 
 ### 6.1 Server-side search & metadata (everyone)
 
@@ -203,46 +204,32 @@ Two independent layers; the second is optional per user.
   time — so the UI never needs live Spotify calls to render lists, and rate
   limits stay trivial for a friend group.
 - **Note:** Spotify removed 30-second `preview_url`s for apps created after
-  Nov 2024, so previews cannot be relied on; this is why baseline playback is
-  link-out only and real playback goes through the SDK.
+  Nov 2024, so there is no in-browser preview audio; auditioning is via the
+  "Open in Spotify" deep link only.
 
-### 6.2 Per-user playback via Web Playback SDK (optional upgrade)
+### 6.2 Spotify app setup (ops)
 
-- **Authorization Code with PKCE** flow; scopes `streaming`,
-  `user-read-email`, `user-read-private`. Tokens kept server-side per user
-  (`SpotifyAccount` table), refreshed on demand; the browser receives only
-  short-lived access tokens for the SDK.
-- A "Connect Spotify" button on the Klub 100 pages starts the flow; connected
-  state shows in the segment picker. **Requires Spotify Premium** (SDK
-  limitation) — free-account users see a friendly notice and keep the manual
-  flow. **Capped at 5 connected members total** by the dev-mode allowlist
-  (§6.4); reserve slots for the mix owner and active co-curators.
-- The SDK creates a local playback device in the browser; we control it with
-  seek/play/pause to audition tracks and preview the exact selected segment.
+- Register one app; add env vars `SPOTIFY_CLIENT_ID` and
+  `SPOTIFY_CLIENT_SECRET` to `.env.example`, the production env, and
+  `docs/DEPLOYMENT.md`.
+- The app stays in **development mode**; search via client credentials needs
+  no user allowlisting. (Extended quota review is unavailable to hobby apps —
+  it requires a registered business with 250k+ MAU since March 2025.)
 
-### 6.3 Spotify app setup (ops)
+### 6.3 Spotify platform constraints — research log (June 2026)
 
-- Register one app; add env vars `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`
-  and the OAuth callback (e.g. `https://<domain>/api/spotify/callback`) to
-  `.env.example`, the production env, and `docs/DEPLOYMENT.md`.
-- The app stays in **development mode**: Spotify accounts that authorize via
-  OAuth must be allowlisted in the dashboard ("User Management") — **max 5
-  accounts** since Feb 2026, see §6.4. Search via client credentials needs no
-  allowlisting. (Extended quota review is unavailable to hobby apps — it
-  requires a registered business with 250k+ MAU since March 2025.)
-
-### 6.4 Spotify platform constraints — research log (June 2026)
-
-Findings from debugging the production search failure; **read this before
-implementing M4**. Spotify has tightened developer access three times since
-this project was specced:
+Findings from debugging the production search failure. The **search** items
+below shaped the shipped phase-1 integration; the **per-user / allowlist**
+items are the main input for any future phase-2 playback PRD (and the reason
+in-browser playback is deferred). Spotify has tightened developer access three
+times since this project was specced:
 
 **Nov 2024 changes** (apps created after Nov 27, 2024):
 
 - Removed for dev apps: 30-second `preview_url`, Recommendations, Related
   Artists, Audio Features/Analysis, Featured/Category Playlists. There is no
-  in-browser preview audio available from Spotify — full playback via the
-  SDK is the only way to hear anything.
+  in-browser preview audio available from Spotify — full playback would only
+  be possible via the Web Playback SDK (a phase-2 concern).
 
 **March 2025**: extended quota mode restricted to legally registered
 businesses with 250 000+ MAU and a launched service. A hobby app can never
@@ -252,18 +239,20 @@ leave development mode — plan around dev-mode limits permanently.
 [endpoint changelog](https://developer.spotify.com/documentation/web-api/references/changes/february-2026);
 applied to new apps Feb 11, 2026, to existing apps Mar 9, 2026):
 
-- The developer's own Spotify account must have **Premium**.
+- The developer's own Spotify account must have **Premium** (only relevant to
+  a future per-user playback feature).
 - **One development-mode Client ID per developer account** — guard the app
   we already registered; we can't create spares.
 - **Max 5 authorized users** in the allowlist (down from 25). This only
   caps OAuth-connected accounts: site members using search/suggest/vote
-  consume no slots; only "Connect Spotify" (M4) does. With 12 members, at
-  most 5 can ever get in-browser playback — treat M4 as a perk for the mix
-  owner + a few co-curators, with the manual flow as the primary UX.
+  consume no slots. **This is the key reason in-browser playback is deferred:**
+  with 12 members, any future per-user playback could reach at most 5 of them,
+  so it could only ever be a curator perk, never a group feature.
 - **Reduced endpoint set.** Confirmed surviving: `GET /search`, single-item
   metadata (tracks/albums/artists), `GET /me`, top items, playlists, saved
-  items, and **all 14 player endpoints** — so both our search and the M4
-  Web Playback SDK approach remain feasible.
+  items, and **all 14 player endpoints** — so both our search and a future
+  Web Playback SDK approach remain technically feasible (the latter still
+  capped at 5 users).
 - **`GET /search` limit param max is now 10** (default 5). `limit=12`
   produced the misleading `400 {"error":{"status":400,"message":"Invalid
   limit"}}` we hit in production — keep requests at ≤10 results
@@ -274,8 +263,9 @@ applied to new apps Feb 11, 2026, to existing apps Mar 9, 2026):
 - Pass a concrete `market` (we send `market=DK`, override via
   `SPOTIFY_MARKET`): client-credentials tokens carry no user country, and
   dev-mode catalog calls have a history of failing without one.
-- Redirect URIs (for M4 OAuth) must be **HTTPS**, except the literal
-  loopback `http://127.0.0.1:<port>/...` — `http://localhost` is rejected.
+- Redirect URIs (for any future per-user OAuth) must be **HTTPS**, except the
+  literal loopback `http://127.0.0.1:<port>/...` — `http://localhost` is
+  rejected.
 - docker compose `env_file` passes surrounding quotes through literally;
   `src/lib/spotify.ts` strips them defensively, and `.env.example` shows
   unquoted values.
@@ -385,19 +375,6 @@ model Klub100Vote {
 
   @@id([songId, userId]) // one vote per user per song
 }
-
-model SpotifyAccount {
-  // Optional per-user Spotify connection for Web Playback SDK
-  userId        String   @id
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  spotifyUserId String
-  refreshToken  String   // consider encrypting at rest
-  accessToken   String?
-  expiresAt     DateTime?
-  product       String?  // "premium" | "free" — gates the SDK UI
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
 ```
 
 Notes:
@@ -407,6 +384,8 @@ Notes:
   pipeline gets exact cut points.
 - `position` is compacted on accept/remove/reorder so the tracklist is always
   a contiguous 1..n.
+- A future per-user Spotify connection (phase 2) would add its own table
+  (e.g. `SpotifyAccount`) — phase 1 stores no Spotify user tokens.
 
 ## 9. Code structure
 
@@ -419,25 +398,33 @@ src/modules/klub100/
   search-actions.ts                        # Spotify search (server-side token)
   project-controls.tsx                     # create project, flag toggles, export button
   suggest-song.tsx                         # search + segment picker + cheers dialog ("use client")
-  segment-picker.tsx                       # timeline widget, SDK-aware
+  segment-picker.tsx                       # timeline widget
   cheers-recorder.tsx                      # MediaRecorder + upload fallback
   tracklist.tsx / suggestion-pool.tsx      # lists, voting, accept/reject, drag-reorder
 src/app/(app)/klub100/page.tsx             # project list
 src/app/(app)/klub100/[id]/page.tsx        # project page
 src/app/api/klub100/cheers/[songId]/route.ts   # authenticated cheers streaming
 src/app/api/klub100/export/[id]/route.ts       # ZIP export (owner/admin)
-src/app/api/spotify/callback/route.ts          # OAuth PKCE callback (phase: SDK)
-src/lib/spotify.ts                         # client-credentials token cache, search, PKCE helpers
+src/lib/spotify.ts                         # client-credentials token cache, search
 ```
 
 Server actions return `{ error?: string; ok?: boolean }` per house style;
 every mutation starts with `requireSession()` and curation actions verify
 `project.createdById === session.user.id || role === ADMIN`.
 
-The middleware already protects all new routes by default; the Spotify OAuth
-callback stays behind login (users must be signed in before connecting).
+The middleware already protects all new routes by default.
 
-## 10. Phase 2 — playing/producing the mix (door kept open)
+## 10. Phase 2 — per-user playback & producing the mix (separate PRD)
+
+Everything beyond phase 1 lives in its own future PRD. Sketches kept here so
+the data model stays open; **do not implement from this section** — it exists
+to be lifted into the phase-2 PRD.
+
+A prerequisite for live playback (option 1) is a **per-user Spotify
+connection** (Authorization Code + PKCE, Web Playback SDK, a `SpotifyAccount`
+table). Note the hard limits from §6.3: dev-mode caps this at **5 connected
+Premium accounts**, so it can only ever be a curator perk, not a group
+feature — which is exactly why it was cut from phase 1.
 
 Preferred exploration first, fallback second:
 
@@ -446,37 +433,25 @@ Preferred exploration first, fallback second:
    song, seek to `seg1StartMs`, ramp volume up (SDK `setVolume` steps ≈
    fade-in), play the segment, ramp down, pause, play the cheers file via
    Web Audio, continue to the next song. No audio file ever produced —
-   the mix *happens* live. Risks to validate: seek latency, fade smoothness
-   via setVolume, mobile browser autoplay policies.
-2. **ffmpeg pipeline (server-side render).** If live playback disappoints:
-   owner uploads the actual audio file per accepted song; a server job cuts
-   segments, applies fades, splices cheers between songs, and renders one
-   long MP3. Needs per-song audio upload UI, a background job runner, and
-   significant storage — the manifest and segment data from phase 1 are
-   already sufficient input.
+   the mix *happens* live. Risks to validate: the 5-account allowlist cap,
+   seek latency, fade smoothness via setVolume, mobile browser autoplay
+   policies, and unreliable SDK support on iOS Safari (the primary device).
+2. **ffmpeg pipeline (server-side render).** If live playback disappoints (or
+   to serve the >5 members the allowlist excludes): owner uploads the actual
+   audio file per accepted song; a server job cuts segments, applies fades,
+   splices cheers between songs, and renders one long MP3. Needs per-song
+   audio upload UI, a background job runner, and significant storage — the
+   manifest and segment data from phase 1 are already sufficient input.
+   Notably this path needs **no** Spotify connection at all.
 
 Nothing in phase 1 blocks either path; the explicit per-segment ms values,
 cheers files, and ordered manifest are the shared foundation.
 
 ## 11. Risks & open questions
 
-- **Spotify dev-mode allowlist (5 users since Feb 2026, see §6.4)** — with
-  12 members, SDK playback can never reach the whole group; M4 must be
-  framed as a curator perk, not a member feature. Search is unaffected
-  (client credentials, no allowlist slots).
-- **Premium requirement** — SDK playback silently excludes free-tier members
-  (and dev mode itself requires the app owner's account to be Premium); the
-  manual flow must stay first-class (hybrid decision).
-- **SDK on mobile** — the Web Playback SDK is unreliable in mobile browsers
-  (iOS Safari especially), yet mobile is the primary device. The manual
-  segment flow with Spotify-app deep links is therefore the main mobile
-  experience; SDK playback is a desktop enhancement.
 - **Safari/iOS recording** — MediaRecorder output is `audio/mp4` and mic
   permission UX differs; test on iPhones early since party contributions
   will often be mobile.
-- **Token security** — Spotify refresh tokens live in the DB; SQLite file is
-  on the server volume. Acceptable for this site's threat model; consider
-  encrypting the column.
 - **Body size limits** — cheers uploads (≤5 MB) fit the existing
   `serverActions.bodySizeLimit` / Caddy `request_body` caps; verify rather
   than raise.
@@ -495,11 +470,10 @@ cheers files, and ordered manifest are the shared foundation.
    streaming, inline playback, progress counters.
 3. **M3 — Curation & export:** voting, accept/reject, drag-and-drop reorder
    with position compaction, status flag toggles, ZIP export with manifests.
-4. **M4 — Spotify playback upgrade:** PKCE connect flow, `SpotifyAccount`
-   table, Web Playback SDK in the segment picker, segment preview. Scoped to
-   ≤5 connected accounts by the dev-mode allowlist — read §6.4 first.
-5. **M5 (phase 2, separate PRD-let):** party playback mode spike; ffmpeg
-   pipeline if needed.
+
+M1–M3 are shipped. All further work — per-user Spotify playback, party
+playback mode, and ffmpeg mix production — is deferred to a separate phase-2
+PRD (see §10), gated by the Spotify platform constraints documented in §6.3.
 
 Each milestone ships behind the normal CI gates (`lint`, `typecheck`,
 `build`); M1 includes the Prisma migration committed alongside the schema.
