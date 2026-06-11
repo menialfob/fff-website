@@ -245,9 +245,9 @@ applied to new apps Feb 11, 2026, to existing apps Mar 9, 2026):
   we already registered; we can't create spares.
 - **Max 5 authorized users** in the allowlist (down from 25). This only
   caps OAuth-connected accounts: site members using search/suggest/vote
-  consume no slots. **This is the key reason in-browser playback is deferred:**
-  with 12 members, any future per-user playback could reach at most 5 of them,
-  so it could only ever be a curator perk, never a group feature.
+  consume no slots. With 12 members, per-user playback can reach at most 5
+  of them — accepted for phase 2, since live party playback only needs the
+  host's device connected (see §10).
 - **Reduced endpoint set.** Confirmed surviving: `GET /search`, single-item
   metadata (tracks/albums/artists), `GET /me`, top items, playlists, saved
   items, and **all 14 player endpoints** — so both our search and a future
@@ -420,29 +420,33 @@ Everything beyond phase 1 lives in its own future PRD. Sketches kept here so
 the data model stays open; **do not implement from this section** — it exists
 to be lifted into the phase-2 PRD.
 
-A prerequisite for live playback (option 1) is a **per-user Spotify
-connection** (Authorization Code + PKCE, Web Playback SDK, a `SpotifyAccount`
-table). Note the hard limits from §6.3: dev-mode caps this at **5 connected
-Premium accounts**, so it can only ever be a curator perk, not a group
-feature — which is exactly why it was cut from phase 1.
+**Decision (June 2026): live party playback is the primary phase-2 path.**
+The 5-account allowlist cap is accepted — playback only needs to run on the
+device hosting the party, so a handful of connected curator accounts is
+enough. The ffmpeg render path is the fallback, to be built **only if** live
+playback proves unworkable in practice.
 
-Preferred exploration first, fallback second:
-
-1. **Party playback mode (in-browser, Spotify SDK).** A "Play mix" screen
-   that plays the tracklist live on a connected Premium account: for each
-   song, seek to `seg1StartMs`, ramp volume up (SDK `setVolume` steps ≈
+1. **Party playback mode (in-browser, Spotify SDK) — primary.** A "Play mix"
+   screen that plays the tracklist live on a connected Premium account: for
+   each song, seek to `seg1StartMs`, ramp volume up (SDK `setVolume` steps ≈
    fade-in), play the segment, ramp down, pause, play the cheers file via
    Web Audio, continue to the next song. No audio file ever produced —
-   the mix *happens* live. Risks to validate: the 5-account allowlist cap,
-   seek latency, fade smoothness via setVolume, mobile browser autoplay
-   policies, and unreliable SDK support on iOS Safari (the primary device).
-2. **ffmpeg pipeline (server-side render).** If live playback disappoints (or
-   to serve the >5 members the allowlist excludes): owner uploads the actual
-   audio file per accepted song; a server job cuts segments, applies fades,
-   splices cheers between songs, and renders one long MP3. Needs per-song
-   audio upload UI, a background job runner, and significant storage — the
-   manifest and segment data from phase 1 are already sufficient input.
-   Notably this path needs **no** Spotify connection at all.
+   the mix *happens* live. Prerequisite: a per-user Spotify connection
+   (Authorization Code + PKCE, Web Playback SDK, a `SpotifyAccount` table),
+   capped at **5 connected Premium accounts** by the dev-mode allowlist
+   (§6.3) — fine, since only the party host's device needs playback.
+   The phase-2 PRD should start with a **spike** validating the real risks:
+   seek latency between songs, fade smoothness via setVolume, browser
+   autoplay policies, and SDK reliability on the host device (desktop or
+   Android Chrome is the safe target; iOS Safari support is poor, so the
+   party host should plan on a laptop or Android device).
+2. **ffmpeg pipeline (server-side render) — fallback only.** If the live
+   playback spike fails: owner uploads the actual audio file per accepted
+   song; a server job cuts segments, applies fades, splices cheers between
+   songs, and renders one long MP3. Needs per-song audio upload UI, a
+   background job runner, and significant storage — the manifest and segment
+   data from phase 1 are already sufficient input. Needs no Spotify
+   connection at all.
 
 Nothing in phase 1 blocks either path; the explicit per-segment ms values,
 cheers files, and ordered manifest are the shared foundation.
@@ -471,9 +475,10 @@ cheers files, and ordered manifest are the shared foundation.
 3. **M3 — Curation & export:** voting, accept/reject, drag-and-drop reorder
    with position compaction, status flag toggles, ZIP export with manifests.
 
-M1–M3 are shipped. All further work — per-user Spotify playback, party
-playback mode, and ffmpeg mix production — is deferred to a separate phase-2
-PRD (see §10), gated by the Spotify platform constraints documented in §6.3.
+M1–M3 are shipped. All further work is deferred to a separate phase-2 PRD
+(see §10): live party playback via the Spotify SDK as the primary path, with
+the ffmpeg render pipeline as fallback only if live playback proves
+unworkable. The Spotify platform constraints in §6.3 gate the design.
 
 Each milestone ships behind the normal CI gates (`lint`, `typecheck`,
 `build`); M1 includes the Prisma migration committed alongside the schema.
