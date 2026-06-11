@@ -2,10 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import {
-  DeleteProjectButton,
-  ProjectFlags,
-} from "@/modules/klub100/project-controls";
+import { DeleteProjectButton } from "@/modules/klub100/project-controls";
 import { SuggestSongButton } from "@/modules/klub100/suggest-song";
 import { SuggestionPool } from "@/modules/klub100/suggestion-pool";
 import { Tracklist } from "@/modules/klub100/tracklist";
@@ -85,18 +82,6 @@ export default async function Klub100ProjectPage({
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <Progress label="Songs" value={accepted.length} />
           <Progress label="Cheers" value={cheersCount} />
-          {isCurator ? (
-            <ProjectFlags
-              projectId={project.id}
-              reordered={project.reordered}
-              mixed={project.mixed}
-            />
-          ) : (
-            <p className="text-sm text-stone-600">
-              reordered {project.reordered ? "✓" : "✗"} · mixed{" "}
-              {project.mixed ? "✓" : "✗"}
-            </p>
-          )}
           <span className="flex-1" />
           <Link
             href={`/klub100/${project.id}/play`}

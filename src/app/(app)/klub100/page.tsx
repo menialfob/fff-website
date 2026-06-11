@@ -73,9 +73,7 @@ export default async function Klub100Page() {
                   </div>
                   <p className="mt-1 text-sm text-stone-600">
                     {accepted.length}/{TRACKLIST_SIZE} songs · {cheersCount}/
-                    {TRACKLIST_SIZE} cheers · {poolCount} in pool · reordered{" "}
-                    {project.reordered ? "✓" : "✗"} · mixed{" "}
-                    {project.mixed ? "✓" : "✗"}
+                    {TRACKLIST_SIZE} cheers · {poolCount} in pool
                   </p>
                 </Link>
               </li>

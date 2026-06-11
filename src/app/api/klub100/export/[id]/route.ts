@@ -105,8 +105,6 @@ export async function GET(
         project: {
           name: project.name,
           createdBy: project.createdBy.name,
-          reordered: project.reordered,
-          mixed: project.mixed,
           exportedAt: new Date().toISOString(),
         },
         tracklist: tracklistEntries,
