@@ -61,9 +61,9 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
           if (result?.ok) router.push("/klub100");
         });
       }}
-      className="text-sm text-red-600 hover:underline disabled:opacity-50"
+      className="min-h-11 rounded-md border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
     >
-      Delete project
+      {isPending ? "Deleting…" : "Delete project"}
     </button>
   );
 }

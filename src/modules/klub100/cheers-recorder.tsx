@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { attachCheers } from "./actions";
+import { trimSilence } from "./trim-silence";
 
 const MAX_RECORD_MS = 10_000;
 
@@ -64,11 +65,14 @@ export function CheersCapture({
     recorderRef.current = recorder;
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => chunks.push(e.data);
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
       const type = recorder.mimeType || "audio/webm";
       const blob = new Blob(chunks, { type });
-      onChange(new File([blob], `cheers.${extensionFor(type)}`, { type }));
+      const raw = new File([blob], `cheers.${extensionFor(type)}`, { type });
+      // Cut the hesitation between pressing record and saying "skål" —
+      // conservative, and falls back to the raw take on any trouble.
+      onChange(await trimSilence(raw));
       setRecording(false);
     };
     recorder.start();
