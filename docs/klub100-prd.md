@@ -215,7 +215,8 @@ Two independent layers; the second is optional per user.
 - A "Connect Spotify" button on the Klub 100 pages starts the flow; connected
   state shows in the segment picker. **Requires Spotify Premium** (SDK
   limitation) — free-account users see a friendly notice and keep the manual
-  flow.
+  flow. **Capped at 5 connected members total** by the dev-mode allowlist
+  (§6.4); reserve slots for the mix owner and active co-curators.
 - The SDK creates a local playback device in the browser; we control it with
   seek/play/pause to audition tracks and preview the exact selected segment.
 
@@ -224,11 +225,63 @@ Two independent layers; the second is optional per user.
 - Register one app; add env vars `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`
   and the OAuth callback (e.g. `https://<domain>/api/spotify/callback`) to
   `.env.example`, the production env, and `docs/DEPLOYMENT.md`.
-- The app stays in **development mode**: up to 25 named Spotify accounts must
-  be allowlisted in the dashboard ("User Management"). Fine for a friend
-  group; document the step for onboarding new members. (Extended quota review
-  is effectively unavailable to hobby apps and is not needed here — search
-  via client credentials works regardless.)
+- The app stays in **development mode**: Spotify accounts that authorize via
+  OAuth must be allowlisted in the dashboard ("User Management") — **max 5
+  accounts** since Feb 2026, see §6.4. Search via client credentials needs no
+  allowlisting. (Extended quota review is unavailable to hobby apps — it
+  requires a registered business with 250k+ MAU since March 2025.)
+
+### 6.4 Spotify platform constraints — research log (June 2026)
+
+Findings from debugging the production search failure; **read this before
+implementing M4**. Spotify has tightened developer access three times since
+this project was specced:
+
+**Nov 2024 changes** (apps created after Nov 27, 2024):
+
+- Removed for dev apps: 30-second `preview_url`, Recommendations, Related
+  Artists, Audio Features/Analysis, Featured/Category Playlists. There is no
+  in-browser preview audio available from Spotify — full playback via the
+  SDK is the only way to hear anything.
+
+**March 2025**: extended quota mode restricted to legally registered
+businesses with 250 000+ MAU and a launched service. A hobby app can never
+leave development mode — plan around dev-mode limits permanently.
+
+**Feb 2026 changes** ([announcement](https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security),
+[endpoint changelog](https://developer.spotify.com/documentation/web-api/references/changes/february-2026);
+applied to new apps Feb 11, 2026, to existing apps Mar 9, 2026):
+
+- The developer's own Spotify account must have **Premium**.
+- **One development-mode Client ID per developer account** — guard the app
+  we already registered; we can't create spares.
+- **Max 5 authorized users** in the allowlist (down from 25). This only
+  caps OAuth-connected accounts: site members using search/suggest/vote
+  consume no slots; only "Connect Spotify" (M4) does. With 12 members, at
+  most 5 can ever get in-browser playback — treat M4 as a perk for the mix
+  owner + a few co-curators, with the manual flow as the primary UX.
+- **Reduced endpoint set.** Confirmed surviving: `GET /search`, single-item
+  metadata (tracks/albums/artists), `GET /me`, top items, playlists, saved
+  items, and **all 14 player endpoints** — so both our search and the M4
+  Web Playback SDK approach remain feasible.
+- **`GET /search` limit param max is now 10** (default 5). `limit=12`
+  produced the misleading `400 {"error":{"status":400,"message":"Invalid
+  limit"}}` we hit in production — keep requests at ≤10 results
+  (`src/lib/spotify.ts` caps this; don't raise it).
+
+**Implementation notes learned the hard way:**
+
+- Pass a concrete `market` (we send `market=DK`, override via
+  `SPOTIFY_MARKET`): client-credentials tokens carry no user country, and
+  dev-mode catalog calls have a history of failing without one.
+- Redirect URIs (for M4 OAuth) must be **HTTPS**, except the literal
+  loopback `http://127.0.0.1:<port>/...` — `http://localhost` is rejected.
+- docker compose `env_file` passes surrounding quotes through literally;
+  `src/lib/spotify.ts` strips them defensively, and `.env.example` shows
+  unquoted values.
+- Search failures log the full Spotify response to the server logs
+  (`docker compose logs app`); credential rejections get a distinct
+  user-facing message.
 
 ## 7. Cheers recording
 
@@ -407,11 +460,13 @@ cheers files, and ordered manifest are the shared foundation.
 
 ## 11. Risks & open questions
 
-- **Spotify dev-mode allowlist (25 users)** — fine at current group size;
-  onboarding a member to SDK playback needs a dashboard step. Search is
-  unaffected.
-- **Premium requirement** — SDK playback silently excludes free-tier members;
-  the manual flow must stay first-class (hybrid decision).
+- **Spotify dev-mode allowlist (5 users since Feb 2026, see §6.4)** — with
+  12 members, SDK playback can never reach the whole group; M4 must be
+  framed as a curator perk, not a member feature. Search is unaffected
+  (client credentials, no allowlist slots).
+- **Premium requirement** — SDK playback silently excludes free-tier members
+  (and dev mode itself requires the app owner's account to be Premium); the
+  manual flow must stay first-class (hybrid decision).
 - **SDK on mobile** — the Web Playback SDK is unreliable in mobile browsers
   (iOS Safari especially), yet mobile is the primary device. The manual
   segment flow with Spotify-app deep links is therefore the main mobile
@@ -441,7 +496,8 @@ cheers files, and ordered manifest are the shared foundation.
 3. **M3 — Curation & export:** voting, accept/reject, drag-and-drop reorder
    with position compaction, status flag toggles, ZIP export with manifests.
 4. **M4 — Spotify playback upgrade:** PKCE connect flow, `SpotifyAccount`
-   table, Web Playback SDK in the segment picker, segment preview.
+   table, Web Playback SDK in the segment picker, segment preview. Scoped to
+   ≤5 connected accounts by the dev-mode allowlist — read §6.4 first.
 5. **M5 (phase 2, separate PRD-let):** party playback mode spike; ffmpeg
    pipeline if needed.
 
