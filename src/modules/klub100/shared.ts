@@ -5,6 +5,9 @@
 
 export const TRACKLIST_SIZE = 100;
 
+/** Spotify's dev-mode allowlist cap (Feb 2026 rules) — surfaced in the UI. */
+export const SPOTIFY_ALLOWLIST_SLOTS = 5;
+
 export type Placement = "EARLY" | "MIDDLE" | "LATE";
 
 export const placementLabels: Record<Placement, string> = {
