@@ -416,9 +416,9 @@ The middleware already protects all new routes by default.
 
 ## 10. Phase 2 — per-user playback & producing the mix (separate PRD)
 
-Everything beyond phase 1 lives in its own future PRD. Sketches kept here so
-the data model stays open; **do not implement from this section** — it exists
-to be lifted into the phase-2 PRD.
+Phase 2 is specced in **`docs/klub100-phase2-prd.md`** — that document is
+authoritative. The sketches below are kept for historical context only;
+**do not implement from this section**.
 
 **Decision (June 2026): live party playback is the primary phase-2 path.**
 The 5-account allowlist cap is accepted — playback only needs to run on the
