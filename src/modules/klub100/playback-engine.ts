@@ -1,10 +1,11 @@
 /**
  * Client-side sequencer for live Klub 100 playback (phase-2 PRD §2).
  *
- * Runs entirely in the host's browser: song segments play through the
- * Spotify Web Playback SDK (faded in/out via setVolume), cheers clips play
- * from our own storage through one HTMLAudioElement, and after each
- * transition progress is persisted server-side for crash-safe resume.
+ * Runs entirely in the host's browser: each song's cheers clip plays from
+ * our own storage through one HTMLAudioElement, then the song segment plays
+ * through the Spotify Web Playback SDK (faded in/out via setVolume), and
+ * after each transition progress is persisted server-side for crash-safe
+ * resume.
  *
  * The single "Start the mix" click is the one user gesture that unlocks
  * both audio paths (player.activateElement() + a muted prime of the cheers
@@ -266,6 +267,11 @@ export class PlaybackEngine {
         this.callbacks.persistProgress(song.id, s + 1);
         this.emit({ songIndex: i, segmentIndex: s });
 
+        // Cheers first — "skål!", sip, then the song drops.
+        const cheers = await this.playCheers(song);
+        if (this.stopped || this.fatalError) return;
+        if (cheers === "skipped") break; // host pressed skip → next song
+
         const result = await this.playSegment(song, s);
         if (this.stopped || this.fatalError) return;
         if (result === "failed") {
@@ -275,13 +281,9 @@ export class PlaybackEngine {
               { position: song.position, title: `${song.title} — ${song.artist}`, reason: "unavailable on Spotify" },
             ],
           });
-          break; // skip the song's cheers too — that sip is lost
+          break;
         }
         if (result === "skipped") break; // host pressed skip → next song
-
-        const cheers = await this.playCheers(song);
-        if (this.stopped || this.fatalError) return;
-        if (cheers === "skipped") break;
       }
     }
 

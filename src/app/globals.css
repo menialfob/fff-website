@@ -6,4 +6,7 @@
 
 body {
   @apply bg-stone-50 text-stone-900 antialiased;
+  /* A single overflowing element must not make the whole page horizontally
+     pannable/zoomable on phones — clip instead of growing the viewport. */
+  overflow-x: clip;
 }

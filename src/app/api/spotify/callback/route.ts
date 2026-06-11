@@ -7,19 +7,28 @@ import { exchangeCodeForTokens, fetchSpotifyProfile } from "@/lib/spotify";
  * Spotify redirects back here after the user approves (or denies) access.
  * Exchanges the code for tokens and upserts the caller's SpotifyAccount row.
  * Errors land back on the return page as ?spotify=… for the connect card.
+ *
+ * Redirects use relative Location headers: behind the reverse proxy,
+ * request.nextUrl carries the container's internal origin (0.0.0.0:3000),
+ * so absolute URLs built from it would send the browser off-site. The
+ * browser resolves a relative Location against the public URL it is on.
  */
+function relativeRedirect(path: string) {
+  return new NextResponse(null, { status: 307, headers: { Location: path } });
+}
+
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     // Session expired mid-flow — log in again and retry.
-    return NextResponse.redirect(new URL("/login", request.nextUrl));
+    return relativeRedirect("/login");
   }
 
   const returnTo = request.cookies.get("spotify_return_to")?.value ?? "/klub100";
   const redirect = (result: "connected" | "denied" | "error") => {
-    const url = new URL(returnTo, request.nextUrl);
-    url.searchParams.set("spotify", result);
-    const response = NextResponse.redirect(url);
+    const response = relativeRedirect(
+      `${returnTo}${returnTo.includes("?") ? "&" : "?"}spotify=${result}`,
+    );
     for (const name of ["spotify_pkce_verifier", "spotify_oauth_state", "spotify_return_to"]) {
       response.cookies.delete(name);
     }
