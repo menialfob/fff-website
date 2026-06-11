@@ -149,7 +149,32 @@ Migrations run automatically when the app container starts.
 **Rollback:** on the server, edit the image tag in `docker-compose.yml` to a
 previous commit SHA and `docker compose up -d`.
 
-## 5. Backups
+## 5. Spotify (Klub 100)
+
+Two integrations share one Spotify app
+([dashboard](https://developer.spotify.com/dashboard)): server-side track
+search (`SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` in the server `.env`) and
+the per-user connect flow that lets a member host live Klub 100 playback.
+The app stays in development mode permanently (extended quota is unavailable
+to hobby apps), which imposes two rules — see `docs/klub100-prd.md` §6.3:
+
+- **Redirect URI** — add `https://<your-domain>/api/spotify/callback` under
+  the app's settings → Redirect URIs. Without it the connect flow fails with
+  `INVALID_CLIENT: Invalid redirect URI`. (For local dev, also add
+  `http://127.0.0.1:3000/api/spotify/callback` and set
+  `SPOTIFY_REDIRECT_URI` accordingly — Spotify rejects `http://localhost`.)
+- **User allowlist (max 5)** — every member who connects their Spotify
+  account must first be added under the app's **User Management** with the
+  email of their Spotify account. Only 5 slots exist and only playback
+  *hosts* need one (search/suggest/vote need no slot), so coordinate in the
+  group chat before adding anyone. Removing an entry in the dashboard frees
+  the slot; the member should also hit "Disconnect" on the Klub 100 page so
+  the site's count stays honest.
+
+Hosting playback additionally requires the connected account to have
+**Spotify Premium** (a Feb 2026 platform rule; the UI explains this).
+
+## 6. Backups
 
 Everything that matters (SQLite database + all uploads) lives in the single
 `app-data` Docker volume. A simple nightly dump:

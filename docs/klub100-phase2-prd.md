@@ -1,6 +1,14 @@
 # PRD: Klub 100 phase 2 — live party playback
 
-Status: **Draft — gated on the M-P2 spike** · Owner: Jonas · Last updated: 2026-06-11
+Status: **Implemented (M-P2-1 + M-P2-3) — §8 spike criteria pending live
+validation** · Owner: Jonas · Last updated: 2026-06-11
+
+> Implementation note (June 2026): the connect flow and the full play screen
+> are built; the playback engine is the real one, not a throwaway, so the §8
+> measurements should be taken against it on desktop Chrome + Android Chrome
+> with a connected Premium account before the first party (record results
+> here). If criteria 1–4 fail after tuning, the §11 fallback decision still
+> applies.
 
 Phase 1 (collaborative collection, curation, export — see
 `docs/klub100-prd.md`) is shipped. This PRD covers playing the finished mix
@@ -169,7 +177,7 @@ src/app/api/spotify/login/route.ts      # PKCE redirect kickoff
 src/app/api/spotify/callback/route.ts   # token exchange, upsert SpotifyAccount
 src/app/api/spotify/token/route.ts      # short-lived access token for the SDK
 src/lib/spotify.ts                      # + PKCE helpers, refresh logic
-public/default-cheers.mp3               # fallback clip for cheers-less songs
+public/default-cheers.wav               # fallback clip for cheers-less songs (synthesized clinks)
 ```
 
 Same house rules as phase 1: server actions guarded by `requireSession()`,

@@ -26,6 +26,23 @@ model User {
   klub100Songs    Klub100Song[]
   klub100Cheers   Klub100Cheers[]
   klub100Votes    Klub100Vote[]
+  spotifyAccount  SpotifyAccount?
+}
+
+// Per-user Spotify connection (Authorization Code + PKCE). Only needed to
+// *host* Klub 100 playback; capped at 5 accounts by Spotify's dev-mode
+// allowlist (see docs/klub100-prd.md §6.3).
+model SpotifyAccount {
+  userId        String    @id
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spotifyUserId String
+  refreshToken  String
+  accessToken   String?
+  expiresAt     DateTime?
+  // "premium" | "free" | … — hosting playback requires premium.
+  product       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model FileItem {
@@ -62,8 +79,21 @@ model Klub100Project {
   createdBy   User          @relation(fields: [createdById], references: [id], onDelete: Cascade)
   createdById String
   songs       Klub100Song[]
+  playbackState Klub100PlaybackState?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+}
+
+// Crash-safe resume for live playback: where the mix got to, persisted after
+// every segment/cheers transition. One row per project; cleared on finish or
+// "start over". songId is not a relation — a deleted song just means the
+// resume offer falls back to the start.
+model Klub100PlaybackState {
+  projectId String         @id
+  project   Klub100Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  songId    String
+  segmentNo Int            @default(1)
+  updatedAt DateTime       @updatedAt
 }
 
 model Klub100Song {

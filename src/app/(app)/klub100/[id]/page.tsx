@@ -98,6 +98,12 @@ export default async function Klub100ProjectPage({
             </p>
           )}
           <span className="flex-1" />
+          <Link
+            href={`/klub100/${project.id}/play`}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+          >
+            ▶ Play mix
+          </Link>
           {isCurator && (
             <a
               href={`/api/klub100/export/${project.id}`}

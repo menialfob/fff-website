@@ -1,18 +1,28 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { spotifyConfigured } from "@/lib/spotify";
 import { NewProjectForm } from "@/modules/klub100/project-controls";
+import { SpotifyConnectCard } from "@/modules/klub100/spotify-connect";
 import { TRACKLIST_SIZE } from "@/modules/klub100/shared";
 
 export default async function Klub100Page() {
-  await requireSession();
-  const projects = await prisma.klub100Project.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      createdBy: { select: { name: true } },
-      songs: { select: { status: true, cheers: { select: { id: true } } } },
-    },
-  });
+  const session = await requireSession();
+  const [projects, ownAccount, slotsUsed] = await Promise.all([
+    prisma.klub100Project.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        createdBy: { select: { name: true } },
+        songs: { select: { status: true, cheers: { select: { id: true } } } },
+      },
+    }),
+    prisma.spotifyAccount.findUnique({
+      where: { userId: session.user.id },
+      select: { product: true },
+    }),
+    prisma.spotifyAccount.count(),
+  ]);
 
   return (
     <div>
@@ -25,6 +35,19 @@ export default async function Klub100Page() {
         <h2 className="mb-3 text-lg font-semibold">Start a new mix</h2>
         <NewProjectForm />
       </section>
+      <div className="mb-8">
+        {/* useSearchParams (OAuth result feedback) needs a Suspense boundary */}
+        <Suspense>
+          <SpotifyConnectCard
+            connection={{
+              configured: spotifyConfigured(),
+              connected: Boolean(ownAccount),
+              product: ownAccount?.product ?? null,
+              slotsUsed,
+            }}
+          />
+        </Suspense>
+      </div>
       {projects.length === 0 ? (
         <p className="text-stone-600">No projects yet — create the first one!</p>
       ) : (
