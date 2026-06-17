@@ -2,6 +2,7 @@
 
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { computeIsCurator } from "./shared";
 
 /**
  * Crash-safe resume for live playback (phase-2 PRD §5): the engine persists
@@ -12,15 +13,15 @@ import { prisma } from "@/lib/db";
  * play screen owns its own state; the saved row is only read on page load.
  */
 
-/** Hosting is curation-level: project owner or admin. */
+/** Hosting is curation-level: project owner, project admin, or site admin. */
 async function requireHost(projectId: string) {
   const session = await requireSession();
   const project = await prisma.klub100Project.findUnique({
     where: { id: projectId },
-    select: { createdById: true },
+    select: { createdById: true, admins: { select: { userId: true } } },
   });
   if (!project) return { error: "Project not found." as const };
-  if (project.createdById !== session.user.id && session.user.role !== "ADMIN") {
+  if (!computeIsCurator(project, session.user)) {
     return { error: "Only the project owner or an admin can host playback." as const };
   }
   return { session };

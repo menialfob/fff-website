@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { spotifyConfigured } from "@/lib/spotify";
 import { PlayScreen } from "@/modules/klub100/play-screen";
-import { TRACKLIST_SIZE } from "@/modules/klub100/shared";
+import { computeIsCurator, TRACKLIST_SIZE } from "@/modules/klub100/shared";
 import type { PlaybackSong } from "@/modules/klub100/playback-engine";
 
 export default async function Klub100PlayPage({
@@ -19,6 +19,7 @@ export default async function Klub100PlayPage({
     where: { id },
     include: {
       playbackState: true,
+      admins: { select: { userId: true } },
       songs: {
         where: { status: "ACCEPTED" },
         orderBy: { position: "asc" },
@@ -31,8 +32,7 @@ export default async function Klub100PlayPage({
   });
   if (!project) notFound();
 
-  const isHost =
-    project.createdById === session.user.id || session.user.role === "ADMIN";
+  const isHost = computeIsCurator(project, session.user);
 
   const songs: PlaybackSong[] = project.songs.map((s) => ({
     id: s.id,

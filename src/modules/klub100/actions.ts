@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { deleteUpload, saveUpload } from "@/lib/storage";
-import { TRACKLIST_SIZE } from "./shared";
+import { computeIsCurator, TRACKLIST_SIZE } from "./shared";
 
 const MAX_CHEERS_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -14,21 +14,47 @@ function projectPath(projectId: string) {
   return `/klub100/${projectId}`;
 }
 
-/** Owner of the project or an admin — the only roles allowed to curate. */
+/** Owner, a project admin, or a site admin — the roles allowed to curate. */
 async function requireCurator(projectId: string) {
   const session = await requireSession();
   const project = await prisma.klub100Project.findUnique({
     where: { id: projectId },
-    select: { id: true, createdById: true },
+    select: {
+      id: true,
+      createdById: true,
+      admins: { select: { userId: true } },
+    },
   });
   if (!project) return { error: "Project not found." as const };
-  if (
-    project.createdById !== session.user.id &&
-    session.user.role !== "ADMIN"
-  ) {
+  if (!computeIsCurator(project, session.user)) {
     return { error: "Only the project owner or an admin can do this." as const };
   }
   return { session, project };
+}
+
+/**
+ * The song's suggestor, or anyone who can curate its project — the roles
+ * allowed to edit a suggestion (timing, placement, cheers).
+ */
+async function requireSongEditor(songId: string) {
+  const session = await requireSession();
+  const song = await prisma.klub100Song.findUnique({
+    where: { id: songId },
+    include: {
+      cheers: true,
+      project: {
+        select: { createdById: true, admins: { select: { userId: true } } },
+      },
+    },
+  });
+  if (!song) return { error: "Song not found." as const };
+  if (
+    song.suggestedById !== session.user.id &&
+    !computeIsCurator(song.project, session.user)
+  ) {
+    return { error: "Only the suggestor or a project admin can do this." as const };
+  }
+  return { session, song };
 }
 
 export async function createProject(formData: FormData) {
@@ -70,6 +96,34 @@ const segmentRange = (durationMs: number) =>
     // Allow a second of slack for rounding against the reported duration.
     .refine((s) => s.endMs <= durationMs + 1000, "Segment is outside the track.");
 
+/** Validate seg1 + optional seg2 against a track length; error message or null. */
+function validateSegments(
+  durationMs: number,
+  data: {
+    seg1StartMs: number;
+    seg1EndMs: number;
+    seg2StartMs: number | null;
+    seg2EndMs: number | null;
+  },
+): string | null {
+  const seg1 = segmentRange(durationMs).safeParse({
+    startMs: data.seg1StartMs,
+    endMs: data.seg1EndMs,
+  });
+  if (!seg1.success) return seg1.error.errors[0].message;
+  if ((data.seg2StartMs === null) !== (data.seg2EndMs === null)) {
+    return "Second segment is incomplete.";
+  }
+  if (data.seg2StartMs !== null && data.seg2EndMs !== null) {
+    const seg2 = segmentRange(durationMs).safeParse({
+      startMs: data.seg2StartMs,
+      endMs: data.seg2EndMs,
+    });
+    if (!seg2.success) return seg2.error.errors[0].message;
+  }
+  return null;
+}
+
 const suggestSchema = z.object({
   projectId: z.string().min(1),
   spotifyTrackId: z.string().min(1),
@@ -97,21 +151,8 @@ export async function suggestSong(input: SuggestSongInput) {
   }
   const data = parsed.data;
 
-  const seg1 = segmentRange(data.durationMs).safeParse({
-    startMs: data.seg1StartMs,
-    endMs: data.seg1EndMs,
-  });
-  if (!seg1.success) return { error: seg1.error.errors[0].message };
-  if ((data.seg2StartMs === null) !== (data.seg2EndMs === null)) {
-    return { error: "Second segment is incomplete." };
-  }
-  if (data.seg2StartMs !== null && data.seg2EndMs !== null) {
-    const seg2 = segmentRange(data.durationMs).safeParse({
-      startMs: data.seg2StartMs,
-      endMs: data.seg2EndMs,
-    });
-    if (!seg2.success) return { error: seg2.error.errors[0].message };
-  }
+  const segError = validateSegments(data.durationMs, data);
+  if (segError) return { error: segError };
 
   const existing = await prisma.klub100Song.findUnique({
     where: {
@@ -158,17 +199,61 @@ export async function suggestSong(input: SuggestSongInput) {
   }
 }
 
+const editSchema = z.object({
+  songId: z.string().min(1),
+  seg1StartMs: z.number().int().min(0),
+  seg1EndMs: z.number().int().min(0),
+  seg2StartMs: z.number().int().min(0).nullable(),
+  seg2EndMs: z.number().int().min(0).nullable(),
+  placement: z.enum(["EARLY", "MIDDLE", "LATE"]).nullable(),
+  placementNote: z.string().max(300).nullable(),
+});
+
+export type EditSongInput = z.infer<typeof editSchema>;
+
+/** Edit a suggestion's timing, placement and note. Suggestor or curator only. */
+export async function editSong(input: EditSongInput) {
+  const parsed = editSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.errors[0]?.message ?? "Invalid edit." };
+  }
+  const data = parsed.data;
+
+  const editor = await requireSongEditor(data.songId);
+  if ("error" in editor) return { error: editor.error };
+
+  const segError = validateSegments(editor.song.durationMs, data);
+  if (segError) return { error: segError };
+
+  await prisma.klub100Song.update({
+    where: { id: data.songId },
+    data: {
+      seg1StartMs: data.seg1StartMs,
+      seg1EndMs: data.seg1EndMs,
+      seg2StartMs: data.seg2StartMs,
+      seg2EndMs: data.seg2EndMs,
+      placement: data.placement,
+      placementNote: data.placementNote?.trim() || null,
+    },
+  });
+  revalidatePath(projectPath(editor.song.projectId));
+  return { ok: true };
+}
+
 export async function deleteSuggestion(songId: string) {
   const session = await requireSession();
   const song = await prisma.klub100Song.findUnique({
     where: { id: songId },
-    include: { cheers: true, project: { select: { createdById: true } } },
+    include: {
+      cheers: true,
+      project: {
+        select: { createdById: true, admins: { select: { userId: true } } },
+      },
+    },
   });
   if (!song) return { error: "Song not found." };
 
-  const isCurator =
-    song.project.createdById === session.user.id ||
-    session.user.role === "ADMIN";
+  const isCurator = computeIsCurator(song.project, session.user);
   if (song.suggestedById !== session.user.id && !isCurator) {
     return { error: "You can only remove your own suggestions." };
   }
@@ -307,9 +392,11 @@ async function compactPositions(projectId: string) {
   );
 }
 
-/** Attach (or replace) the cheers recording on a song. Any member may do this. */
+/**
+ * Attach (or replace) the cheers recording on a song. Suggestor or curator only
+ * — changing the cheers counts as editing the suggestion.
+ */
 export async function attachCheers(formData: FormData) {
-  const session = await requireSession();
   const songId = String(formData.get("songId") ?? "");
   const file = formData.get("file");
 
@@ -323,11 +410,9 @@ export async function attachCheers(formData: FormData) {
     return { error: "Only audio files can be a cheers." };
   }
 
-  const song = await prisma.klub100Song.findUnique({
-    where: { id: songId },
-    include: { cheers: true },
-  });
-  if (!song) return { error: "Song not found." };
+  const editor = await requireSongEditor(songId);
+  if ("error" in editor) return { error: editor.error };
+  const { session, song } = editor;
 
   const storedName = await saveUpload(file);
   if (song.cheers) {
@@ -344,5 +429,53 @@ export async function attachCheers(formData: FormData) {
     },
   });
   revalidatePath(projectPath(song.projectId));
+  return { ok: true };
+}
+
+/** Remove a song's cheers recording. Suggestor or curator only. */
+export async function removeCheers(songId: string) {
+  const editor = await requireSongEditor(songId);
+  if ("error" in editor) return { error: editor.error };
+  const { song } = editor;
+
+  if (!song.cheers) return { ok: true };
+  await prisma.klub100Cheers.delete({ where: { id: song.cheers.id } });
+  await deleteUpload(song.cheers.storedName);
+  revalidatePath(projectPath(song.projectId));
+  return { ok: true };
+}
+
+/** Curator: grant another site member curator rights on this project. */
+export async function addProjectAdmin(projectId: string, userId: string) {
+  const curator = await requireCurator(projectId);
+  if ("error" in curator) return { error: curator.error };
+
+  if (userId === curator.project.createdById) return { ok: true }; // already implicit
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!user) return { error: "User not found." };
+
+  try {
+    await prisma.klub100ProjectAdmin.create({ data: { projectId, userId } });
+  } catch (e) {
+    // Already an admin — treat as success.
+    if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) {
+      throw e;
+    }
+  }
+  revalidatePath(projectPath(projectId));
+  return { ok: true };
+}
+
+/** Curator: revoke a project admin's curator rights. */
+export async function removeProjectAdmin(projectId: string, userId: string) {
+  const curator = await requireCurator(projectId);
+  if ("error" in curator) return { error: curator.error };
+
+  await prisma.klub100ProjectAdmin.deleteMany({ where: { projectId, userId } });
+  revalidatePath(projectPath(projectId));
   return { ok: true };
 }

@@ -26,6 +26,7 @@ model User {
   klub100Songs    Klub100Song[]
   klub100Cheers   Klub100Cheers[]
   klub100Votes    Klub100Vote[]
+  klub100ProjectAdminOf Klub100ProjectAdmin[]
   spotifyAccount  SpotifyAccount?
 }
 
@@ -76,9 +77,23 @@ model Klub100Project {
   createdBy   User          @relation(fields: [createdById], references: [id], onDelete: Cascade)
   createdById String
   songs       Klub100Song[]
+  admins      Klub100ProjectAdmin[]
   playbackState Klub100PlaybackState?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+}
+
+// Extra members the project creator has granted curator rights to. The creator
+// is always an implicit admin and is never stored here. Site-wide ADMINs also
+// curate every project, independent of these rows.
+model Klub100ProjectAdmin {
+  project   Klub100Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime       @default(now())
+
+  @@id([projectId, userId])
 }
 
 // Crash-safe resume for live playback: where the mix got to, persisted after
