@@ -59,22 +59,34 @@ export function SongMeta({ song }: { song: SongView }) {
   );
 }
 
-/** Cheers player when present, otherwise an add button. */
-export function CheersCell({ song }: { song: SongView }) {
+/**
+ * Cheers player when present, plus add/replace controls for editors. Everyone
+ * can listen; only the suggestor or a curator (`canEdit`) can change the clip.
+ */
+export function CheersCell({
+  song,
+  canEdit,
+}: {
+  song: SongView;
+  canEdit: boolean;
+}) {
+  if (!song.hasCheers && !canEdit) return null;
   return (
     <div className="flex items-center gap-2">
-      {song.hasCheers ? (
-        <>
-          <audio
-            src={`/api/klub100/cheers/${song.id}`}
-            controls
-            preload="none"
-            className="h-9 w-44 max-w-full"
-          />
-          <CheersButton songId={song.id} songTitle={song.title} hasCheers />
-        </>
-      ) : (
-        <CheersButton songId={song.id} songTitle={song.title} hasCheers={false} />
+      {song.hasCheers && (
+        <audio
+          src={`/api/klub100/cheers/${song.id}`}
+          controls
+          preload="none"
+          className="h-9 w-44 max-w-full"
+        />
+      )}
+      {canEdit && (
+        <CheersButton
+          songId={song.id}
+          songTitle={song.title}
+          hasCheers={song.hasCheers}
+        />
       )}
     </div>
   );

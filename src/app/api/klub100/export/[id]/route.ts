@@ -4,6 +4,7 @@ import path from "path";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { readUpload } from "@/lib/storage";
+import { computeIsCurator } from "@/modules/klub100/shared";
 
 /**
  * Owner/admin export: a ZIP with manifest.json, manifest.csv and all cheers
@@ -23,6 +24,7 @@ export async function GET(
     where: { id },
     include: {
       createdBy: { select: { name: true } },
+      admins: { select: { userId: true } },
       songs: {
         include: {
           suggestedBy: { select: { name: true } },
@@ -35,7 +37,7 @@ export async function GET(
   if (!project) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (project.createdById !== session.user.id && session.user.role !== "ADMIN") {
+  if (!computeIsCurator(project, session.user)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

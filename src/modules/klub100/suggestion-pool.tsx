@@ -8,6 +8,7 @@ import {
   restoreSong,
   toggleVote,
 } from "./actions";
+import { EditSongButton } from "./edit-song";
 import { CheersCell, SongMeta } from "./song-bits";
 import { placementLabels, type Placement, type SongView } from "./shared";
 
@@ -69,7 +70,9 @@ export function SuggestionPool({
         </p>
       ) : (
         <ul className="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white shadow-sm">
-          {visible.map((song) => (
+          {visible.map((song) => {
+            const canEdit = isCurator || song.suggestedById === currentUserId;
+            return (
             <li key={song.id} className="flex flex-col gap-2 px-4 py-3">
               <div className="flex items-center gap-3">
                 <SongMeta song={song} />
@@ -89,7 +92,8 @@ export function SuggestionPool({
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <CheersCell song={song} />
+                <CheersCell song={song} canEdit={canEdit} />
+                {canEdit && <EditSongButton song={song} />}
                 <span className="flex-1" />
                 {isCurator && (
                   <>
@@ -126,7 +130,8 @@ export function SuggestionPool({
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 

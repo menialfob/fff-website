@@ -16,6 +16,22 @@ export const placementLabels: Record<Placement, string> = {
   LATE: "Late",
 };
 
+/**
+ * Whether a user may curate a project: the site admin, the creator, or anyone
+ * the creator has added as a project admin. Pure — pass the project's admin
+ * rows (selected as `{ userId }`) so it can be reused in pages and actions.
+ */
+export function computeIsCurator(
+  project: { createdById: string; admins: { userId: string }[] },
+  user: { id: string; role: string },
+): boolean {
+  return (
+    user.role === "ADMIN" ||
+    project.createdById === user.id ||
+    project.admins.some((a) => a.userId === user.id)
+  );
+}
+
 /** Serializable view of a song row, built by the project page. */
 export type SongView = {
   id: string;

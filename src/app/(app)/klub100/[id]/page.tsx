@@ -3,10 +3,15 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { DeleteProjectButton } from "@/modules/klub100/project-controls";
+import { ProjectAdminManager } from "@/modules/klub100/project-admins";
 import { SuggestSongButton } from "@/modules/klub100/suggest-song";
 import { SuggestionPool } from "@/modules/klub100/suggestion-pool";
 import { Tracklist } from "@/modules/klub100/tracklist";
-import { TRACKLIST_SIZE, type SongView } from "@/modules/klub100/shared";
+import {
+  computeIsCurator,
+  TRACKLIST_SIZE,
+  type SongView,
+} from "@/modules/klub100/shared";
 
 export default async function Klub100ProjectPage({
   params,
@@ -19,7 +24,8 @@ export default async function Klub100ProjectPage({
   const project = await prisma.klub100Project.findUnique({
     where: { id },
     include: {
-      createdBy: { select: { name: true } },
+      createdBy: { select: { id: true, name: true } },
+      admins: { select: { userId: true } },
       songs: {
         include: {
           suggestedBy: { select: { name: true } },
@@ -31,8 +37,15 @@ export default async function Klub100ProjectPage({
   });
   if (!project) notFound();
 
-  const isCurator =
-    project.createdById === session.user.id || session.user.role === "ADMIN";
+  const isCurator = computeIsCurator(project, session.user);
+
+  // Members the curator can pick from when managing project admins.
+  const members = isCurator
+    ? await prisma.user.findMany({
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
 
   const songs: SongView[] = project.songs.map((s) => ({
     id: s.id,
@@ -107,7 +120,11 @@ export default async function Klub100ProjectPage({
         <SuggestSongButton projectId={project.id} />
       </div>
       <div className="mt-3">
-        <Tracklist songs={accepted} isCurator={isCurator} />
+        <Tracklist
+          songs={accepted}
+          isCurator={isCurator}
+          currentUserId={session.user.id}
+        />
       </div>
 
       <h2 className="mt-8 text-xl font-semibold">
@@ -125,7 +142,13 @@ export default async function Klub100ProjectPage({
       />
 
       {isCurator && (
-        <div className="mt-10 border-t border-stone-200 pt-4">
+        <div className="mt-10 space-y-8 border-t border-stone-200 pt-6">
+          <ProjectAdminManager
+            projectId={project.id}
+            creator={{ id: project.createdBy.id, name: project.createdBy.name }}
+            adminUserIds={project.admins.map((a) => a.userId)}
+            members={members}
+          />
           <DeleteProjectButton projectId={project.id} />
         </div>
       )}

@@ -2,15 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { moveSong, restoreSong } from "./actions";
+import { EditSongButton } from "./edit-song";
 import { CheersCell, SongMeta } from "./song-bits";
 import type { SongView } from "./shared";
 
 export function Tracklist({
   songs,
   isCurator,
+  currentUserId,
 }: {
   songs: SongView[]; // accepted, sorted by position
   isCurator: boolean;
+  currentUserId: string;
 }) {
   const [error, setError] = useState<string>();
   const [isPending, startTransition] = useTransition();
@@ -37,7 +40,9 @@ export function Tracklist({
         </p>
       )}
       <ol className="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white shadow-sm">
-        {songs.map((song) => (
+        {songs.map((song) => {
+          const canEdit = isCurator || song.suggestedById === currentUserId;
+          return (
           <li key={song.id} className="flex flex-col gap-2 px-4 py-3">
             <div className="flex items-center gap-3">
               <span className="w-8 shrink-0 text-right font-mono text-sm text-stone-500">
@@ -68,7 +73,8 @@ export function Tracklist({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2 pl-11">
-              <CheersCell song={song} />
+              <CheersCell song={song} canEdit={canEdit} />
+              {canEdit && <EditSongButton song={song} />}
               <span className="flex-1" />
               <span className="text-xs text-stone-500">♥ {song.voteCount}</span>
               {isCurator && (
@@ -91,7 +97,8 @@ export function Tracklist({
               )}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ol>
     </div>
   );
