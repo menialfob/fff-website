@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { attachCheers, suggestSong } from "./actions";
 import { searchSongs, type SearchResult } from "./search-actions";
 import { CheersCapture } from "./cheers-recorder";
@@ -48,15 +48,35 @@ function SuggestSongDialog({
   const [cheersFile, setCheersFile] = useState<File | null>(null);
   const [error, setError] = useState<string>();
   const [isPending, startTransition] = useTransition();
+  // Bumped on every search so out-of-order responses from earlier keystrokes
+  // can be discarded — only the latest request gets to set state.
+  const searchSeq = useRef(0);
 
-  const runSearch = () => {
-    startTransition(async () => {
-      const result = await searchSongs(projectId, query);
-      setError(result.error);
-      setResults(result.tracks ?? []);
-      setSearched(true);
-    });
-  };
+  // Spotify-style live search: debounce the query and search as the user
+  // types, instead of waiting for a button press.
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      searchSeq.current += 1; // invalidate any in-flight request
+      setResults([]);
+      setSearched(false);
+      setError(undefined);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const seq = ++searchSeq.current;
+      startTransition(async () => {
+        const result = await searchSongs(projectId, trimmed);
+        if (seq !== searchSeq.current) return; // a newer search superseded us
+        setError(result.error);
+        setResults(result.tracks ?? []);
+        setSearched(true);
+      });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [query, projectId]);
 
   const selectTrack = (t: SearchResult) => {
     setTrack(t);
@@ -128,29 +148,22 @@ function SuggestSongDialog({
         <div className="flex-1 overflow-y-auto p-4">
           {!track ? (
             <>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  runSearch();
-                }}
-                className="flex gap-2"
-              >
+              <div className="relative">
                 <input
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search Spotify — song or artist"
                   autoFocus
-                  className="min-w-0 flex-1 rounded-md border border-stone-300 px-3 py-2.5 text-sm"
+                  className="w-full rounded-md border border-stone-300 px-3 py-2.5 pr-10 text-base sm:text-sm"
                 />
-                <button
-                  type="submit"
-                  disabled={isPending || !query.trim()}
-                  className="rounded-md bg-stone-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50"
-                >
-                  {isPending ? "…" : "Search"}
-                </button>
-              </form>
+                {isPending && (
+                  <span
+                    aria-hidden
+                    className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-stone-300 border-t-stone-700"
+                  />
+                )}
+              </div>
               {error && (
                 <p className="mt-3 text-sm text-red-600" role="alert">
                   {error}
@@ -183,7 +196,7 @@ function SuggestSongDialog({
                     </button>
                   </li>
                 ))}
-                {searched && !isPending && results.length === 0 && !error && (
+                {searched && !isPending && query.trim() && results.length === 0 && !error && (
                   <li className="py-4 text-sm text-stone-500">No tracks found.</li>
                 )}
               </ul>
@@ -254,7 +267,7 @@ function SuggestSongDialog({
                   onChange={(e) => setNote(e.target.value)}
                   maxLength={300}
                   placeholder="Optional note — “late song for when people are hyped”"
-                  className="mt-2 w-full rounded-md border border-stone-300 px-3 py-2.5 text-sm"
+                  className="mt-2 w-full rounded-md border border-stone-300 px-3 py-2.5 text-base sm:text-sm"
                 />
               </div>
 
