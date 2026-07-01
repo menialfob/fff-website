@@ -390,14 +390,17 @@ export class PlaybackEngine {
     if (!(await this.waitForTrackStart(song.spotifyTrackId))) return "failed";
     await this.fadeTo(1, fade);
 
-    // Watch the position until the cut point (minus the fade-out window).
-    // `progressed` gates the "ended early" fallback below: even after
-    // waitForTrackStart saw the track playing, the SDK can briefly report
-    // paused/position 0 while the freshly-requested track is still settling.
-    // Honouring that transient as an early end skips the song right after the
-    // cheers — the intermittent skip hosts were seeing. Only trust it once we
-    // have actually observed the track making progress.
-    let progressed = false;
+    // Play the segment for its wall-clock duration rather than watching the
+    // SDK's reported position for the cut point. At a track boundary
+    // getCurrentState() keeps returning the *previous* song's position for a
+    // beat after the new track's URI is already live, so a position-based cut
+    // fires instantly for every song after the first (which alone starts from
+    // a fresh player at 0). Timing off elapsed playtime sidesteps that stale
+    // read entirely; the SDK position is only used to notice a track that ends
+    // before its slice is up.
+    const playMs = segLen - fade;
+    let elapsedMs = 0;
+    let lastTick = Date.now();
     while (true) {
       if (this.stopped) return "skipped";
       if (this.fatalError) return "failed";
@@ -408,18 +411,21 @@ export class PlaybackEngine {
         return "skipped";
       }
       if (this.userPaused) {
+        lastTick = Date.now(); // don't count paused time toward the segment
         await sleep(TICK_MS);
         continue;
       }
+      const now = Date.now();
+      elapsedMs += now - lastTick;
+      lastTick = now;
+      this.emit({ segmentProgressMs: Math.min(elapsedMs, segLen) });
+      if (elapsedMs >= playMs) break;
+      // Track ended before its slice was up (song shorter than the segment):
+      // once we've actually been playing, a paused/reset-to-0 state means the
+      // song is over, so move on instead of fading silence.
       const state = await player.getCurrentState();
-      if (state) {
-        this.emit({
-          segmentProgressMs: Math.max(0, Math.min(state.position - seg.startMs, segLen)),
-        });
-        if (state.position > seg.startMs) progressed = true;
-        if (state.position >= seg.endMs - fade) break;
-        // Track ended early (segment ran to the end of the song).
-        if (progressed && state.paused && state.position === 0) return "completed";
+      if (state && elapsedMs > 1000 && state.paused && state.position === 0) {
+        return "completed";
       }
       await sleep(TICK_MS);
     }
