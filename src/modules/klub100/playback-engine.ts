@@ -391,6 +391,13 @@ export class PlaybackEngine {
     await this.fadeTo(1, fade);
 
     // Watch the position until the cut point (minus the fade-out window).
+    // `progressed` gates the "ended early" fallback below: even after
+    // waitForTrackStart saw the track playing, the SDK can briefly report
+    // paused/position 0 while the freshly-requested track is still settling.
+    // Honouring that transient as an early end skips the song right after the
+    // cheers — the intermittent skip hosts were seeing. Only trust it once we
+    // have actually observed the track making progress.
+    let progressed = false;
     while (true) {
       if (this.stopped) return "skipped";
       if (this.fatalError) return "failed";
@@ -409,9 +416,10 @@ export class PlaybackEngine {
         this.emit({
           segmentProgressMs: Math.max(0, Math.min(state.position - seg.startMs, segLen)),
         });
+        if (state.position > seg.startMs) progressed = true;
         if (state.position >= seg.endMs - fade) break;
         // Track ended early (segment ran to the end of the song).
-        if (state.paused && state.position === 0) return "completed";
+        if (progressed && state.paused && state.position === 0) return "completed";
       }
       await sleep(TICK_MS);
     }
