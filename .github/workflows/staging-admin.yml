@@ -1,0 +1,53 @@
+name: Create staging admin
+
+# On-demand: creates or resets a single ADMIN account on the STAGING site so
+# you can get initial access (staging has its own empty database). Run it from
+# the Actions tab. The password is read from the STAGING_ADMIN_PASSWORD repo
+# secret so it never appears in this (public) repo or in the run logs.
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Admin email to create/reset on staging"
+        required: true
+        default: "jonasnlind@gmail.com"
+      name:
+        description: "Display name"
+        required: false
+        default: "Admin"
+
+concurrency:
+  group: staging-admin
+  cancel-in-progress: false
+
+jobs:
+  set-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upsert admin in the staging container
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          ADMIN_EMAIL: ${{ inputs.email }}
+          ADMIN_NAME: ${{ inputs.name }}
+          ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: ADMIN_EMAIL,ADMIN_NAME,ADMIN_PASSWORD
+          script: |
+            if [ -z "$ADMIN_PASSWORD" ]; then
+              echo "Secret STAGING_ADMIN_PASSWORD is not set. Add it under" >&2
+              echo "repo Settings -> Secrets and variables -> Actions." >&2
+              exit 1
+            fi
+            cd /opt/fff-website
+            # Make sure the running staging container has the latest image
+            # (which contains scripts/set-admin.mjs).
+            docker compose pull app-staging
+            docker compose up -d app-staging
+            docker compose exec -T \
+              -e ADMIN_EMAIL="$ADMIN_EMAIL" \
+              -e ADMIN_NAME="$ADMIN_NAME" \
+              -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+              app-staging node scripts/set-admin.mjs

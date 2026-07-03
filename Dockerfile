@@ -50,6 +50,7 @@ COPY --from=prisma-cli /cli/node_modules ./cli/node_modules
 # package; bootstrap-admin.mjs needs it at runtime
 COPY --from=builder /app/node_modules/bcryptjs ./node_modules/bcryptjs
 COPY scripts/bootstrap-admin.mjs ./scripts/bootstrap-admin.mjs
+COPY scripts/set-admin.mjs ./scripts/set-admin.mjs
 COPY --chmod=755 docker-entrypoint.sh ./
 
 USER nextjs
