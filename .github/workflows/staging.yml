@@ -63,6 +63,9 @@ jobs:
                 .env > .env.staging
             docker compose pull app-staging
             docker compose up -d app-staging caddy
-            # Reload Caddy so the test.<domain> site block picks up any change.
-            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+            # Restart Caddy so it reloads the synced Caddyfile and makes a
+            # fresh certificate-issuance attempt. A restart (rather than a hot
+            # reload) resets any ACME backoff left over from an earlier try
+            # that raced ahead of the DNS record being created.
+            docker compose restart caddy
             docker image prune -f

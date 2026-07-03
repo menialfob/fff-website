@@ -63,7 +63,8 @@ jobs:
                 .env > .env.staging
             docker compose pull app
             docker compose up -d app caddy
-            # Reload Caddy in case the synced Caddyfile changed (a bind-mount
-            # content change alone does not recreate the container).
-            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+            # Restart Caddy so it picks up the synced Caddyfile (a bind-mount
+            # content change alone does not recreate the container) and makes a
+            # fresh certificate-issuance attempt for any newly added site.
+            docker compose restart caddy
             docker image prune -f
