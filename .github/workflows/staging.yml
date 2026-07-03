@@ -1,12 +1,16 @@
-name: Deploy
+name: Staging
 
+# Builds and deploys a live staging copy of the site at test.<domain> on every
+# push to a non-main branch. Intended for solo, one-branch-at-a-time work: each
+# push overwrites the single ':staging' image and refreshes one shared staging
+# container (its own database volume, separate from production).
 on:
   push:
-    branches: [main]
+    branches-ignore: [main]
 
 concurrency:
-  group: deploy
-  cancel-in-progress: false
+  group: staging
+  cancel-in-progress: true
 
 jobs:
   build-and-push:
@@ -26,9 +30,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+          tags: ghcr.io/${{ github.repository }}:staging
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -46,7 +48,7 @@ jobs:
           source: "deploy/docker-compose.yml,deploy/Caddyfile"
           target: "/opt/fff-website"
           strip_components: 1
-      - name: Pull and restart on server
+      - name: Pull and restart staging on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -54,16 +56,13 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             cd /opt/fff-website
-            # Derive the staging env from prod, overriding only the domain, so
-            # .env.staging always exists (compose references it) and stays in
-            # sync with prod secrets.
+            # Derive the staging env from prod, overriding only the domain.
             PROD_DOMAIN=$(grep '^SITE_DOMAIN=' .env | cut -d= -f2-)
             sed -e "s|^SITE_DOMAIN=.*|SITE_DOMAIN=test.${PROD_DOMAIN}|" \
                 -e "s|^AUTH_URL=.*|AUTH_URL=https://test.${PROD_DOMAIN}|" \
                 .env > .env.staging
-            docker compose pull app
-            docker compose up -d app caddy
-            # Reload Caddy in case the synced Caddyfile changed (a bind-mount
-            # content change alone does not recreate the container).
+            docker compose pull app-staging
+            docker compose up -d app-staging caddy
+            # Reload Caddy so the test.<domain> site block picks up any change.
             docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
             docker image prune -f

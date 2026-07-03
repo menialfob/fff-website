@@ -149,6 +149,42 @@ Migrations run automatically when the app container starts.
 **Rollback:** on the server, edit the image tag in `docker-compose.yml` to a
 previous commit SHA and `docker compose up -d`.
 
+### Staging environment (`test.<domain>`)
+
+`staging.yml` gives you a live copy of the site to test a branch before merging
+to `main` — no manual SSH, only a one-time DNS record. It's built for solo,
+one-branch-at-a-time work: every push to a **non-`main`** branch rebuilds the
+`:staging` image and refreshes a single `app-staging` container served at
+`test.<your-domain>` (e.g. `test.fff.example.com`).
+
+How it stays hands-off:
+
+- Both workflows now `scp` `docker-compose.yml` and `Caddyfile` to the server
+  before restarting, so those files are driven from the repo — edit them here,
+  push, done. (Before, they were only ever placed on the server by hand.)
+- The deploy step derives `.env.staging` from the server's `.env`, overriding
+  only `SITE_DOMAIN`/`AUTH_URL` to `test.<domain>`. Staging reuses production's
+  `AUTH_SECRET` and `INITIAL_ADMIN_*`; no extra secrets to manage.
+- `app-staging` uses its own `app-staging-data` volume, so staging has a
+  **separate database and uploads** — production data is never touched. The
+  first push seeds a fresh admin from `INITIAL_ADMIN_*`.
+
+**One-time setup:** add an **A record** for `test.<your-domain>` pointing at the
+same server IP, set to **DNS only (grey cloud)** like the main record. Nothing
+else — the existing `DEPLOY_*` secrets and firewall ports (80/443) already
+cover it. Then push any branch and visit `https://test.<your-domain>`.
+
+Notes:
+
+- The staging database persists across branches. A branch that changes
+  `prisma/schema.prisma` migrates that shared DB on startup; if you switch
+  between branches with divergent schemas and hit a migration conflict, reset
+  it with `docker compose down app-staging && docker volume rm
+  fff-website_app-staging-data`, then push again.
+- The **Spotify per-user connect flow won't work on staging** unless you also
+  add `https://test.<domain>/api/spotify/callback` as a Redirect URI in the
+  Spotify dashboard (§5). Track search still works.
+
 ## 5. Spotify (Klub 100)
 
 Two integrations share one Spotify app

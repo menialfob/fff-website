@@ -8,6 +8,17 @@ services:
     volumes:
       - app-data:/data
 
+  # Staging copy of the site. Runs the ':staging' image (rebuilt on every push
+  # to a non-main branch) and reads .env.staging, which the deploy workflow
+  # derives from .env with the domain overridden to test.<domain>. It uses its
+  # own data volume so staging never touches the production database/uploads.
+  app-staging:
+    image: ghcr.io/menialfob/fff-website:staging
+    restart: unless-stopped
+    env_file: .env.staging
+    volumes:
+      - app-staging-data:/data
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -24,5 +35,7 @@ volumes:
   # Holds the SQLite database and all uploaded files — this is the volume
   # to back up.
   app-data:
+  # Staging's throwaway database and uploads — not backed up.
+  app-staging-data:
   caddy-data:
   caddy-config:
