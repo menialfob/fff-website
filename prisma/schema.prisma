@@ -43,6 +43,7 @@ model User {
   extraRoles   UserRole[]
   auditLogs    AuditLog[]
   files        FileItem[]
+  folders      Folder[]
   klub100Projects Klub100Project[]
   klub100Songs    Klub100Song[]
   klub100Cheers   Klub100Cheers[]
@@ -97,6 +98,20 @@ model SpotifyAccount {
   updatedAt     DateTime  @updatedAt
 }
 
+// One-level folders for the files section. Deleting a folder never deletes
+// its files — the SetNull relation moves them back to the root listing.
+// Calendar events own a folder (CalendarEvent.folderId) so event assets are
+// discoverable here; such a folder behaves like any other once the event is
+// gone.
+model Folder {
+  id          String     @id @default(cuid())
+  name        String
+  createdBy   User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  files       FileItem[]
+  createdAt   DateTime   @default(now())
+}
+
 model FileItem {
   id           String   @id @default(cuid())
   // Original filename as uploaded, for display and download.
@@ -107,6 +122,8 @@ model FileItem {
   size         Int
   uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
   uploadedById String
+  folder       Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folderId     String?
   createdAt    DateTime @default(now())
 }
 
