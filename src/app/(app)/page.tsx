@@ -5,6 +5,7 @@ import { fmt } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n/server";
 import { cardHover, moduleAccents } from "@/components/ui";
 import {
+  CalendarIcon,
   FolderIcon,
   MusicIcon,
   ShieldIcon,
@@ -12,6 +13,7 @@ import {
 } from "@/components/icons";
 
 const moduleIcons: Record<ModuleId, (p: { className?: string }) => React.ReactNode> = {
+  calendar: CalendarIcon,
   files: FolderIcon,
   klub100: MusicIcon,
   members: UsersIcon,

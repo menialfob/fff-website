@@ -31,6 +31,10 @@ export const da = {
       label: "Hjem",
       description: "Overblik over hele klubhuset.",
     },
+    calendar: {
+      label: "Kalender",
+      description: "Faste traditioner og ad hoc-begivenheder.",
+    },
     files: {
       label: "Filer",
       description: "Delte billeder, videoer og dokumenter.",
@@ -81,6 +85,9 @@ export const da = {
     emptyFolder: "Denne mappe er tom.",
     fileCount: "{count} filer",
     fileCountOne: "1 fil",
+  },
+  calendar: {
+    empty: "Ingen begivenheder endnu.",
   },
   members: {
     joined: "Medlem siden {date}",

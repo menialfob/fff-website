@@ -37,6 +37,9 @@ model User {
   bio          String?
   // Deactivated users keep their account and content but cannot log in.
   isActive     Boolean    @default(true)
+  // Secret for the personal iCal subscription feed (/api/calendar/feed/…).
+  // Null until the member enables the feed; regenerating it revokes old URLs.
+  calendarToken String?   @unique
   lastLoginAt  DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -44,6 +47,7 @@ model User {
   auditLogs    AuditLog[]
   files        FileItem[]
   folders      Folder[]
+  calendarEvents CalendarEvent[]
   klub100Projects Klub100Project[]
   klub100Songs    Klub100Song[]
   klub100Cheers   Klub100Cheers[]
@@ -109,7 +113,61 @@ model Folder {
   createdBy   User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById String?
   files       FileItem[]
+  event       CalendarEvent?
   createdAt   DateTime   @default(now())
+}
+
+enum CalendarEventKind {
+  ADHOC
+  RECURRING
+}
+
+// The three supported recurrence patterns. Occurrence dates are computed in
+// src/modules/calendar/recurrence.ts and emitted as native RRULEs in the
+// iCal feed — keep the three places consistent.
+enum RecurrenceFreq {
+  MONTHLY_NTH_WEEKDAY // e.g. first Wednesday of every month
+  YEARLY_NTH_WEEKDAY // e.g. first Friday of March, every year
+  YEARLY_FIXED_DATE // e.g. every 24 December
+}
+
+// All times are Danish wall-clock, never UTC: `date` is "YYYY-MM-DD" and
+// startMinutes counts from local midnight. The iCal feed pairs them with
+// TZID=Europe/Copenhagen, so DST conversion is entirely the calendar
+// client's job.
+model CalendarEvent {
+  id              String            @id @default(cuid())
+  kind            CalendarEventKind
+  title           String
+  // TipTap document as a JSON string (SQLite has no Json type).
+  contentJson     String?
+  location        String?
+  allDay          Boolean           @default(true)
+  startMinutes    Int?
+  durationMinutes Int?
+  // ADHOC only: the event's date.
+  date            String?
+  // RECURRING only ↓
+  freq            RecurrenceFreq?
+  // ISO weekday, 1 = Monday … 7 = Sunday (nth-weekday patterns).
+  weekday         Int?
+  // 1..4, or -1 for the last weekday of the month (nth-weekday patterns).
+  ordinal         Int?
+  // 1..12 — the month for the two yearly patterns.
+  month           Int?
+  // 1..31 — day of month for YEARLY_FIXED_DATE.
+  dayOfMonth      Int?
+  // Folder in the files section holding the event's images and attachments.
+  folder          Folder?           @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folderId        String?           @unique
+  // SetNull (unlike FileItem's Cascade): events are group content and must
+  // outlive their author.
+  createdBy       User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([kind, date])
 }
 
 model FileItem {

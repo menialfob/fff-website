@@ -29,6 +29,10 @@ export const en: typeof da = {
       label: "Home",
       description: "Overview of the whole clubhouse.",
     },
+    calendar: {
+      label: "Calendar",
+      description: "Standing traditions and ad hoc events.",
+    },
     files: {
       label: "Files",
       description: "Shared photos, videos and documents.",
@@ -79,6 +83,9 @@ export const en: typeof da = {
     emptyFolder: "This folder is empty.",
     fileCount: "{count} files",
     fileCountOne: "1 file",
+  },
+  calendar: {
+    empty: "No events yet.",
   },
   members: {
     joined: "Member since {date}",

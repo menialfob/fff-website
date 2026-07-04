@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
 import { moduleAccents } from "@/components/ui";
 import {
+  CalendarIcon,
   FolderIcon,
   HomeIcon,
   MusicIcon,
@@ -13,12 +14,13 @@ import {
 } from "@/components/icons";
 
 export type NavItem = {
-  id: "dashboard" | "files" | "klub100" | "members" | "admin";
+  id: "dashboard" | "calendar" | "files" | "klub100" | "members" | "admin";
   href: string;
 };
 
 const navIcons: Record<NavItem["id"], (p: { className?: string }) => React.ReactNode> = {
   dashboard: HomeIcon,
+  calendar: CalendarIcon,
   files: FolderIcon,
   klub100: MusicIcon,
   members: UsersIcon,

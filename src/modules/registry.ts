@@ -15,7 +15,7 @@ import type { ExtraRole } from "@/lib/roles";
  * registers with `requiredRole: "BESTYRELSE"` and guards its server actions
  * with `requireRole("BESTYRELSE")` from src/lib/auth). Admins see everything.
  */
-export type ModuleId = "files" | "klub100" | "members" | "admin";
+export type ModuleId = "calendar" | "files" | "klub100" | "members" | "admin";
 
 export type AppModule = {
   id: ModuleId;
@@ -25,6 +25,9 @@ export type AppModule = {
 };
 
 export const modules: AppModule[] = [
+  // Visible to everyone; recurring-event writes are gated to
+  // ADMIN/BESTYRELSE inside the module's server actions.
+  { id: "calendar", href: "/calendar" },
   { id: "files", href: "/files" },
   { id: "klub100", href: "/klub100" },
   { id: "members", href: "/members" },

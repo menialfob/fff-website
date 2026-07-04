@@ -71,6 +71,7 @@ export const moduleAccents: Record<string, ModuleAccent> = {
     gradient: "from-amber-400 to-orange-500",
     text: "text-amber-300",
   },
+  calendar: { gradient: "from-lime-400 to-green-500", text: "text-lime-300" },
   files: { gradient: "from-sky-400 to-cyan-500", text: "text-sky-300" },
   klub100: {
     gradient: "from-fuchsia-500 to-pink-500",
