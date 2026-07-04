@@ -236,6 +236,23 @@ export const en: typeof da = {
     language: "Language / Sprog",
     languageHint: "Choose the language of the interface.",
     account: "Account",
+    calendarFeed: {
+      title: "Calendar on your phone",
+      hint: "Subscribe to the club calendar so events automatically appear in your own calendar app and stay up to date. The link is personal \u2014 don't share it.",
+      enable: "Enable calendar feed",
+      subscribe: "Open in calendar app",
+      copy: "Copy link",
+      copied: "Copied!",
+      regenerate: "Make a new link (the old one stops working)",
+      confirmRegenerate:
+        "Make a new link? The old one stops working and you'll need to subscribe again on your phone.",
+      iosTitle: "How to on iPhone",
+      iosSteps:
+        "1. Tap \u201cOpen in calendar app\u201d \u2014 or copy the link.\n2. If you copied it: open Settings \u2192 Apps \u2192 Calendar \u2192 Accounts \u2192 Add Account \u2192 Other \u2192 Add Subscribed Calendar, and paste the link.\n3. Tap Subscribe \u2014 done. Events keep themselves up to date.",
+      androidTitle: "How to on Android",
+      androidSteps:
+        "1. Copy the link.\n2. Open calendar.google.com in a browser (easiest on a computer).\n3. Next to \u201cOther calendars\u201d tap + \u2192 From URL, and paste the link.\n4. Tap Add calendar \u2014 it then syncs to Google Calendar on your phone.",
+    },
   },
   klub100: {
     intro:

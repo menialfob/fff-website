@@ -238,6 +238,23 @@ export const da = {
     language: "Sprog / Language",
     languageHint: "Vælg hvilket sprog siden vises på.",
     account: "Konto",
+    calendarFeed: {
+      title: "Kalender på din telefon",
+      hint: "Abonnér på klubbens kalender, så begivenhederne automatisk dukker op i din egen kalender-app og holder sig opdateret. Linket er personligt — del det ikke.",
+      enable: "Aktivér kalender-feed",
+      subscribe: "Åbn i kalender-app",
+      copy: "Kopiér link",
+      copied: "Kopieret!",
+      regenerate: "Lav nyt link (det gamle stopper med at virke)",
+      confirmRegenerate:
+        "Lav et nyt link? Det gamle holder op med at virke, og du skal abonnere igen på din telefon.",
+      iosTitle: "Sådan gør du på iPhone",
+      iosSteps:
+        "1. Tryk på “Åbn i kalender-app” — eller kopiér linket.\n2. Hvis du kopierede: Åbn Indstillinger → Apps → Kalender → Konti → Tilføj konto → Anden → Tilføj kalenderabonnement, og sæt linket ind.\n3. Tryk Abonnér — færdig. Begivenhederne opdaterer sig selv.",
+      androidTitle: "Sådan gør du på Android",
+      androidSteps:
+        "1. Kopiér linket.\n2. Åbn calendar.google.com i en browser (fungerer bedst på computer).\n3. Ved “Andre kalendere” tryk + → Fra webadresse, og sæt linket ind.\n4. Tryk Tilføj kalender — den synkroniserer derefter til Google Kalender på din telefon.",
+    },
   },
   klub100: {
     intro:

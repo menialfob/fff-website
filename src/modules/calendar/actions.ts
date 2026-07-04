@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { logEvent } from "@/lib/audit";
 import { requireSession } from "@/lib/auth";
@@ -345,6 +346,26 @@ export async function deleteEvent(eventId: string) {
     meta: { title: existing.title, kind: existing.kind },
   });
   revalidateCalendar();
+  return { ok: true };
+}
+
+/**
+ * Create or rotate the caller's personal iCal feed token. Rotating
+ * invalidates the previous feed URL immediately.
+ */
+export async function regenerateCalendarToken() {
+  const session = await requireSession();
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { calendarToken: randomBytes(24).toString("base64url") },
+  });
+  await logEvent({
+    actorId: session.user.id,
+    action: "calendar.token.regenerate",
+    targetType: "user",
+    targetId: session.user.id,
+  });
+  revalidatePath("/profile");
   return { ok: true };
 }
 
