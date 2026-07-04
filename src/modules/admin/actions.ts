@@ -3,9 +3,11 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { logEvent } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
+import { isExtraRole, type ExtraRole } from "@/lib/roles";
 
 const createUserSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -15,7 +17,7 @@ const createUserSchema = z.object({
 });
 
 export async function createUser(formData: FormData) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const t = await getDict();
 
   const parsed = createUserSchema.safeParse({
@@ -32,7 +34,7 @@ export async function createUser(formData: FormData) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return { error: t.errors.userExists };
 
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       name: parsed.data.name,
       email,
@@ -40,16 +42,171 @@ export async function createUser(formData: FormData) {
       role: parsed.data.role,
     },
   });
+  await logEvent({
+    actorId: session.user.id,
+    action: "user.create",
+    targetType: "user",
+    targetId: user.id,
+    meta: { targetName: user.name },
+  });
   revalidatePath("/admin");
   return { ok: true };
 }
 
 export async function deleteUser(userId: string) {
   const session = await requireAdmin();
+  const t = await getDict();
   if (userId === session.user.id) {
-    return { error: (await getDict()).errors.cannotDeleteSelf };
+    return { error: t.errors.cannotDeleteSelf };
   }
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: t.errors.userNotFound };
+
   await prisma.user.delete({ where: { id: userId } });
+  await logEvent({
+    actorId: session.user.id,
+    action: "user.delete",
+    targetType: "user",
+    targetId: userId,
+    meta: { targetName: user.name },
+  });
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+const renameSchema = z.object({ name: z.string().trim().min(1).max(100) });
+
+export async function renameUser(userId: string, formData: FormData) {
+  const session = await requireAdmin();
+  const t = await getDict();
+
+  const parsed = renameSchema.safeParse({ name: formData.get("name") });
+  if (!parsed.success) return { error: t.errors.invalidInput };
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: t.errors.userNotFound };
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { name: parsed.data.name },
+  });
+  await logEvent({
+    actorId: session.user.id,
+    action: "user.rename",
+    targetType: "user",
+    targetId: userId,
+    meta: { targetName: user.name, newName: parsed.data.name },
+  });
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function setUserAdmin(userId: string, isAdmin: boolean) {
+  const session = await requireAdmin();
+  const t = await getDict();
+  if (userId === session.user.id && !isAdmin) {
+    return { error: t.errors.cannotDemoteSelf };
+  }
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: t.errors.userNotFound };
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { role: isAdmin ? "ADMIN" : "MEMBER" },
+  });
+  await logEvent({
+    actorId: session.user.id,
+    action: isAdmin ? "user.promote" : "user.demote",
+    targetType: "user",
+    targetId: userId,
+    meta: { targetName: user.name },
+  });
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+const resetPasswordSchema = z.object({ password: z.string().min(8).max(200) });
+
+export async function resetUserPassword(userId: string, formData: FormData) {
+  const session = await requireAdmin();
+  const t = await getDict();
+
+  const parsed = resetPasswordSchema.safeParse({
+    password: formData.get("password"),
+  });
+  if (!parsed.success) return { error: t.errors.invalidPassword };
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: t.errors.userNotFound };
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await bcrypt.hash(parsed.data.password, 12) },
+  });
+  // Never put the password itself in the log meta.
+  await logEvent({
+    actorId: session.user.id,
+    action: "user.passwordReset",
+    targetType: "user",
+    targetId: userId,
+    meta: { targetName: user.name },
+  });
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function setUserActive(userId: string, active: boolean) {
+  const session = await requireAdmin();
+  const t = await getDict();
+  if (userId === session.user.id && !active) {
+    return { error: t.errors.cannotDeactivateSelf };
+  }
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: t.errors.userNotFound };
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isActive: active },
+  });
+  await logEvent({
+    actorId: session.user.id,
+    action: active ? "user.reactivate" : "user.deactivate",
+    targetType: "user",
+    targetId: userId,
+    meta: { targetName: user.name },
+  });
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function setExtraRole(
+  userId: string,
+  role: ExtraRole,
+  granted: boolean,
+) {
+  const session = await requireAdmin();
+  const t = await getDict();
+  if (!isExtraRole(role)) return { error: t.errors.invalidInput };
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: t.errors.userNotFound };
+
+  if (granted) {
+    await prisma.userRole.upsert({
+      where: { userId_role: { userId, role } },
+      create: { userId, role },
+      update: {},
+    });
+  } else {
+    await prisma.userRole.deleteMany({ where: { userId, role } });
+  }
+  await logEvent({
+    actorId: session.user.id,
+    action: granted ? "user.grantRole" : "user.revokeRole",
+    targetType: "user",
+    targetId: userId,
+    meta: { targetName: user.name, role },
+  });
   revalidatePath("/admin");
   return { ok: true };
 }

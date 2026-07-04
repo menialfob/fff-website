@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { modulesForRole, type ModuleId } from "@/modules/registry";
+import { modulesForUser, type ModuleId } from "@/modules/registry";
 import { fmt } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n/server";
 import { cardHover, moduleAccents } from "@/components/ui";
@@ -32,7 +32,7 @@ export default async function DashboardPage() {
       </h1>
       <p className="mb-8 mt-2 text-zinc-400">{t.dashboard.welcomeBack}</p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {modulesForRole(role).map((m) => {
+        {modulesForUser({ role, extraRoles: session?.user?.extraRoles }).map((m) => {
           const Icon = moduleIcons[m.id];
           const accent = moduleAccents[m.id];
           return (

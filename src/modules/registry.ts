@@ -1,3 +1,5 @@
+import type { ExtraRole } from "@/lib/roles";
+
 /**
  * Central registry of feature modules.
  *
@@ -7,6 +9,11 @@
  *  3. Register it here and add its `modules.<id>` labels to both i18n
  *     dictionaries, plus a nav icon + accent — the nav and dashboard pick it
  *     up automatically.
+ *
+ * Access control: `adminOnly` limits a module to site admins. `requiredRole`
+ * limits it to holders of an extra role (e.g. a future bestyrelse-only area
+ * registers with `requiredRole: "BESTYRELSE"` and guards its server actions
+ * with `requireRole("BESTYRELSE")` from src/lib/auth). Admins see everything.
  */
 export type ModuleId = "files" | "klub100" | "members" | "admin";
 
@@ -14,6 +21,7 @@ export type AppModule = {
   id: ModuleId;
   href: string;
   adminOnly?: boolean;
+  requiredRole?: ExtraRole;
 };
 
 export const modules: AppModule[] = [
@@ -23,6 +31,14 @@ export const modules: AppModule[] = [
   { id: "admin", href: "/admin", adminOnly: true },
 ];
 
-export function modulesForRole(role: "ADMIN" | "MEMBER") {
-  return modules.filter((m) => !m.adminOnly || role === "ADMIN");
+export function modulesForUser(user: {
+  role: "ADMIN" | "MEMBER";
+  extraRoles?: ExtraRole[];
+}) {
+  return modules.filter((m) => {
+    if (user.role === "ADMIN") return true;
+    if (m.adminOnly) return false;
+    if (m.requiredRole) return user.extraRoles?.includes(m.requiredRole) ?? false;
+    return true;
+  });
 }

@@ -32,3 +32,10 @@ export function fmt(
 export function formatDate(date: Date, locale: Locale): string {
   return date.toLocaleDateString(locale === "da" ? "da-DK" : "en-GB");
 }
+
+export function formatDateTime(date: Date, locale: Locale): string {
+  return date.toLocaleString(locale === "da" ? "da-DK" : "en-GB", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}

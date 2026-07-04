@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logEvent } from "@/lib/audit";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { deleteUpload, saveUpload } from "@/lib/storage";
@@ -21,7 +22,7 @@ export async function uploadFile(formData: FormData) {
   }
 
   const storedName = await saveUpload(file);
-  await prisma.fileItem.create({
+  const item = await prisma.fileItem.create({
     data: {
       name: file.name,
       storedName,
@@ -29,6 +30,13 @@ export async function uploadFile(formData: FormData) {
       size: file.size,
       uploadedById: session.user.id,
     },
+  });
+  await logEvent({
+    actorId: session.user.id,
+    action: "file.upload",
+    targetType: "file",
+    targetId: item.id,
+    meta: { name: file.name, size: file.size },
   });
   revalidatePath("/files");
   return { ok: true };
@@ -46,6 +54,13 @@ export async function deleteFile(fileId: string) {
 
   await prisma.fileItem.delete({ where: { id: fileId } });
   await deleteUpload(file.storedName);
+  await logEvent({
+    actorId: session.user.id,
+    action: "file.delete",
+    targetType: "file",
+    targetId: fileId,
+    meta: { name: file.name },
+  });
   revalidatePath("/files");
   return { ok: true };
 }

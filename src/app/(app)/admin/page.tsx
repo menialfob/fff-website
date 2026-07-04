@@ -1,23 +1,44 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getDict } from "@/lib/i18n/server";
-import { card, cardPad, PageTitle } from "@/components/ui";
-import {
-  CreateUserForm,
-  DeleteUserButton,
-} from "@/modules/admin/admin-controls";
+import { formatDateTime } from "@/lib/i18n";
+import { getDict, getLocale } from "@/lib/i18n/server";
+import { card, cardPad, mutedText, PageTitle } from "@/components/ui";
+import { AdminTabs } from "@/modules/admin/admin-tabs";
+import { CreateUserForm, UserRow } from "@/modules/admin/admin-controls";
 
 export default async function AdminPage() {
   const session = await auth();
   if (session?.user?.role !== "ADMIN") redirect("/");
-  const t = await getDict();
+  const [t, locale] = await Promise.all([getDict(), getLocale()]);
 
-  const users = await prisma.user.findMany({ orderBy: { name: "asc" } });
+  const [users, fileStats, songStats, cheersStats] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { name: "asc" },
+      include: { extraRoles: true },
+    }),
+    prisma.fileItem.groupBy({
+      by: ["uploadedById"],
+      _count: true,
+      _sum: { size: true },
+    }),
+    prisma.klub100Song.groupBy({ by: ["suggestedById"], _count: true }),
+    prisma.klub100Cheers.groupBy({ by: ["recordedById"], _count: true }),
+  ]);
+
+  const files = new Map(
+    fileStats.map((s) => [
+      s.uploadedById,
+      { count: s._count, bytes: s._sum.size ?? 0 },
+    ]),
+  );
+  const songs = new Map(songStats.map((s) => [s.suggestedById, s._count]));
+  const cheers = new Map(cheersStats.map((s) => [s.recordedById, s._count]));
 
   return (
     <div>
       <PageTitle>{t.modules.admin.label}</PageTitle>
+      <AdminTabs active="users" />
       <section className={`${cardPad} mb-8`}>
         <h2 className="mb-4 text-lg font-semibold text-white">
           {t.admin.addUser}
@@ -30,25 +51,33 @@ export default async function AdminPage() {
         </h2>
         <ul className="divide-y divide-white/[0.06] p-2">
           {users.map((user) => (
-            <li
+            <UserRow
               key={user.id}
-              className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 py-3 sm:px-4"
-            >
-              <span className="font-medium text-zinc-100">{user.name}</span>
-              <span className="text-sm text-zinc-500">{user.email}</span>
-              {user.role === "ADMIN" && (
-                <span className="rounded-full border border-rose-400/30 bg-rose-400/10 px-2.5 py-0.5 text-xs font-medium text-rose-300">
-                  {t.admin.adminBadge}
-                </span>
-              )}
-              <span className="flex-1" />
-              {user.id !== session.user.id && (
-                <DeleteUserButton userId={user.id} userName={user.name} />
-              )}
-            </li>
+              user={{
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                isAdmin: user.role === "ADMIN",
+                isActive: user.isActive,
+                extraRoles: user.extraRoles.map((r) => r.role),
+              }}
+              stats={{
+                files: files.get(user.id)?.count ?? 0,
+                bytes: files.get(user.id)?.bytes ?? 0,
+                songs: songs.get(user.id) ?? 0,
+                cheers: cheers.get(user.id) ?? 0,
+              }}
+              isSelf={user.id === session.user.id}
+              lastLogin={
+                user.lastLoginAt
+                  ? formatDateTime(user.lastLoginAt, locale)
+                  : null
+              }
+            />
           ))}
         </ul>
       </section>
+      <p className={`${mutedText} mt-4 text-sm`}>{t.admin.staleSessionHint}</p>
     </div>
   );
 }

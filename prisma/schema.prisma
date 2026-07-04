@@ -12,6 +12,13 @@ enum Role {
   MEMBER
 }
 
+// Additional, independent roles a user can hold besides the ADMIN/MEMBER
+// admin flag. Mirrored as a string-literal union in src/lib/roles.ts, which
+// the edge-safe auth config uses — keep the two in sync.
+enum ExtraRole {
+  BESTYRELSE
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -19,8 +26,13 @@ model User {
   passwordHash String
   role         Role       @default(MEMBER)
   bio          String?
+  // Deactivated users keep their account and content but cannot log in.
+  isActive     Boolean    @default(true)
+  lastLoginAt  DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  extraRoles   UserRole[]
+  auditLogs    AuditLog[]
   files        FileItem[]
   klub100Projects Klub100Project[]
   klub100Songs    Klub100Song[]
@@ -28,6 +40,33 @@ model User {
   klub100Votes    Klub100Vote[]
   klub100ProjectAdminOf Klub100ProjectAdmin[]
   spotifyAccount  SpotifyAccount?
+}
+
+model UserRole {
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      ExtraRole
+  createdAt DateTime  @default(now())
+
+  @@id([userId, role])
+}
+
+// Usage log shown to admins. `action` is a stable key (e.g. "user.rename")
+// looked up in the i18n dictionaries at display time; `meta` is a JSON string
+// (SQLite has no Json type) that snapshots names so rows still render after
+// the actor or target is deleted. Rows are written via logEvent() in
+// src/lib/audit.ts.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  meta       String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 // Per-user Spotify connection (Authorization Code + PKCE). Only needed to
