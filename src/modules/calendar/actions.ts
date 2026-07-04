@@ -8,7 +8,12 @@ import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
 import type { Dictionary } from "@/lib/i18n";
 import { saveUpload } from "@/lib/storage";
-import { daysInMonth, parseISODate } from "./recurrence";
+import {
+  daysInMonth,
+  isOccurrenceDate,
+  parseISODate,
+  type RecurrenceRule,
+} from "./recurrence";
 
 const MAX_TITLE = 120;
 const MAX_LOCATION = 120;
@@ -57,6 +62,34 @@ function intInRange(raw: string, min: number, max: number): number | null {
   return n >= min && n <= max ? n : null;
 }
 
+/**
+ * Rich content + attachment ids from a form. Returns null on invalid
+ * content; an empty document is normalized to null.
+ */
+function parseContentFields(
+  formData: FormData,
+): { contentJson: string | null; attachmentIds: string[] } | null {
+  let contentJson: string | null = str(formData, "contentJson") || null;
+  if (contentJson) {
+    if (Buffer.byteLength(contentJson, "utf8") > MAX_CONTENT_BYTES) return null;
+    try {
+      const doc = JSON.parse(contentJson);
+      if (!doc || typeof doc !== "object" || doc.type !== "doc") return null;
+      // An empty document is stored as null.
+      if (doc.content?.length === 0) contentJson = null;
+    } catch {
+      return null;
+    }
+  }
+
+  const attachmentIds = formData
+    .getAll("attachmentIds")
+    .filter(
+      (v): v is string => typeof v === "string" && /^[A-Za-z0-9]+$/.test(v),
+    );
+  return { contentJson, attachmentIds };
+}
+
 /** Shared field validation for create + update. Returns null on bad input. */
 function parseEventForm(
   kind: "ADHOC" | "RECURRING",
@@ -82,22 +115,14 @@ function parseEventForm(
     }
   }
 
-  let contentJson: string | null = str(formData, "contentJson") || null;
-  if (contentJson) {
-    if (Buffer.byteLength(contentJson, "utf8") > MAX_CONTENT_BYTES) return null;
-    try {
-      const doc = JSON.parse(contentJson);
-      if (!doc || typeof doc !== "object" || doc.type !== "doc") return null;
-    } catch {
-      return null;
-    }
-    // An empty document is stored as null.
-    if (JSON.parse(contentJson).content?.length === 0) contentJson = null;
-  }
-
-  const attachmentIds = formData
-    .getAll("attachmentIds")
-    .filter((v): v is string => typeof v === "string" && /^[A-Za-z0-9]+$/.test(v));
+  // Recurring events carry no series-level content — description and
+  // attachments live per occurrence date (CalendarOccurrence).
+  const content =
+    kind === "ADHOC"
+      ? parseContentFields(formData)
+      : { contentJson: null, attachmentIds: [] };
+  if (!content) return null;
+  const { contentJson, attachmentIds } = content;
 
   const parsed: ParsedEvent = {
     title,
@@ -201,7 +226,7 @@ function extractImageFileIds(contentJson: string | null): string[] {
  * folders or users.
  */
 async function claimAssets(
-  parsed: ParsedEvent,
+  parsed: { contentJson: string | null; attachmentIds: string[] },
   folderId: string,
   userId: string,
 ) {
@@ -233,9 +258,14 @@ export async function createEvent(formData: FormData) {
   const parsed = parseEventForm(kind, formData);
   if (!parsed) return { error: t.errors.invalidInput };
 
-  const folder = await prisma.folder.create({
-    data: { name: parsed.title, createdById: session.user.id },
-  });
+  // Only ad hoc events own a series folder; recurring events get lazy
+  // per-occurrence folders when content is added for a date.
+  const folder =
+    kind === "ADHOC"
+      ? await prisma.folder.create({
+          data: { name: parsed.title, createdById: session.user.id },
+        })
+      : null;
   const event = await prisma.calendarEvent.create({
     data: {
       kind,
@@ -251,11 +281,11 @@ export async function createEvent(formData: FormData) {
       ordinal: parsed.ordinal,
       month: parsed.month,
       dayOfMonth: parsed.dayOfMonth,
-      folderId: folder.id,
+      folderId: folder?.id ?? null,
       createdById: session.user.id,
     },
   });
-  await claimAssets(parsed, folder.id, session.user.id);
+  if (folder) await claimAssets(parsed, folder.id, session.user.id);
   await logEvent({
     actorId: session.user.id,
     action: "calendar.create",
@@ -281,19 +311,21 @@ export async function updateEvent(eventId: string, formData: FormData) {
   const parsed = parseEventForm(existing.kind, formData);
   if (!parsed) return { error: t.errors.invalidInput };
 
-  // Ensure the event still has a folder for its assets, and keep the folder
-  // name in sync with the title so it stays findable in the files section.
+  // Ad hoc events keep a series folder in sync with the title; recurring
+  // events have per-occurrence folders instead and never a series one.
   let folderId = existing.folderId;
-  if (folderId) {
-    await prisma.folder.update({
-      where: { id: folderId },
-      data: { name: parsed.title },
-    });
-  } else {
-    const folder = await prisma.folder.create({
-      data: { name: parsed.title, createdById: session.user.id },
-    });
-    folderId = folder.id;
+  if (existing.kind === "ADHOC") {
+    if (folderId) {
+      await prisma.folder.update({
+        where: { id: folderId },
+        data: { name: parsed.title },
+      });
+    } else {
+      const folder = await prisma.folder.create({
+        data: { name: parsed.title, createdById: session.user.id },
+      });
+      folderId = folder.id;
+    }
   }
 
   await prisma.calendarEvent.update({
@@ -314,7 +346,9 @@ export async function updateEvent(eventId: string, formData: FormData) {
       folderId,
     },
   });
-  await claimAssets(parsed, folderId, session.user.id);
+  if (existing.kind === "ADHOC" && folderId) {
+    await claimAssets(parsed, folderId, session.user.id);
+  }
   await logEvent({
     actorId: session.user.id,
     action: "calendar.update",
@@ -347,6 +381,72 @@ export async function deleteEvent(eventId: string) {
   });
   revalidateCalendar();
   return { ok: true };
+}
+
+/**
+ * Save the content (description + attachments) of one occurrence date of a
+ * recurring event. The row and its folder ("{title} {date}") are created
+ * lazily on first save, so every other date stays blank. Same permission as
+ * the series: ADMIN/BESTYRELSE.
+ */
+export async function saveOccurrenceContent(
+  eventId: string,
+  date: string,
+  formData: FormData,
+) {
+  const t = await getDict();
+  const event = await prisma.calendarEvent.findUnique({
+    where: { id: eventId },
+  });
+  if (!event || event.kind !== "RECURRING" || !event.freq) {
+    return { error: t.errors.eventNotFound };
+  }
+  const { error, session } = await requireEventPermission("RECURRING", t);
+  if (error || !session) return { error: error ?? t.errors.invalidInput };
+
+  // The URL is user-editable — re-check that the date actually belongs to
+  // this event's rule.
+  const rule: RecurrenceRule = {
+    freq: event.freq,
+    weekday: event.weekday,
+    ordinal: event.ordinal,
+    month: event.month,
+    dayOfMonth: event.dayOfMonth,
+  };
+  if (!isOccurrenceDate(rule, date)) return { error: t.errors.invalidInput };
+
+  const content = parseContentFields(formData);
+  if (!content) return { error: t.errors.invalidInput };
+
+  const existing = await prisma.calendarOccurrence.findUnique({
+    where: { eventId_date: { eventId, date } },
+  });
+  let folderId = existing?.folderId ?? null;
+  if (!folderId) {
+    const folder = await prisma.folder.create({
+      data: {
+        name: `${event.title} ${date}`,
+        createdById: session.user.id,
+      },
+    });
+    folderId = folder.id;
+  }
+
+  await prisma.calendarOccurrence.upsert({
+    where: { eventId_date: { eventId, date } },
+    create: { eventId, date, contentJson: content.contentJson, folderId },
+    update: { contentJson: content.contentJson, folderId },
+  });
+  await claimAssets(content, folderId, session.user.id);
+  await logEvent({
+    actorId: session.user.id,
+    action: "calendar.occurrence.update",
+    targetType: "calendarEvent",
+    targetId: eventId,
+    meta: { title: event.title, date },
+  });
+  revalidateCalendar(eventId);
+  return { ok: true, id: eventId };
 }
 
 /**

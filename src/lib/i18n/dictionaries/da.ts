@@ -104,6 +104,10 @@ export const da = {
     createdBy: "Oprettet af {name}",
     prevMonth: "Forrige måned",
     nextMonth: "Næste måned",
+    noOccurrenceContent:
+      "Ingen beskrivelse til denne dato endnu.",
+    editOccurrence: "Rediger indhold for denne dato",
+    occurrenceEditSub: "Gælder kun {date} — andre datoer påvirkes ikke.",
     recurrence: {
       ordinals: {
         "1": "Første",
@@ -137,6 +141,8 @@ export const da = {
       contentLabel: "Beskrivelse",
       attachmentsLabel: "Vedhæftede filer",
       addAttachment: "Tilføj fil",
+      perDateHint:
+        "Beskrivelse, billeder og filer tilføjes pr. dato fra begivenhedens side, så hvert år starter blankt.",
       create: "Opret begivenhed",
     },
     editor: {
@@ -230,6 +236,7 @@ export const da = {
         "calendar.create": "Oprettede begivenheden {title}",
         "calendar.update": "Redigerede begivenheden {title}",
         "calendar.delete": "Slettede begivenheden {title}",
+        "calendar.occurrence.update": "Redigerede {title} den {date}",
         "calendar.token.regenerate": "Fornyede sit kalender-link",
       },
     },

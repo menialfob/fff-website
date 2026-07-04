@@ -27,6 +27,7 @@ export async function GET(
 
   const events = await prisma.calendarEvent.findMany({
     orderBy: { createdAt: "asc" },
+    include: { occurrences: true },
   });
   const ics = buildIcs(events, {
     calendarName: "FFF",

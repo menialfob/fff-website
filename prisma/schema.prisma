@@ -114,6 +114,7 @@ model Folder {
   createdById String?
   files       FileItem[]
   event       CalendarEvent?
+  occurrence  CalendarOccurrence?
   createdAt   DateTime   @default(now())
 }
 
@@ -139,7 +140,9 @@ model CalendarEvent {
   id              String            @id @default(cuid())
   kind            CalendarEventKind
   title           String
-  // TipTap document as a JSON string (SQLite has no Json type).
+  // ADHOC only — TipTap document as a JSON string (SQLite has no Json
+  // type). Recurring events keep their content per occurrence date in
+  // CalendarOccurrence instead, so each year/month starts blank.
   contentJson     String?
   location        String?
   allDay          Boolean           @default(true)
@@ -157,17 +160,38 @@ model CalendarEvent {
   month           Int?
   // 1..31 — day of month for YEARLY_FIXED_DATE.
   dayOfMonth      Int?
-  // Folder in the files section holding the event's images and attachments.
+  // ADHOC only — folder in the files section holding the event's images
+  // and attachments (recurring events use per-occurrence folders).
   folder          Folder?           @relation(fields: [folderId], references: [id], onDelete: SetNull)
   folderId        String?           @unique
   // SetNull (unlike FileItem's Cascade): events are group content and must
   // outlive their author.
   createdBy       User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById     String?
+  occurrences     CalendarOccurrence[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   @@index([kind, date])
+}
+
+// Per-date content of a RECURRING event. The series shares rule/title/time,
+// but description and assets belong to a single occurrence — the row (and
+// its folder, named "{title} {date}") is created lazily the first time
+// someone saves content for that date.
+model CalendarOccurrence {
+  id          String        @id @default(cuid())
+  event       CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId     String
+  // "YYYY-MM-DD"; always validated against the event's recurrence rule.
+  date        String
+  contentJson String?
+  folder      Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folderId    String?       @unique
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([eventId, date])
 }
 
 model FileItem {

@@ -98,6 +98,13 @@ export function occurrenceInMonth(
   }
 }
 
+/** Whether a "YYYY-MM-DD" date is an occurrence of the rule. */
+export function isOccurrenceDate(rule: RecurrenceRule, iso: string): boolean {
+  const parsed = parseISODate(iso);
+  if (!parsed) return false;
+  return occurrenceInMonth(rule, parsed.year, parsed.month) === iso;
+}
+
 /** All occurrence dates with fromISO <= date <= toISO, ascending. */
 export function occurrencesInRange(
   rule: RecurrenceRule,

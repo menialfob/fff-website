@@ -47,30 +47,29 @@ function minutesToTime(minutes: number | null): string {
 
 const ORDINALS = ["1", "2", "3", "4", "-1"] as const;
 
-export function EventForm({
-  event,
-  canRecurring,
+/**
+ * Rich content editor + attachment uploader, shared by the ad hoc event
+ * form and the per-date occurrence form. Emits `contentJson` (hidden input
+ * from the editor) and repeated `attachmentIds` fields into the enclosing
+ * form; reports upload activity so the parent can hold its submit button.
+ */
+export function ContentAndAttachments({
+  initialContent,
+  onUploadingChange,
 }: {
-  /** Present when editing; absent when creating. */
-  event?: EventFormValues;
-  /** Whether the viewer may manage recurring events (ADMIN/BESTYRELSE). */
-  canRecurring: boolean;
+  initialContent: string | null;
+  onUploadingChange?: (uploading: boolean) => void;
 }) {
-  const { t, locale } = useI18n();
-  const router = useRouter();
+  const { t } = useI18n();
   const [error, setError] = useState<string>();
-  const [isPending, startTransition] = useTransition();
-
-  const [kind, setKind] = useState<"ADHOC" | "RECURRING">(
-    event?.kind ?? "ADHOC",
-  );
-  const [freq, setFreq] = useState<Freq>(event?.freq ?? "MONTHLY_NTH_WEEKDAY");
-  const [allDay, setAllDay] = useState(event?.allDay ?? true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploadingState] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
-  const editable = kind !== "RECURRING" || canRecurring;
+  const setUploading = (value: boolean) => {
+    setUploadingState(value);
+    onUploadingChange?.(value);
+  };
 
   const addAttachments = async (files: FileList) => {
     setError(undefined);
@@ -97,6 +96,84 @@ export function EventForm({
   };
 
   return (
+    <>
+      {attachments.map((a) => (
+        <input key={a.id} type="hidden" name="attachmentIds" value={a.id} />
+      ))}
+      <div>
+        <span className={label}>{t.calendar.form.contentLabel}</span>
+        <div className="mt-1.5">
+          <EventContentEditor initialContent={initialContent} />
+        </div>
+      </div>
+      <div>
+        <span className={label}>{t.calendar.form.attachmentsLabel}</span>
+        {attachments.length > 0 && (
+          <ul className="mt-2 grid gap-1 text-sm">
+            {attachments.map((a) => (
+              <li key={a.id} className="flex items-center gap-2">
+                <span className="truncate text-zinc-100">{a.name}</span>
+                <span className="shrink-0 text-zinc-500">
+                  {formatSize(a.size)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => attachmentInputRef.current?.click()}
+          className={`${btnSecondary} mt-2`}
+        >
+          <PlusIcon className="h-4 w-4" />
+          {uploading ? t.files.uploading : t.calendar.form.addAttachment}
+        </button>
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const files = e.target.files;
+            if (files && files.length > 0) void addAttachments(files);
+            e.target.value = "";
+          }}
+        />
+        {error && (
+          <p className={`${errorText} mt-2`} role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+export function EventForm({
+  event,
+  canRecurring,
+}: {
+  /** Present when editing; absent when creating. */
+  event?: EventFormValues;
+  /** Whether the viewer may manage recurring events (ADMIN/BESTYRELSE). */
+  canRecurring: boolean;
+}) {
+  const { t, locale } = useI18n();
+  const router = useRouter();
+  const [error, setError] = useState<string>();
+  const [isPending, startTransition] = useTransition();
+
+  const [kind, setKind] = useState<"ADHOC" | "RECURRING">(
+    event?.kind ?? "ADHOC",
+  );
+  const [freq, setFreq] = useState<Freq>(event?.freq ?? "MONTHLY_NTH_WEEKDAY");
+  const [allDay, setAllDay] = useState(event?.allDay ?? true);
+  const [uploading, setUploading] = useState(false);
+
+  const editable = kind !== "RECURRING" || canRecurring;
+
+  return (
     <form
       action={(formData) =>
         startTransition(async () => {
@@ -110,9 +187,6 @@ export function EventForm({
       className="grid gap-5"
     >
       <input type="hidden" name="kind" value={kind} />
-      {attachments.map((a) => (
-        <input key={a.id} type="hidden" name="attachmentIds" value={a.id} />
-      ))}
 
       {!event && (
         <div>
@@ -335,48 +409,14 @@ export function EventForm({
         )}
       </div>
 
-      <div>
-        <span className={label}>{t.calendar.form.contentLabel}</span>
-        <div className="mt-1.5">
-          <EventContentEditor initialContent={event?.contentJson ?? null} />
-        </div>
-      </div>
-
-      <div>
-        <span className={label}>{t.calendar.form.attachmentsLabel}</span>
-        {attachments.length > 0 && (
-          <ul className="mt-2 grid gap-1 text-sm">
-            {attachments.map((a) => (
-              <li key={a.id} className="flex items-center gap-2">
-                <span className="truncate text-zinc-100">{a.name}</span>
-                <span className="shrink-0 text-zinc-500">
-                  {formatSize(a.size)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <button
-          type="button"
-          disabled={uploading}
-          onClick={() => attachmentInputRef.current?.click()}
-          className={`${btnSecondary} mt-2`}
-        >
-          <PlusIcon className="h-4 w-4" />
-          {uploading ? t.files.uploading : t.calendar.form.addAttachment}
-        </button>
-        <input
-          ref={attachmentInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            const files = e.target.files;
-            if (files && files.length > 0) void addAttachments(files);
-            e.target.value = "";
-          }}
+      {kind === "ADHOC" ? (
+        <ContentAndAttachments
+          initialContent={event?.contentJson ?? null}
+          onUploadingChange={setUploading}
         />
-      </div>
+      ) : (
+        <p className="text-sm text-zinc-500">{t.calendar.form.perDateHint}</p>
+      )}
 
       {error && (
         <p className={errorText} role="alert">

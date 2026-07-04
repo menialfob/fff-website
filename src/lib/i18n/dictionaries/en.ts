@@ -102,6 +102,9 @@ export const en: typeof da = {
     createdBy: "Created by {name}",
     prevMonth: "Previous month",
     nextMonth: "Next month",
+    noOccurrenceContent: "No description for this date yet.",
+    editOccurrence: "Edit content for this date",
+    occurrenceEditSub: "Applies only to {date} — other dates are unaffected.",
     recurrence: {
       ordinals: {
         "1": "First",
@@ -135,6 +138,8 @@ export const en: typeof da = {
       contentLabel: "Description",
       attachmentsLabel: "Attached files",
       addAttachment: "Add file",
+      perDateHint:
+        "Description, pictures and files are added per date from the event's page, so every year starts blank.",
       create: "Create event",
     },
     editor: {
@@ -228,6 +233,7 @@ export const en: typeof da = {
         "calendar.create": "Created the event {title}",
         "calendar.update": "Edited the event {title}",
         "calendar.delete": "Deleted the event {title}",
+        "calendar.occurrence.update": "Edited {title} on {date}",
         "calendar.token.regenerate": "Regenerated their calendar link",
       },
     },

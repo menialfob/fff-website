@@ -1,9 +1,11 @@
-import type { CalendarEvent } from "@prisma/client";
+import type { CalendarEvent, CalendarOccurrence } from "@prisma/client";
 import {
   nextOccurrences,
   parseISODate,
   type RecurrenceRule,
 } from "./recurrence";
+
+export type FeedEvent = CalendarEvent & { occurrences: CalendarOccurrence[] };
 
 /**
  * Hand-written iCalendar (RFC 5545) generation for the subscription feed.
@@ -151,7 +153,42 @@ function plainTextOf(contentJson: string | null): string {
   return parts.join("").replace(/\n+/g, "\n").trim().slice(0, 1000);
 }
 
-function veventLines(event: CalendarEvent, baseUrl: string): string[] {
+/**
+ * DTSTART/DTEND (or RECURRENCE-ID) value lines for one date, matching the
+ * event's all-day/timed shape. The same helper produces the series DTSTART
+ * and each override's RECURRENCE-ID so the two always agree — clients
+ * silently drop overrides whose RECURRENCE-ID doesn't match an instance.
+ */
+function dateProps(
+  event: CalendarEvent,
+  date: string,
+): { start: string; startEnd: string[] } {
+  if (event.allDay || event.startMinutes === null) {
+    return {
+      start: `;VALUE=DATE:${basicDate(date)}`,
+      startEnd: [
+        `DTSTART;VALUE=DATE:${basicDate(date)}`,
+        // DTEND is exclusive for all-day events.
+        `DTEND;VALUE=DATE:${basicDate(addDays(date, 1))}`,
+      ],
+    };
+  }
+  const start = event.startMinutes;
+  const end = start + (event.durationMinutes ?? 60);
+  return {
+    start: `;TZID=${TZID}:${localDateTime(date, start)}`,
+    startEnd: [
+      `DTSTART;TZID=${TZID}:${localDateTime(date, start)}`,
+      // Events ending past midnight roll onto the next day.
+      `DTEND;TZID=${TZID}:${localDateTime(
+        addDays(date, Math.floor(end / 1440)),
+        end % 1440,
+      )}`,
+    ],
+  };
+}
+
+function veventLines(event: FeedEvent, baseUrl: string): string[] {
   const rule = ruleOf(event);
 
   // The series (or single) start date. For recurring events DTSTART must
@@ -178,34 +215,44 @@ function veventLines(event: CalendarEvent, baseUrl: string): string[] {
   ];
 
   if (event.location) lines.push(`LOCATION:${escapeText(event.location)}`);
-  const description = plainTextOf(event.contentJson);
-  if (description) lines.push(`DESCRIPTION:${escapeText(description)}`);
-  lines.push(`URL:${baseUrl}/calendar/${event.id}`);
-
-  if (event.allDay || event.startMinutes === null) {
-    lines.push(`DTSTART;VALUE=DATE:${basicDate(startDate)}`);
-    // DTEND is exclusive for all-day events.
-    lines.push(`DTEND;VALUE=DATE:${basicDate(addDays(startDate, 1))}`);
-  } else {
-    const start = event.startMinutes;
-    const end = start + (event.durationMinutes ?? 60);
-    lines.push(`DTSTART;TZID=${TZID}:${localDateTime(startDate, start)}`);
-    // Events ending past midnight roll onto the next day.
-    lines.push(
-      `DTEND;TZID=${TZID}:${localDateTime(
-        addDays(startDate, Math.floor(end / 1440)),
-        end % 1440,
-      )}`,
-    );
+  // Recurring events have no series-level description — content is per
+  // occurrence and emitted as override VEVENTs below.
+  if (!rule) {
+    const description = plainTextOf(event.contentJson);
+    if (description) lines.push(`DESCRIPTION:${escapeText(description)}`);
   }
-
+  lines.push(`URL:${baseUrl}/calendar/${event.id}`);
+  lines.push(...dateProps(event, startDate).startEnd);
   if (rule) lines.push(rruleOf(rule));
   lines.push("END:VEVENT");
+
+  // One override VEVENT per occurrence that carries content: same UID plus
+  // RECURRENCE-ID is RFC 5545's "this instance differs" mechanism.
+  if (rule) {
+    for (const occ of event.occurrences) {
+      const description = plainTextOf(occ.contentJson);
+      if (!description || occ.date < startDate) continue;
+      lines.push(
+        "BEGIN:VEVENT",
+        `UID:${event.id}@fff-website`,
+        `RECURRENCE-ID${dateProps(event, occ.date).start}`,
+        `DTSTAMP:${utcStamp(occ.updatedAt)}`,
+        `LAST-MODIFIED:${utcStamp(occ.updatedAt)}`,
+        `SEQUENCE:${Math.floor(occ.updatedAt.getTime() / 1000)}`,
+        `SUMMARY:${escapeText(event.title)}`,
+      );
+      if (event.location) lines.push(`LOCATION:${escapeText(event.location)}`);
+      lines.push(`DESCRIPTION:${escapeText(description)}`);
+      lines.push(`URL:${baseUrl}/calendar/${event.id}?d=${occ.date}`);
+      lines.push(...dateProps(event, occ.date).startEnd);
+      lines.push("END:VEVENT");
+    }
+  }
   return lines;
 }
 
 export function buildIcs(
-  events: CalendarEvent[],
+  events: FeedEvent[],
   options: { calendarName: string; baseUrl: string },
 ): string {
   const lines = [

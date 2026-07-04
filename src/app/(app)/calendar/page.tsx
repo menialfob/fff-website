@@ -205,7 +205,11 @@ export default async function CalendarPage({
             return (
               <li key={`${occ.event.id}-${occ.date}`}>
                 <Link
-                  href={`/calendar/${occ.event.id}`}
+                  href={
+                    occ.event.kind === "RECURRING"
+                      ? `/calendar/${occ.event.id}?d=${occ.date}`
+                      : `/calendar/${occ.event.id}`
+                  }
                   className={`${cardHover} flex items-center gap-4 p-4`}
                 >
                   <span
