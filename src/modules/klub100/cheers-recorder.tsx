@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useI18n } from "@/lib/i18n/client";
+import { btnPrimary, btnSecondary, errorText, linkDanger } from "@/components/ui";
+import { BeerIcon, MicIcon, StopIcon, UploadIcon } from "@/components/icons";
 import { attachCheers } from "./actions";
 import { trimSilence } from "./trim-silence";
 
@@ -26,6 +29,7 @@ export function CheersCapture({
   value: File | null;
   onChange: (file: File | null) => void;
 }) {
+  const { t, fmt } = useI18n();
   const [recording, setRecording] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState<string>();
@@ -44,20 +48,21 @@ export function CheersCapture({
 
   // Stop the recorder (and mic) if the component unmounts mid-recording.
   useEffect(() => {
-    return () => recorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+    return () =>
+      recorderRef.current?.stream.getTracks().forEach((track) => track.stop());
   }, []);
 
   const startRecording = async () => {
     setError(undefined);
     if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices) {
-      setError("Recording is not supported in this browser — upload a file instead.");
+      setError(t.klub100.recordingUnsupported);
       return;
     }
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      setError("Microphone access was denied — upload a file instead.");
+      setError(t.klub100.micDenied);
       return;
     }
 
@@ -66,7 +71,7 @@ export function CheersCapture({
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => chunks.push(e.data);
     recorder.onstop = async () => {
-      stream.getTracks().forEach((t) => t.stop());
+      stream.getTracks().forEach((track) => track.stop());
       const type = recorder.mimeType || "audio/webm";
       const blob = new Blob(chunks, { type });
       const raw = new File([blob], `cheers.${extensionFor(type)}`, { type });
@@ -101,21 +106,22 @@ export function CheersCapture({
           <button
             type="button"
             onClick={stopRecording}
-            className="rounded-md bg-red-600 px-4 py-3 text-sm font-medium text-white"
+            className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-red-500/25"
           >
-            ■ Stop ({((MAX_RECORD_MS - elapsedMs) / 1000).toFixed(0)}s left)
+            <StopIcon className="h-4 w-4" />
+            {fmt(t.klub100.stopRecording, {
+              seconds: ((MAX_RECORD_MS - elapsedMs) / 1000).toFixed(0),
+            })}
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={startRecording}
-            className="rounded-md bg-stone-900 px-4 py-3 text-sm font-medium text-white hover:bg-stone-700"
-          >
-            ● Record {value ? "again" : "a cheers"}
+          <button type="button" onClick={startRecording} className={btnPrimary}>
+            <MicIcon className="h-4 w-4" />
+            {value ? t.klub100.recordAgain : t.klub100.recordCheers}
           </button>
         )}
-        <label className="cursor-pointer rounded-md border border-stone-300 px-4 py-3 text-sm hover:bg-stone-100">
-          Upload file
+        <label className={`${btnSecondary} cursor-pointer`}>
+          <UploadIcon className="h-4 w-4" />
+          {t.klub100.uploadFile}
           <input
             type="file"
             accept="audio/*"
@@ -134,18 +140,18 @@ export function CheersCapture({
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="text-sm text-red-600 hover:underline"
+            className={linkDanger}
           >
-            Discard
+            {t.klub100.discard}
           </button>
         </div>
       )}
       {error && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className={errorText} role="alert">
           {error}
         </p>
       )}
-      <p className="text-xs text-stone-500">Max 10 seconds. Skål! 🍻</p>
+      <p className="text-xs text-zinc-500">{t.klub100.maxTenSeconds}</p>
     </div>
   );
 }
@@ -160,6 +166,7 @@ export function CheersButton({
   songTitle: string;
   hasCheers: boolean;
 }) {
+  const { t, fmt } = useI18n();
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string>();
@@ -185,22 +192,25 @@ export function CheersButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md border border-stone-300 px-2.5 py-1.5 text-xs hover:bg-stone-100"
+        className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-zinc-300 transition hover:bg-white/10"
       >
-        {hasCheers ? "Replace cheers" : "🍻 Add cheers"}
+        <BeerIcon className="h-3.5 w-3.5" />
+        {hasCheers ? t.klub100.replaceCheers : t.klub100.addCheers}
       </button>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
-          <div className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl">
-            <h3 className="mb-1 text-lg font-semibold">Cheers for “{songTitle}”</h3>
-            <p className="mb-4 text-sm text-stone-600">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-md rounded-t-2xl border-t border-white/10 bg-panel p-5 sm:rounded-2xl sm:border sm:shadow-2xl sm:shadow-black/50">
+            <h3 className="mb-1 text-lg font-semibold text-white">
+              {fmt(t.klub100.cheersFor, { title: songTitle })}
+            </h3>
+            <p className="mb-4 text-sm text-zinc-400">
               {hasCheers
-                ? "This replaces the current cheers recording."
-                : "Record the cheers that plays before this song."}
+                ? t.klub100.cheersReplaceHint
+                : t.klub100.cheersRecordHint}
             </p>
             <CheersCapture value={file} onChange={setFile} />
             {error && (
-              <p className="mt-2 text-sm text-red-600" role="alert">
+              <p className={`${errorText} mt-2`} role="alert">
                 {error}
               </p>
             )}
@@ -211,17 +221,17 @@ export function CheersButton({
                   setFile(null);
                   setOpen(false);
                 }}
-                className="rounded-md border border-stone-300 px-4 py-2 text-sm hover:bg-stone-100"
+                className={btnSecondary}
               >
-                Cancel
+                {t.common.cancel}
               </button>
               <button
                 type="button"
                 disabled={!file || isPending}
                 onClick={save}
-                className="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50"
+                className={btnPrimary}
               >
-                {isPending ? "Saving…" : "Save cheers"}
+                {isPending ? t.common.saving : t.klub100.saveCheers}
               </button>
             </div>
           </div>

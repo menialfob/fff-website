@@ -1,12 +1,19 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useI18n } from "@/lib/i18n/client";
+import {
+  btnPrimary,
+  errorText,
+  input,
+  label,
+  linkDanger,
+  okText,
+} from "@/components/ui";
 import { createUser, deleteUser } from "./actions";
 
-const inputClass =
-  "mt-1 w-full rounded-md border border-stone-300 px-3 py-2 shadow-sm focus:border-stone-500 focus:outline-none";
-
 export function CreateUserForm() {
+  const { t } = useI18n();
   const [result, setResult] = useState<{ error?: string; ok?: boolean }>();
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -25,26 +32,26 @@ export function CreateUserForm() {
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="new-name" className="block text-sm font-medium">
-            Name
+          <label htmlFor="new-name" className={label}>
+            {t.admin.name}
           </label>
-          <input id="new-name" name="name" required className={inputClass} />
+          <input id="new-name" name="name" required className={input} />
         </div>
         <div>
-          <label htmlFor="new-email" className="block text-sm font-medium">
-            Email
+          <label htmlFor="new-email" className={label}>
+            {t.admin.email}
           </label>
           <input
             id="new-email"
             name="email"
             type="email"
             required
-            className={inputClass}
+            className={input}
           />
         </div>
         <div>
-          <label htmlFor="new-password" className="block text-sm font-medium">
-            Initial password
+          <label htmlFor="new-password" className={label}>
+            {t.admin.initialPassword}
           </label>
           <input
             id="new-password"
@@ -52,31 +59,27 @@ export function CreateUserForm() {
             type="text"
             required
             minLength={8}
-            className={inputClass}
+            className={input}
           />
         </div>
         <div>
-          <label htmlFor="new-role" className="block text-sm font-medium">
-            Role
+          <label htmlFor="new-role" className={label}>
+            {t.admin.role}
           </label>
-          <select id="new-role" name="role" className={inputClass}>
-            <option value="MEMBER">Member</option>
-            <option value="ADMIN">Admin</option>
+          <select id="new-role" name="role" className={input}>
+            <option value="MEMBER">{t.admin.roleMember}</option>
+            <option value="ADMIN">{t.admin.roleAdmin}</option>
           </select>
         </div>
       </div>
       {result?.error && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className={errorText} role="alert">
           {result.error}
         </p>
       )}
-      {result?.ok && <p className="text-sm text-green-700">User created.</p>}
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-stone-900 px-4 py-2 font-medium text-white hover:bg-stone-700 disabled:opacity-50"
-      >
-        {isPending ? "Creating…" : "Create user"}
+      {result?.ok && <p className={okText}>{t.admin.userCreated}</p>}
+      <button type="submit" disabled={isPending} className={btnPrimary}>
+        {isPending ? t.admin.creating : t.admin.createUser}
       </button>
     </form>
   );
@@ -89,6 +92,7 @@ export function DeleteUserButton({
   userId: string;
   userName: string;
 }) {
+  const { t, fmt } = useI18n();
   const [isPending, startTransition] = useTransition();
 
   return (
@@ -96,15 +100,15 @@ export function DeleteUserButton({
       type="button"
       disabled={isPending}
       onClick={() => {
-        if (!confirm(`Delete ${userName}? Their uploads are removed too.`))
+        if (!confirm(fmt(t.admin.confirmDeleteUser, { name: userName })))
           return;
         startTransition(async () => {
           await deleteUser(userId);
         });
       }}
-      className="text-sm text-red-600 hover:underline disabled:opacity-50"
+      className={linkDanger}
     >
-      Delete
+      {t.common.delete}
     </button>
   );
 }

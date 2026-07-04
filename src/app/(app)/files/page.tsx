@@ -1,5 +1,8 @@
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { formatDate } from "@/lib/i18n";
+import { getDict, getLocale } from "@/lib/i18n/server";
+import { cardPad, emptyBox, listCard, PageTitle } from "@/components/ui";
 import { DeleteFileButton, UploadForm } from "@/modules/files/file-controls";
 
 function formatSize(bytes: number): string {
@@ -10,6 +13,7 @@ function formatSize(bytes: number): string {
 
 export default async function FilesPage() {
   const session = await requireSession();
+  const [t, locale] = await Promise.all([getDict(), getLocale()]);
   const files = await prisma.fileItem.findMany({
     orderBy: { createdAt: "desc" },
     include: { uploadedBy: { select: { name: true } } },
@@ -17,15 +21,17 @@ export default async function FilesPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-3xl font-bold">Files</h1>
-      <section className="mb-8 rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold">Upload</h2>
+      <PageTitle>{t.modules.files.label}</PageTitle>
+      <section className={`${cardPad} mb-8`}>
+        <h2 className="mb-3 text-lg font-semibold text-white">
+          {t.files.uploadTitle}
+        </h2>
         <UploadForm />
       </section>
       {files.length === 0 ? (
-        <p className="text-stone-600">Nothing here yet — upload something!</p>
+        <p className={emptyBox}>{t.files.empty}</p>
       ) : (
-        <ul className="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white shadow-sm">
+        <ul className={listCard}>
           {files.map((file) => {
             const canDelete =
               file.uploadedById === session.user.id ||
@@ -33,17 +39,17 @@ export default async function FilesPage() {
             return (
               <li
                 key={file.id}
-                className="flex flex-wrap items-center gap-x-4 gap-y-1 px-6 py-3"
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 sm:px-6"
               >
                 <a
                   href={`/api/files/${file.id}`}
-                  className="font-medium text-stone-900 hover:underline"
+                  className="font-medium text-zinc-100 hover:text-sky-300 hover:underline"
                 >
                   {file.name}
                 </a>
-                <span className="text-sm text-stone-500">
+                <span className="text-sm text-zinc-500">
                   {formatSize(file.size)} · {file.uploadedBy.name} ·{" "}
-                  {file.createdAt.toLocaleDateString("en-GB")}
+                  {formatDate(file.createdAt, locale)}
                 </span>
                 <span className="flex-1" />
                 {canDelete && <DeleteFileButton fileId={file.id} />}

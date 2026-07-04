@@ -2,6 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { fmt } from "@/lib/i18n";
+import { getDict } from "@/lib/i18n/server";
+import { btnSecondary, cardPad } from "@/components/ui";
+import {
+  ArrowLeftIcon,
+  DownloadIcon,
+  PlayIcon,
+} from "@/components/icons";
 import { DeleteProjectButton } from "@/modules/klub100/project-controls";
 import { ProjectAdminManager } from "@/modules/klub100/project-admins";
 import { SuggestSongButton } from "@/modules/klub100/suggest-song";
@@ -20,6 +28,7 @@ export default async function Klub100ProjectPage({
 }) {
   const session = await requireSession();
   const { id } = await params;
+  const t = await getDict();
 
   const project = await prisma.klub100Project.findUnique({
     where: { id },
@@ -83,39 +92,57 @@ export default async function Klub100ProjectPage({
 
   return (
     <div>
-      <Link href="/klub100" className="text-sm text-stone-500 hover:underline">
-        ← All projects
+      <Link
+        href="/klub100"
+        className="inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-200"
+      >
+        <ArrowLeftIcon className="h-4 w-4" />
+        {t.klub100.allProjects}
       </Link>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <h1 className="text-3xl font-bold">{project.name}</h1>
-        <span className="text-sm text-stone-500">by {project.createdBy.name}</span>
+        <h1 className="text-3xl font-bold tracking-tight text-white">
+          {project.name}
+        </h1>
+        <span className="text-sm text-zinc-500">
+          {fmt(t.klub100.by, { name: project.createdBy.name })}
+        </span>
       </div>
 
-      <section className="mt-4 rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+      <section className={`${cardPad} mt-4`}>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <Progress label="Songs" value={accepted.length} />
-          <Progress label="Cheers" value={cheersCount} />
+          <Progress
+            label={t.klub100.songs}
+            value={accepted.length}
+            barClass="from-fuchsia-500 to-pink-500"
+          />
+          <Progress
+            label={t.klub100.cheers}
+            value={cheersCount}
+            barClass="from-amber-400 to-orange-500"
+          />
           <span className="flex-1" />
           <Link
             href={`/klub100/${project.id}/play`}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-110 active:scale-[0.98]"
           >
-            ▶ Play mix
+            <PlayIcon className="h-4 w-4" />
+            {t.klub100.playMix}
           </Link>
           {isCurator && (
             <a
               href={`/api/klub100/export/${project.id}`}
-              className="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium hover:bg-stone-100"
+              className={btnSecondary}
             >
-              ⬇ Export package
+              <DownloadIcon className="h-4 w-4" />
+              {t.klub100.exportPackage}
             </a>
           )}
         </div>
       </section>
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold">
-          Tracklist ({accepted.length}/{TRACKLIST_SIZE})
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold text-white">
+          {t.klub100.tracklist} ({accepted.length}/{TRACKLIST_SIZE})
         </h2>
         <SuggestSongButton projectId={project.id} />
       </div>
@@ -127,12 +154,12 @@ export default async function Klub100ProjectPage({
         />
       </div>
 
-      <h2 className="mt-8 text-xl font-semibold">
-        Suggestion pool ({suggested.length})
+      <h2 className="mt-10 text-xl font-semibold text-white">
+        {t.klub100.suggestionPool} ({suggested.length})
       </h2>
-      <p className="mb-3 mt-1 text-sm text-stone-600">
-        Vote for the songs that deserve a spot
-        {isCurator && " — accept the best ones onto the tracklist"}.
+      <p className="mb-3 mt-1 text-sm text-zinc-400">
+        {t.klub100.poolHint}
+        {isCurator && t.klub100.poolHintCurator}.
       </p>
       <SuggestionPool
         suggested={suggested}
@@ -142,7 +169,7 @@ export default async function Klub100ProjectPage({
       />
 
       {isCurator && (
-        <div className="mt-10 space-y-8 border-t border-stone-200 pt-6">
+        <div className="mt-12 space-y-8 border-t border-white/10 pt-6">
           <ProjectAdminManager
             projectId={project.id}
             creator={{ id: project.createdBy.id, name: project.createdBy.name }}
@@ -156,19 +183,27 @@ export default async function Klub100ProjectPage({
   );
 }
 
-function Progress({ label, value }: { label: string; value: number }) {
+function Progress({
+  label,
+  value,
+  barClass,
+}: {
+  label: string;
+  value: number;
+  barClass: string;
+}) {
   const pct = Math.min((value / TRACKLIST_SIZE) * 100, 100);
   return (
     <div className="min-w-36">
       <p className="text-sm">
-        <span className="font-medium">{label}</span>{" "}
-        <span className="text-stone-500">
+        <span className="font-medium text-zinc-200">{label}</span>{" "}
+        <span className="text-zinc-500">
           {value}/{TRACKLIST_SIZE}
         </span>
       </p>
-      <div className="mt-1 h-2 rounded-full bg-stone-200">
+      <div className="mt-1.5 h-2 rounded-full bg-white/10">
         <div
-          className="h-2 rounded-full bg-stone-900"
+          className={`h-2 rounded-full bg-gradient-to-r ${barClass}`}
           style={{ width: `${pct}%` }}
         />
       </div>

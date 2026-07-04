@@ -2,6 +2,7 @@
 
 import { AuthError } from "next-auth";
 import { signIn } from "@/lib/auth";
+import { getDict } from "@/lib/i18n/server";
 
 export async function authenticate(
   _prevState: string | undefined,
@@ -11,7 +12,7 @@ export async function authenticate(
     await signIn("credentials", formData);
   } catch (error) {
     if (error instanceof AuthError) {
-      return "Invalid email or password.";
+      return (await getDict()).login.invalidCredentials;
     }
     throw error;
   }

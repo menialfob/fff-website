@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useI18n } from "@/lib/i18n/client";
+import { chip, emptyBox, errorText, linkDanger, listCard } from "@/components/ui";
+import { CheckIcon, HeartIcon, XIcon } from "@/components/icons";
 import {
   acceptSong,
   deleteSuggestion,
@@ -10,7 +13,7 @@ import {
 } from "./actions";
 import { EditSongButton } from "./edit-song";
 import { CheersCell, SongMeta } from "./song-bits";
-import { placementLabels, type Placement, type SongView } from "./shared";
+import { placements, type Placement, type SongView } from "./shared";
 
 type Filter = "ALL" | Placement;
 
@@ -25,6 +28,7 @@ export function SuggestionPool({
   isCurator: boolean;
   currentUserId: string;
 }) {
+  const { t, fmt } = useI18n();
   const [filter, setFilter] = useState<Filter>("ALL");
   const [error, setError] = useState<string>();
   const [isPending, startTransition] = useTransition();
@@ -36,100 +40,102 @@ export function SuggestionPool({
     });
 
   const visible =
-    filter === "ALL" ? suggested : suggested.filter((s) => s.placement === filter);
+    filter === "ALL"
+      ? suggested
+      : suggested.filter((s) => s.placement === filter);
 
   return (
     <div>
       <div className="mb-3 flex flex-wrap gap-2">
-        {(["ALL", "EARLY", "MIDDLE", "LATE"] as Filter[]).map((f) => (
+        {(["ALL", ...placements] as Filter[]).map((f) => (
           <button
             key={f}
             type="button"
             onClick={() => setFilter(f)}
-            className={`rounded-full border px-3 py-1.5 text-sm ${
-              filter === f
-                ? "border-stone-900 bg-stone-900 text-white"
-                : "border-stone-300 hover:bg-stone-100"
-            }`}
+            className={chip(filter === f)}
           >
-            {f === "ALL" ? "All" : placementLabels[f]}
+            {f === "ALL" ? t.klub100.filterAll : t.klub100.placements[f]}
           </button>
         ))}
       </div>
       {error && (
-        <p className="mb-2 text-sm text-red-600" role="alert">
+        <p className={`${errorText} mb-2`} role="alert">
           {error}
         </p>
       )}
 
       {visible.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-stone-300 p-6 text-sm text-stone-500">
+        <p className={emptyBox}>
           {suggested.length === 0
-            ? "No suggestions yet — be the first!"
-            : "No suggestions match this filter."}
+            ? t.klub100.noSuggestions
+            : t.klub100.noFilterMatches}
         </p>
       ) : (
-        <ul className="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white shadow-sm">
+        <ul className={listCard}>
           {visible.map((song) => {
             const canEdit = isCurator || song.suggestedById === currentUserId;
             return (
-            <li key={song.id} className="flex flex-col gap-2 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <SongMeta song={song} />
-                <button
-                  type="button"
-                  disabled={isPending}
-                  onClick={() => run(() => toggleVote(song.id))}
-                  className={`flex min-h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-lg border text-sm ${
-                    song.votedByMe
-                      ? "border-rose-300 bg-rose-50 text-rose-700"
-                      : "border-stone-300 hover:bg-stone-100"
-                  }`}
-                  aria-label={song.votedByMe ? "Remove vote" : "Vote"}
-                >
-                  <span>{song.votedByMe ? "♥" : "♡"}</span>
-                  <span className="text-xs">{song.voteCount}</span>
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <CheersCell song={song} canEdit={canEdit} />
-                {canEdit && <EditSongButton song={song} />}
-                <span className="flex-1" />
-                {isCurator && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => run(() => acceptSong(song.id))}
-                      className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
-                    >
-                      ✓ Accept
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => run(() => rejectSong(song.id))}
-                      className="rounded-md border border-stone-300 px-3 py-1.5 text-xs hover:bg-stone-100 disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
-                  </>
-                )}
-                {song.suggestedById === currentUserId && (
+              <li key={song.id} className="flex flex-col gap-2 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <SongMeta song={song} />
                   <button
                     type="button"
                     disabled={isPending}
-                    onClick={() => {
-                      if (!confirm("Remove your suggestion?")) return;
-                      run(() => deleteSuggestion(song.id));
-                    }}
-                    className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                    onClick={() => run(() => toggleVote(song.id))}
+                    className={`flex min-h-11 min-w-11 shrink-0 cursor-pointer flex-col items-center justify-center rounded-xl border text-sm transition ${
+                      song.votedByMe
+                        ? "border-fuchsia-400/50 bg-fuchsia-500/15 text-fuchsia-300"
+                        : "border-white/15 text-zinc-400 hover:bg-white/10"
+                    }`}
+                    aria-label={
+                      song.votedByMe ? t.klub100.removeVote : t.klub100.vote
+                    }
                   >
-                    Delete
+                    <HeartIcon className="h-4 w-4" filled={song.votedByMe} />
+                    <span className="text-xs">{song.voteCount}</span>
                   </button>
-                )}
-              </div>
-            </li>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CheersCell song={song} canEdit={canEdit} />
+                  {canEdit && <EditSongButton song={song} />}
+                  <span className="flex-1" />
+                  {isCurator && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => run(() => acceptSong(song.id))}
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-emerald-950 transition hover:brightness-110 disabled:opacity-50"
+                      >
+                        <CheckIcon className="h-3.5 w-3.5" />
+                        {t.klub100.accept}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => run(() => rejectSong(song.id))}
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-white/10 disabled:opacity-50"
+                      >
+                        <XIcon className="h-3.5 w-3.5" />
+                        {t.klub100.reject}
+                      </button>
+                    </>
+                  )}
+                  {song.suggestedById === currentUserId && (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => {
+                        if (!confirm(t.klub100.confirmRemoveSuggestion)) return;
+                        run(() => deleteSuggestion(song.id));
+                      }}
+                      className={`${linkDanger} text-xs`}
+                    >
+                      {t.common.delete}
+                    </button>
+                  )}
+                </div>
+              </li>
             );
           })}
         </ul>
@@ -137,10 +143,10 @@ export function SuggestionPool({
 
       {rejected.length > 0 && (
         <details className="mt-4">
-          <summary className="cursor-pointer text-sm text-stone-500">
-            Rejected ({rejected.length})
+          <summary className="cursor-pointer text-sm text-zinc-500 hover:text-zinc-300">
+            {fmt(t.klub100.rejected, { count: rejected.length })}
           </summary>
-          <ul className="mt-2 divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white opacity-70 shadow-sm">
+          <ul className={`${listCard} mt-2 opacity-70`}>
             {rejected.map((song) => (
               <li key={song.id} className="flex items-center gap-3 px-4 py-3">
                 <SongMeta song={song} />
@@ -149,9 +155,9 @@ export function SuggestionPool({
                     type="button"
                     disabled={isPending}
                     onClick={() => run(() => restoreSong(song.id))}
-                    className="shrink-0 text-xs text-stone-600 hover:underline disabled:opacity-50"
+                    className="shrink-0 cursor-pointer text-xs text-zinc-400 hover:text-zinc-200 hover:underline disabled:opacity-50"
                   >
-                    Restore
+                    {t.common.restore}
                   </button>
                 )}
               </li>

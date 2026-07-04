@@ -2,9 +2,13 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useI18n } from "@/lib/i18n/client";
+import { btnDangerOutline, btnPrimary, errorText, input } from "@/components/ui";
+import { PlusIcon, TrashIcon } from "@/components/icons";
 import { createProject, deleteProject } from "./actions";
 
 export function NewProjectForm() {
+  const { t } = useI18n();
   const [error, setError] = useState<string>();
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -26,18 +30,15 @@ export function NewProjectForm() {
         name="name"
         required
         maxLength={80}
-        placeholder="New mix — e.g. “Sommerfest 2026”"
-        className="min-w-0 flex-1 rounded-md border border-stone-300 px-3 py-2.5 text-sm sm:max-w-xs"
+        placeholder={t.klub100.newMixPlaceholder}
+        className={`${input} mt-0 min-w-0 flex-1 sm:max-w-xs`}
       />
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-stone-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50"
-      >
-        {isPending ? "Creating…" : "Create project"}
+      <button type="submit" disabled={isPending} className={btnPrimary}>
+        <PlusIcon className="h-4 w-4" />
+        {isPending ? t.klub100.creating : t.klub100.createProject}
       </button>
       {error && (
-        <p className="w-full text-sm text-red-600" role="alert">
+        <p className={`${errorText} w-full`} role="alert">
           {error}
         </p>
       )}
@@ -46,6 +47,7 @@ export function NewProjectForm() {
 }
 
 export function DeleteProjectButton({ projectId }: { projectId: string }) {
+  const { t } = useI18n();
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -54,16 +56,16 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
       type="button"
       disabled={isPending}
       onClick={() => {
-        if (!confirm("Delete this project, all suggestions and cheers recordings?"))
-          return;
+        if (!confirm(t.klub100.confirmDeleteProject)) return;
         startTransition(async () => {
           const result = await deleteProject(projectId);
           if (result?.ok) router.push("/klub100");
         });
       }}
-      className="min-h-11 rounded-md border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+      className={btnDangerOutline}
     >
-      {isPending ? "Deleting…" : "Delete project"}
+      <TrashIcon className="h-4 w-4" />
+      {isPending ? t.klub100.deleting : t.klub100.deleteProject}
     </button>
   );
 }

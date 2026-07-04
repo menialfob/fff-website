@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
 import { modulesForRole } from "@/modules/registry";
+import { getDict } from "@/lib/i18n/server";
+import { DesktopNav, MobileTabBar, type NavItem } from "@/components/nav";
+import { Brand } from "@/components/ui";
+import { LogOutIcon } from "@/components/icons";
 
 export default async function AppLayout({
   children,
@@ -9,37 +13,35 @@ export default async function AppLayout({
   // Middleware guarantees a session, but keep a safe fallback for rendering.
   const role = session?.user?.role ?? "MEMBER";
   const name = session?.user?.name ?? "";
+  const t = await getDict();
+
+  const navItems: NavItem[] = [
+    { id: "dashboard", href: "/" },
+    ...modulesForRole(role).map((m) => ({ id: m.id, href: m.href })),
+  ];
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-stone-200 bg-white">
-        {/* Mobile-first: brand + account on the first row, module links on a
-            second row that scrolls horizontally instead of overflowing the
-            viewport. From sm up everything sits on one row. */}
-        <nav className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 px-4 py-3 sm:flex-nowrap sm:gap-x-6">
-          <Link href="/" className="text-lg font-bold">
-            FFF
+      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-canvas/80 backdrop-blur-lg">
+        <nav className="mx-auto flex h-16 max-w-5xl items-center gap-4 px-4">
+          <Link href="/" className="shrink-0">
+            <Brand />
           </Link>
-          <div className="order-last -mx-4 mt-2 flex w-[calc(100%+2rem)] gap-4 overflow-x-auto px-4 pb-1 text-sm sm:order-none sm:m-0 sm:w-auto sm:flex-1 sm:overflow-visible sm:p-0">
-            {modulesForRole(role).map((m) => (
-              <Link
-                key={m.id}
-                href={m.href}
-                className="whitespace-nowrap py-1 text-stone-600 hover:text-stone-900"
-              >
-                {m.label}
-              </Link>
-            ))}
-          </div>
-          <span className="flex-1 sm:hidden" />
+          <DesktopNav items={navItems} />
+          <span className="flex-1" />
           <Link
             href="/profile"
-            className="min-w-0 truncate text-sm text-stone-600 hover:text-stone-900"
+            className="group flex min-w-0 items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition hover:bg-white/5"
           >
-            {name}
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-sm font-bold text-white shadow-lg shadow-indigo-500/20">
+              {name.charAt(0).toUpperCase()}
+            </span>
+            <span className="hidden max-w-32 truncate text-sm font-medium text-zinc-300 group-hover:text-white sm:block">
+              {name.split(" ")[0]}
+            </span>
           </Link>
           <form
-            className="ml-2 shrink-0 sm:ml-0"
+            className="hidden shrink-0 md:block"
             action={async () => {
               "use server";
               await signOut({ redirectTo: "/login" });
@@ -47,14 +49,19 @@ export default async function AppLayout({
           >
             <button
               type="submit"
-              className="rounded-md border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100"
+              title={t.common.signOut}
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/10 hover:text-zinc-100"
             >
-              Sign out
+              <LogOutIcon className="h-5 w-5" />
+              <span className="sr-only">{t.common.signOut}</span>
             </button>
           </form>
         </nav>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-4 pb-28 pt-6 sm:pt-8 md:pb-12">
+        {children}
+      </main>
+      <MobileTabBar items={navItems} />
     </div>
   );
 }

@@ -1,22 +1,52 @@
-import { requireSession } from "@/lib/auth";
+import { requireSession, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getDict } from "@/lib/i18n/server";
+import { btnDangerOutline, cardPad, PageTitle } from "@/components/ui";
+import { LocaleSwitcher } from "@/components/locale-switcher";
+import { LogOutIcon } from "@/components/icons";
 import { PasswordForm, ProfileForm } from "@/modules/profile/profile-forms";
 
 export default async function ProfilePage() {
   const session = await requireSession();
+  const t = await getDict();
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: session.user.id },
   });
 
   return (
     <div className="max-w-lg">
-      <h1 className="mb-6 text-3xl font-bold">Your profile</h1>
-      <section className="mb-8 rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
+      <PageTitle>{t.profile.title}</PageTitle>
+      <section className={`${cardPad} mb-6`}>
         <ProfileForm defaultName={user.name} defaultBio={user.bio ?? ""} />
       </section>
-      <section className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold">Change password</h2>
+      <section className={`${cardPad} mb-6`}>
+        <h2 className="mb-4 text-lg font-semibold text-white">
+          {t.profile.changePassword}
+        </h2>
         <PasswordForm />
+      </section>
+      <section className={`${cardPad} mb-6`}>
+        <h2 className="mb-1 text-lg font-semibold text-white">
+          {t.profile.language}
+        </h2>
+        <p className="mb-4 text-sm text-zinc-400">{t.profile.languageHint}</p>
+        <LocaleSwitcher />
+      </section>
+      <section className={cardPad}>
+        <h2 className="mb-4 text-lg font-semibold text-white">
+          {t.profile.account}
+        </h2>
+        <form
+          action={async () => {
+            "use server";
+            await signOut({ redirectTo: "/login" });
+          }}
+        >
+          <button type="submit" className={btnDangerOutline}>
+            <LogOutIcon className="h-4 w-4" />
+            {t.common.signOut}
+          </button>
+        </form>
       </section>
     </div>
   );

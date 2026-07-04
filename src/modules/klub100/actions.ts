@@ -6,6 +6,8 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { deleteUpload, saveUpload } from "@/lib/storage";
+import { fmt, type Dictionary } from "@/lib/i18n";
+import { getDict } from "@/lib/i18n/server";
 import { computeIsCurator, TRACKLIST_SIZE } from "./shared";
 
 const MAX_CHEERS_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -17,6 +19,7 @@ function projectPath(projectId: string) {
 /** Owner, a project admin, or a site admin — the roles allowed to curate. */
 async function requireCurator(projectId: string) {
   const session = await requireSession();
+  const t = await getDict();
   const project = await prisma.klub100Project.findUnique({
     where: { id: projectId },
     select: {
@@ -25,9 +28,9 @@ async function requireCurator(projectId: string) {
       admins: { select: { userId: true } },
     },
   });
-  if (!project) return { error: "Project not found." as const };
+  if (!project) return { error: t.errors.projectNotFound };
   if (!computeIsCurator(project, session.user)) {
-    return { error: "Only the project owner or an admin can do this." as const };
+    return { error: t.errors.onlyProjectOwner };
   }
   return { session, project };
 }
@@ -47,21 +50,23 @@ async function requireSongEditor(songId: string) {
       },
     },
   });
-  if (!song) return { error: "Song not found." as const };
+  const t = await getDict();
+  if (!song) return { error: t.errors.songNotFound };
   if (
     song.suggestedById !== session.user.id &&
     !computeIsCurator(song.project, session.user)
   ) {
-    return { error: "Only the suggestor or a project admin can do this." as const };
+    return { error: t.errors.onlySuggestor };
   }
   return { session, song };
 }
 
 export async function createProject(formData: FormData) {
   const session = await requireSession();
+  const t = await getDict();
   const name = String(formData.get("name") ?? "").trim();
-  if (!name) return { error: "Give the project a name." };
-  if (name.length > 80) return { error: "Name is too long (max 80 characters)." };
+  if (!name) return { error: t.errors.projectNameRequired };
+  if (name.length > 80) return { error: t.errors.nameTooLong };
 
   await prisma.klub100Project.create({
     data: { name, createdById: session.user.id },
@@ -85,16 +90,13 @@ export async function deleteProject(projectId: string) {
   return { ok: true };
 }
 
-const segmentRange = (durationMs: number) =>
+const segmentRange = (durationMs: number, e: Dictionary["errors"]) =>
   z
     .object({ startMs: z.number().int().min(0), endMs: z.number().int().min(0) })
-    .refine((s) => s.endMs > s.startMs, "Segment must end after it starts.")
-    .refine(
-      (s) => s.endMs - s.startMs <= 3 * 60_000,
-      "Segment is too long (max 3 minutes).",
-    )
+    .refine((s) => s.endMs > s.startMs, e.segmentEndAfterStart)
+    .refine((s) => s.endMs - s.startMs <= 3 * 60_000, e.segmentTooLong)
     // Allow a second of slack for rounding against the reported duration.
-    .refine((s) => s.endMs <= durationMs + 1000, "Segment is outside the track.");
+    .refine((s) => s.endMs <= durationMs + 1000, e.segmentOutsideTrack);
 
 /** Validate seg1 + optional seg2 against a track length; error message or null. */
 function validateSegments(
@@ -105,17 +107,18 @@ function validateSegments(
     seg2StartMs: number | null;
     seg2EndMs: number | null;
   },
+  e: Dictionary["errors"],
 ): string | null {
-  const seg1 = segmentRange(durationMs).safeParse({
+  const seg1 = segmentRange(durationMs, e).safeParse({
     startMs: data.seg1StartMs,
     endMs: data.seg1EndMs,
   });
   if (!seg1.success) return seg1.error.errors[0].message;
   if ((data.seg2StartMs === null) !== (data.seg2EndMs === null)) {
-    return "Second segment is incomplete.";
+    return e.secondSegmentIncomplete;
   }
   if (data.seg2StartMs !== null && data.seg2EndMs !== null) {
-    const seg2 = segmentRange(durationMs).safeParse({
+    const seg2 = segmentRange(durationMs, e).safeParse({
       startMs: data.seg2StartMs,
       endMs: data.seg2EndMs,
     });
@@ -145,13 +148,14 @@ export type SuggestSongInput = z.infer<typeof suggestSchema>;
 
 export async function suggestSong(input: SuggestSongInput) {
   const session = await requireSession();
+  const t = await getDict();
   const parsed = suggestSchema.safeParse(input);
   if (!parsed.success) {
-    return { error: parsed.error.errors[0]?.message ?? "Invalid suggestion." };
+    return { error: t.errors.invalidInput };
   }
   const data = parsed.data;
 
-  const segError = validateSegments(data.durationMs, data);
+  const segError = validateSegments(data.durationMs, data, t.errors);
   if (segError) return { error: segError };
 
   const existing = await prisma.klub100Song.findUnique({
@@ -164,7 +168,11 @@ export async function suggestSong(input: SuggestSongInput) {
     include: { suggestedBy: { select: { name: true } } },
   });
   if (existing) {
-    return { error: `Already suggested by ${existing.suggestedBy.name}.` };
+    return {
+      error: fmt(t.errors.alreadySuggestedBy, {
+        name: existing.suggestedBy.name,
+      }),
+    };
   }
 
   try {
@@ -193,7 +201,7 @@ export async function suggestSong(input: SuggestSongInput) {
     return { ok: true, songId: song.id };
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { error: "Someone just suggested this track." };
+      return { error: t.errors.justSuggested };
     }
     throw e;
   }
@@ -213,16 +221,17 @@ export type EditSongInput = z.infer<typeof editSchema>;
 
 /** Edit a suggestion's timing, placement and note. Suggestor or curator only. */
 export async function editSong(input: EditSongInput) {
+  const t = await getDict();
   const parsed = editSchema.safeParse(input);
   if (!parsed.success) {
-    return { error: parsed.error.errors[0]?.message ?? "Invalid edit." };
+    return { error: t.errors.invalidInput };
   }
   const data = parsed.data;
 
   const editor = await requireSongEditor(data.songId);
   if ("error" in editor) return { error: editor.error };
 
-  const segError = validateSegments(editor.song.durationMs, data);
+  const segError = validateSegments(editor.song.durationMs, data, t.errors);
   if (segError) return { error: segError };
 
   await prisma.klub100Song.update({
@@ -242,6 +251,7 @@ export async function editSong(input: EditSongInput) {
 
 export async function deleteSuggestion(songId: string) {
   const session = await requireSession();
+  const t = await getDict();
   const song = await prisma.klub100Song.findUnique({
     where: { id: songId },
     include: {
@@ -251,14 +261,14 @@ export async function deleteSuggestion(songId: string) {
       },
     },
   });
-  if (!song) return { error: "Song not found." };
+  if (!song) return { error: t.errors.songNotFound };
 
   const isCurator = computeIsCurator(song.project, session.user);
   if (song.suggestedById !== session.user.id && !isCurator) {
-    return { error: "You can only remove your own suggestions." };
+    return { error: t.errors.ownSuggestionsOnly };
   }
   if (song.status === "ACCEPTED" && !isCurator) {
-    return { error: "This song is on the tracklist — ask the project owner." };
+    return { error: t.errors.onTracklistAsk };
   }
 
   await prisma.klub100Song.delete({ where: { id: songId } });
@@ -274,7 +284,7 @@ export async function toggleVote(songId: string) {
     where: { id: songId },
     select: { projectId: true },
   });
-  if (!song) return { error: "Song not found." };
+  if (!song) return { error: (await getDict()).errors.songNotFound };
 
   const key = { songId_userId: { songId, userId: session.user.id } };
   const existing = await prisma.klub100Vote.findUnique({ where: key });
@@ -290,11 +300,12 @@ export async function toggleVote(songId: string) {
 }
 
 export async function acceptSong(songId: string) {
+  const t = await getDict();
   const song = await prisma.klub100Song.findUnique({
     where: { id: songId },
     select: { projectId: true, status: true },
   });
-  if (!song) return { error: "Song not found." };
+  if (!song) return { error: t.errors.songNotFound };
   const curator = await requireCurator(song.projectId);
   if ("error" in curator) return { error: curator.error };
   if (song.status === "ACCEPTED") return { ok: true };
@@ -303,7 +314,7 @@ export async function acceptSong(songId: string) {
     where: { projectId: song.projectId, status: "ACCEPTED" },
   });
   if (accepted >= TRACKLIST_SIZE) {
-    return { error: `The tracklist is full (${TRACKLIST_SIZE} songs).` };
+    return { error: fmt(t.errors.tracklistFull, { count: TRACKLIST_SIZE }) };
   }
 
   await prisma.klub100Song.update({
@@ -328,7 +339,7 @@ async function setPoolStatus(songId: string, status: "SUGGESTED" | "REJECTED") {
     where: { id: songId },
     select: { projectId: true, status: true },
   });
-  if (!song) return { error: "Song not found." };
+  if (!song) return { error: (await getDict()).errors.songNotFound };
   const curator = await requireCurator(song.projectId);
   if ("error" in curator) return { error: curator.error };
 
@@ -342,14 +353,15 @@ async function setPoolStatus(songId: string, status: "SUGGESTED" | "REJECTED") {
 }
 
 export async function moveSong(songId: string, toPosition: number) {
+  const t = await getDict();
   const song = await prisma.klub100Song.findUnique({
     where: { id: songId },
     select: { projectId: true, status: true },
   });
-  if (!song) return { error: "Song not found." };
+  if (!song) return { error: t.errors.songNotFound };
   const curator = await requireCurator(song.projectId);
   if ("error" in curator) return { error: curator.error };
-  if (song.status !== "ACCEPTED") return { error: "Song is not on the tracklist." };
+  if (song.status !== "ACCEPTED") return { error: t.errors.notOnTracklist };
 
   const accepted = await prisma.klub100Song.findMany({
     where: { projectId: song.projectId, status: "ACCEPTED" },
@@ -400,14 +412,15 @@ export async function attachCheers(formData: FormData) {
   const songId = String(formData.get("songId") ?? "");
   const file = formData.get("file");
 
+  const t = await getDict();
   if (!(file instanceof File) || file.size === 0) {
-    return { error: "Record or choose an audio clip first." };
+    return { error: t.errors.chooseClip };
   }
   if (file.size > MAX_CHEERS_SIZE) {
-    return { error: "Clip is too large (max 5 MB)." };
+    return { error: t.errors.clipTooLarge };
   }
   if (file.type && !file.type.startsWith("audio/")) {
-    return { error: "Only audio files can be a cheers." };
+    return { error: t.errors.cheersMustBeAudio };
   }
 
   const editor = await requireSongEditor(songId);
@@ -456,7 +469,7 @@ export async function addProjectAdmin(projectId: string, userId: string) {
     where: { id: userId },
     select: { id: true },
   });
-  if (!user) return { error: "User not found." };
+  if (!user) return { error: (await getDict()).errors.userNotFound };
 
   try {
     await prisma.klub100ProjectAdmin.create({ data: { projectId, userId } });
