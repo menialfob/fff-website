@@ -118,12 +118,11 @@ export async function searchTracks(
     artist: t.artists.map((a) => a.name).join(", "),
     album: t.album.name,
     durationMs: t.duration_ms,
-    // Smallest image that is still ≥ 64px wide, for list thumbnails.
+    // Highest-resolution cover Spotify offers (usually 640px). It fills the
+    // full-screen play screen, so we favour quality; list thumbnails
+    // downscale it and lazy-load so long tracklists stay cheap.
     albumArtUrl:
-      [...t.album.images].sort((a, b) => a.width - b.width).find((i) => i.width >= 64)
-        ?.url ??
-      t.album.images[0]?.url ??
-      null,
+      [...t.album.images].sort((a, b) => b.width - a.width)[0]?.url ?? null,
     spotifyUrl: t.external_urls.spotify,
   }));
 }
