@@ -35,6 +35,7 @@ export function SongMeta({ song }: { song: SongView }) {
         <img
           src={song.albumArtUrl}
           alt=""
+          loading="lazy"
           className="h-12 w-12 shrink-0 rounded-lg object-cover shadow-md shadow-black/30"
         />
       )}
