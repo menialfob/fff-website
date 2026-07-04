@@ -220,22 +220,67 @@ export async function fetchSpotifyProfile(
 }
 
 /**
+ * Refresh well before expiry (matches the playback engine's own buffer, so
+ * a client asking "early" actually gets a fresh token instead of the same
+ * near-expiry one back).
+ */
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60_000;
+
+type UserTokenResult =
+  | { accessToken: string; expiresAt: Date; product: string | null }
+  | { error: "not-connected" | "refresh-failed" };
+
+/**
+ * Serializes refreshes per user. PKCE rotates the refresh token on every
+ * use — if two requests (the SDK's getOAuthToken and the engine's own play
+ * calls, or a second tab) refresh concurrently, the loser sends a
+ * just-invalidated refresh token and Spotify kills the whole connection,
+ * which mid-party would force a full OAuth reconnect.
+ */
+const refreshInFlight = new Map<string, Promise<UserTokenResult>>();
+
+/**
  * Returns a valid access token for the user's connected Spotify account,
- * refreshing (and persisting) it when it's within a minute of expiry.
+ * refreshing (and persisting) it when it's close to expiry.
  * Access tokens last ~1 h and a mix runs ~2 h, so the play screen calls
  * /api/spotify/token (which calls this) whenever the SDK asks for a token.
  */
-export async function getUserAccessToken(userId: string): Promise<
-  | { accessToken: string; expiresAt: Date; product: string | null }
-  | { error: "not-connected" | "refresh-failed" }
-> {
+export async function getUserAccessToken(userId: string): Promise<UserTokenResult> {
   const account = await prisma.spotifyAccount.findUnique({ where: { userId } });
   if (!account) return { error: "not-connected" };
 
   if (
     account.accessToken &&
     account.expiresAt &&
-    account.expiresAt.getTime() > Date.now() + 60_000
+    account.expiresAt.getTime() > Date.now() + TOKEN_REFRESH_BUFFER_MS
+  ) {
+    return {
+      accessToken: account.accessToken,
+      expiresAt: account.expiresAt,
+      product: account.product,
+    };
+  }
+
+  // No await between the get and the set — concurrent callers join the same
+  // in-flight refresh instead of racing it.
+  let pending = refreshInFlight.get(userId);
+  if (!pending) {
+    pending = refreshUserToken(userId).finally(() => refreshInFlight.delete(userId));
+    refreshInFlight.set(userId, pending);
+  }
+  return pending;
+}
+
+async function refreshUserToken(userId: string): Promise<UserTokenResult> {
+  // Re-read inside the lock: a refresh that completed while the caller was
+  // doing its first lookup has already rotated the stored refresh token, and
+  // replaying the old one would invalidate the connection.
+  const account = await prisma.spotifyAccount.findUnique({ where: { userId } });
+  if (!account) return { error: "not-connected" };
+  if (
+    account.accessToken &&
+    account.expiresAt &&
+    account.expiresAt.getTime() > Date.now() + TOKEN_REFRESH_BUFFER_MS
   ) {
     return {
       accessToken: account.accessToken,

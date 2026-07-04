@@ -245,6 +245,22 @@ export const da = {
     resume: "Fortsæt",
     skip: "Spring over",
     lostToSpotify: "Tabt til Spotify (der skyldes slurke!):",
+    engineSdkLoadFailed:
+      "Kunne ikke indlæse Spotify-afspilleren — tjek netværket.",
+    engineClosed: "Afspilningen blev lukket.",
+    engineInitFailed: "Spotify-afspilleren kunne ikke starte.",
+    engineAuthFailed: "Spotify afviste forbindelsen.",
+    engineAccountError: "Spotify afviste kontoen — værtsrollen kræver Premium.",
+    engineConnectFailed: "Kunne ikke forbinde Spotify-afspilleren.",
+    engineReadyTimeout: "Spotify-afspilleren var for længe om at blive klar.",
+    engineTokenFailed:
+      "Kunne ikke forny Spotify-adgangen — genindlæs for at fortsætte.",
+    engineDeviceLost:
+      "Spotify-afspilleren mistede forbindelsen — genindlæs for at fortsætte herfra.",
+    engineConnectionLost:
+      "Mistede forbindelsen til Spotify — genindlæs for at fortsætte herfra.",
+    engineUnexpected:
+      "Afspilningen ramte en uventet fejl — genindlæs for at fortsætte herfra.",
   },
   errors: {
     invalidInput: "Ugyldigt input.",

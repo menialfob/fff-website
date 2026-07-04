@@ -47,6 +47,7 @@ function isIos() {
 
 export function PlayScreen(props: PlayScreenProps) {
   const { projectId, songs } = props;
+  const { t } = useI18n();
   const [ios, setIos] = useState(false);
   const [device, setDevice] = useState<{
     status: "pending" | "ready" | "failed";
@@ -72,6 +73,19 @@ export function PlayScreen(props: PlayScreenProps) {
       songs,
       cheersUrl: (songId) => `/api/klub100/cheers/${songId}`,
       defaultCheersUrl: "/default-cheers.wav",
+      messages: {
+        sdkLoadFailed: t.klub100.engineSdkLoadFailed,
+        closed: t.klub100.engineClosed,
+        initFailed: t.klub100.engineInitFailed,
+        authFailed: t.klub100.engineAuthFailed,
+        accountError: t.klub100.engineAccountError,
+        connectFailed: t.klub100.engineConnectFailed,
+        readyTimeout: t.klub100.engineReadyTimeout,
+        tokenFailed: t.klub100.engineTokenFailed,
+        deviceLost: t.klub100.engineDeviceLost,
+        connectionLost: t.klub100.engineConnectionLost,
+        unexpected: t.klub100.engineUnexpected,
+      },
       callbacks: {
         onState: setEngineState,
         persistProgress: (songId, segmentNo) => {
