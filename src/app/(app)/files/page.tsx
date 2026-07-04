@@ -1,15 +1,10 @@
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { formatSize } from "@/lib/format";
 import { formatDate } from "@/lib/i18n";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { cardPad, emptyBox, listCard, PageTitle } from "@/components/ui";
 import { DeleteFileButton, UploadForm } from "@/modules/files/file-controls";
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 
 export default async function FilesPage() {
   const session = await requireSession();

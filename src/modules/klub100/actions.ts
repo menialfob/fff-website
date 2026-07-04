@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { logEvent } from "@/lib/audit";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { deleteUpload, saveUpload } from "@/lib/storage";
@@ -24,6 +25,7 @@ async function requireCurator(projectId: string) {
     where: { id: projectId },
     select: {
       id: true,
+      name: true,
       createdById: true,
       admins: { select: { userId: true } },
     },
@@ -68,8 +70,15 @@ export async function createProject(formData: FormData) {
   if (!name) return { error: t.errors.projectNameRequired };
   if (name.length > 80) return { error: t.errors.nameTooLong };
 
-  await prisma.klub100Project.create({
+  const project = await prisma.klub100Project.create({
     data: { name, createdById: session.user.id },
+  });
+  await logEvent({
+    actorId: session.user.id,
+    action: "klub100.projectCreate",
+    targetType: "klub100Project",
+    targetId: project.id,
+    meta: { name },
   });
   revalidatePath("/klub100");
   return { ok: true };
@@ -86,6 +95,13 @@ export async function deleteProject(projectId: string) {
   });
   await prisma.klub100Project.delete({ where: { id: projectId } });
   await Promise.all(cheers.map((c) => deleteUpload(c.storedName)));
+  await logEvent({
+    actorId: curator.session.user.id,
+    action: "klub100.projectDelete",
+    targetType: "klub100Project",
+    targetId: projectId,
+    meta: { name: curator.project.name },
+  });
   revalidatePath("/klub100");
   return { ok: true };
 }

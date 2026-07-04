@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
-import { modulesForRole } from "@/modules/registry";
+import { modulesForUser } from "@/modules/registry";
 import { getDict } from "@/lib/i18n/server";
 import { DesktopNav, MobileTabBar, type NavItem } from "@/components/nav";
 import { Brand } from "@/components/ui";
@@ -17,7 +17,9 @@ export default async function AppLayout({
 
   const navItems: NavItem[] = [
     { id: "dashboard", href: "/" },
-    ...modulesForRole(role).map((m) => ({ id: m.id, href: m.href })),
+    ...modulesForUser({ role, extraRoles: session?.user?.extraRoles }).map(
+      (m) => ({ id: m.id, href: m.href }),
+    ),
   ];
 
   return (

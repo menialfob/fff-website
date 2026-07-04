@@ -290,3 +290,21 @@ export function RotateCcwIcon(p: IconProps) {
     </Svg>
   );
 }
+
+export function KeyIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />
+    </Svg>
+  );
+}
+
+export function HistoryIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l4 2" />
+    </Svg>
+  );
+}
