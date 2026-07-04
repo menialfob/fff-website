@@ -87,7 +87,35 @@ export const da = {
     fileCountOne: "1 fil",
   },
   calendar: {
-    empty: "Ingen begivenheder endnu.",
+    empty: "Ingen begivenheder i denne måned.",
+    newEvent: "Ny begivenhed",
+    today: "I dag",
+    allDay: "Hele dagen",
+    location: "Sted",
+    adhocBadge: "Ad hoc",
+    recurringBadge: "Fast begivenhed",
+    nextOccurrences: "Kommende datoer",
+    attachments: "Filer og billeder",
+    openFolder: "Se mappen i Filer",
+    editEvent: "Rediger begivenhed",
+    deleteEvent: "Slet begivenhed",
+    confirmDelete:
+      "Slet denne begivenhed? Filer og billeder bliver liggende i Filer.",
+    createdBy: "Oprettet af {name}",
+    prevMonth: "Forrige måned",
+    nextMonth: "Næste måned",
+    recurrence: {
+      ordinals: {
+        "1": "Første",
+        "2": "Anden",
+        "3": "Tredje",
+        "4": "Fjerde",
+        "-1": "Sidste",
+      },
+      everyMonth: "{ordinal} {weekday} i hver måned",
+      inMonth: "{ordinal} {weekday} i {month}",
+      fixedDate: "Hvert år den {day}. {month}",
+    },
   },
   members: {
     joined: "Medlem siden {date}",
@@ -375,6 +403,9 @@ export const da = {
     folderNotFound: "Mappen blev ikke fundet.",
     ownFoldersOnly:
       "Kun den der oprettede mappen eller en admin kan gøre dette.",
+    eventNotFound: "Begivenheden blev ikke fundet.",
+    recurringBoardOnly:
+      "Kun bestyrelsen eller en admin kan administrere faste begivenheder.",
     projectNameRequired: "Giv projektet et navn.",
     nameTooLong: "Navnet er for langt (maks 80 tegn).",
     projectNotFound: "Projektet blev ikke fundet.",
