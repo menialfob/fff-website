@@ -1,25 +1,23 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useI18n } from "@/lib/i18n/client";
+import { btnPrimary, errorText, input, label, okText } from "@/components/ui";
 import { changePassword, updateProfile } from "./actions";
 
 type ActionResult = { error?: string; ok?: boolean } | undefined;
 
 function StatusMessage({ result }: { result: ActionResult }) {
+  const { t } = useI18n();
   if (!result) return null;
   if (result.error)
     return (
-      <p className="text-sm text-red-600" role="alert">
+      <p className={errorText} role="alert">
         {result.error}
       </p>
     );
-  return <p className="text-sm text-green-700">Saved.</p>;
+  return <p className={okText}>{t.common.saved}</p>;
 }
-
-const inputClass =
-  "mt-1 w-full rounded-md border border-stone-300 px-3 py-2 shadow-sm focus:border-stone-500 focus:outline-none";
-const buttonClass =
-  "rounded-md bg-stone-900 px-4 py-2 font-medium text-white hover:bg-stone-700 disabled:opacity-50";
 
 export function ProfileForm({
   defaultName,
@@ -28,6 +26,7 @@ export function ProfileForm({
   defaultName: string;
   defaultBio: string;
 }) {
+  const { t } = useI18n();
   const [result, setResult] = useState<ActionResult>();
   const [isPending, startTransition] = useTransition();
 
@@ -39,8 +38,8 @@ export function ProfileForm({
       className="space-y-4"
     >
       <div>
-        <label htmlFor="name" className="block text-sm font-medium">
-          Name
+        <label htmlFor="name" className={label}>
+          {t.profile.name}
         </label>
         <input
           id="name"
@@ -48,12 +47,12 @@ export function ProfileForm({
           required
           maxLength={100}
           defaultValue={defaultName}
-          className={inputClass}
+          className={input}
         />
       </div>
       <div>
-        <label htmlFor="bio" className="block text-sm font-medium">
-          Bio
+        <label htmlFor="bio" className={label}>
+          {t.profile.bio}
         </label>
         <textarea
           id="bio"
@@ -61,18 +60,19 @@ export function ProfileForm({
           rows={3}
           maxLength={500}
           defaultValue={defaultBio}
-          className={inputClass}
+          className={input}
         />
       </div>
       <StatusMessage result={result} />
-      <button type="submit" disabled={isPending} className={buttonClass}>
-        {isPending ? "Saving…" : "Save profile"}
+      <button type="submit" disabled={isPending} className={btnPrimary}>
+        {isPending ? t.common.saving : t.profile.saveProfile}
       </button>
     </form>
   );
 }
 
 export function PasswordForm() {
+  const { t } = useI18n();
   const [result, setResult] = useState<ActionResult>();
   const [isPending, startTransition] = useTransition();
 
@@ -84,8 +84,8 @@ export function PasswordForm() {
       className="space-y-4"
     >
       <div>
-        <label htmlFor="currentPassword" className="block text-sm font-medium">
-          Current password
+        <label htmlFor="currentPassword" className={label}>
+          {t.profile.currentPassword}
         </label>
         <input
           id="currentPassword"
@@ -93,12 +93,12 @@ export function PasswordForm() {
           type="password"
           autoComplete="current-password"
           required
-          className={inputClass}
+          className={input}
         />
       </div>
       <div>
-        <label htmlFor="newPassword" className="block text-sm font-medium">
-          New password
+        <label htmlFor="newPassword" className={label}>
+          {t.profile.newPassword}
         </label>
         <input
           id="newPassword"
@@ -107,12 +107,12 @@ export function PasswordForm() {
           autoComplete="new-password"
           required
           minLength={8}
-          className={inputClass}
+          className={input}
         />
       </div>
       <StatusMessage result={result} />
-      <button type="submit" disabled={isPending} className={buttonClass}>
-        {isPending ? "Saving…" : "Change password"}
+      <button type="submit" disabled={isPending} className={btnPrimary}>
+        {isPending ? t.common.saving : t.profile.changePassword}
       </button>
     </form>
   );

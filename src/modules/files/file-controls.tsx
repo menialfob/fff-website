@@ -1,9 +1,13 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useI18n } from "@/lib/i18n/client";
+import { btnPrimary, errorText, linkDanger } from "@/components/ui";
+import { UploadIcon } from "@/components/icons";
 import { deleteFile, uploadFile } from "./actions";
 
 export function UploadForm() {
+  const { t } = useI18n();
   const [error, setError] = useState<string>();
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -24,17 +28,14 @@ export function UploadForm() {
         type="file"
         name="file"
         required
-        className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-2 file:font-medium hover:file:bg-stone-300"
+        className="text-sm text-zinc-400 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:font-medium file:text-zinc-100 hover:file:bg-white/15"
       />
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50"
-      >
-        {isPending ? "Uploading…" : "Upload"}
+      <button type="submit" disabled={isPending} className={btnPrimary}>
+        <UploadIcon className="h-4 w-4" />
+        {isPending ? t.files.uploading : t.files.upload}
       </button>
       {error && (
-        <p className="w-full text-sm text-red-600" role="alert">
+        <p className={`${errorText} w-full`} role="alert">
           {error}
         </p>
       )}
@@ -43,6 +44,7 @@ export function UploadForm() {
 }
 
 export function DeleteFileButton({ fileId }: { fileId: string }) {
+  const { t } = useI18n();
   const [isPending, startTransition] = useTransition();
 
   return (
@@ -50,14 +52,14 @@ export function DeleteFileButton({ fileId }: { fileId: string }) {
       type="button"
       disabled={isPending}
       onClick={() => {
-        if (!confirm("Delete this file?")) return;
+        if (!confirm(t.files.confirmDelete)) return;
         startTransition(async () => {
           await deleteFile(fileId);
         });
       }}
-      className="text-sm text-red-600 hover:underline disabled:opacity-50"
+      className={linkDanger}
     >
-      Delete
+      {t.common.delete}
     </button>
   );
 }

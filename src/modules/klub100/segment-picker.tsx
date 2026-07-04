@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useI18n } from "@/lib/i18n/client";
+import { PlusIcon } from "@/components/icons";
 import { formatMs, parseTime } from "./shared";
 
 export type Segment = { startMs: number; endMs: number };
@@ -31,10 +33,12 @@ export function SegmentPicker({
   seg2: Segment | null;
   onChange: (seg1: Segment, seg2: Segment | null) => void;
 }) {
+  const { t, fmt } = useI18n();
   const barRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
 
-  const clamp = (ms: number) => Math.min(Math.max(Math.round(ms), 0), durationMs);
+  const clamp = (ms: number) =>
+    Math.min(Math.max(Math.round(ms), 0), durationMs);
 
   const msFromPointer = (clientX: number) => {
     const rect = barRef.current!.getBoundingClientRect();
@@ -79,20 +83,32 @@ export function SegmentPicker({
         endMs: Math.max(ms, current.startMs + MIN_SEGMENT_MS),
       });
     } else {
-      const start = Math.min(Math.max(ms - drag.grabOffsetMs, 0), durationMs - length);
-      updateSegment(drag.seg, { startMs: clamp(start), endMs: clamp(start + length) });
+      const start = Math.min(
+        Math.max(ms - drag.grabOffsetMs, 0),
+        durationMs - length,
+      );
+      updateSegment(drag.seg, {
+        startMs: clamp(start),
+        endMs: clamp(start + length),
+      });
     }
   };
 
   const shift = (which: 1 | 2, deltaMs: number) => {
     const current = which === 1 ? seg1 : seg2!;
     const length = current.endMs - current.startMs;
-    const start = Math.min(Math.max(current.startMs + deltaMs, 0), durationMs - length);
+    const start = Math.min(
+      Math.max(current.startMs + deltaMs, 0),
+      durationMs - length,
+    );
     updateSegment(which, { startMs: clamp(start), endMs: clamp(start + length) });
   };
 
   const addSecondSegment = () => {
-    const start = Math.min(seg1.endMs + 30_000, Math.max(durationMs - DEFAULT_SEGMENT_MS, 0));
+    const start = Math.min(
+      seg1.endMs + 30_000,
+      Math.max(durationMs - DEFAULT_SEGMENT_MS, 0),
+    );
     onChange(seg1, {
       startMs: clamp(start),
       endMs: clamp(Math.min(start + DEFAULT_SEGMENT_MS, durationMs)),
@@ -111,14 +127,16 @@ export function SegmentPicker({
         onPointerMove={handlePointerMove}
         onPointerUp={() => setDrag(null)}
         onPointerCancel={() => setDrag(null)}
-        className="relative h-12 touch-none rounded-lg bg-stone-200"
+        className="relative h-12 touch-none rounded-xl bg-white/10"
       >
         {segments.map(({ which, seg }) => (
           <div
             key={which}
             onPointerDown={(e) => handlePointerDown(e, which, "body")}
-            className={`absolute inset-y-0 cursor-grab rounded-md ${
-              which === 1 ? "bg-amber-400/80" : "bg-orange-400/80"
+            className={`absolute inset-y-0 cursor-grab rounded-lg bg-gradient-to-r shadow-lg ${
+              which === 1
+                ? "from-amber-400/90 to-orange-500/90 shadow-orange-500/20"
+                : "from-fuchsia-500/90 to-pink-500/90 shadow-pink-500/20"
             }`}
             style={{
               left: `${(seg.startMs / durationMs) * 100}%`,
@@ -130,26 +148,29 @@ export function SegmentPicker({
               onPointerDown={(e) => handlePointerDown(e, which, "start")}
               className="absolute -left-3 inset-y-0 w-7 cursor-ew-resize"
             >
-              <div className="absolute left-3 inset-y-1 w-1.5 rounded bg-stone-900/60" />
+              <div className="absolute left-3 inset-y-1 w-1.5 rounded bg-zinc-950/60" />
             </div>
             <div
               onPointerDown={(e) => handlePointerDown(e, which, "end")}
               className="absolute -right-3 inset-y-0 w-7 cursor-ew-resize"
             >
-              <div className="absolute right-3 inset-y-1 w-1.5 rounded bg-stone-900/60" />
+              <div className="absolute right-3 inset-y-1 w-1.5 rounded bg-zinc-950/60" />
             </div>
           </div>
         ))}
       </div>
-      <div className="mt-1 flex justify-between text-xs text-stone-500">
+      <div className="mt-1 flex justify-between text-xs text-zinc-500">
         <span>0:00</span>
         <span>{formatMs(durationMs)}</span>
       </div>
 
       {segments.map(({ which, seg }) => (
-        <div key={which} className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium">
-            {seg2 ? `Minute ${which}:` : "Segment:"}
+        <div
+          key={which}
+          className="mt-3 flex flex-wrap items-center gap-2 text-sm"
+        >
+          <span className="font-medium text-zinc-200">
+            {seg2 ? fmt(t.klub100.minuteN, { n: which }) : t.klub100.segment}
           </span>
           <TimeField
             value={seg.startMs}
@@ -160,7 +181,7 @@ export function SegmentPicker({
               })
             }
           />
-          <span>–</span>
+          <span className="text-zinc-500">–</span>
           <TimeField
             value={seg.endMs}
             onCommit={(ms) =>
@@ -170,7 +191,7 @@ export function SegmentPicker({
               })
             }
           />
-          <span className="text-stone-500">
+          <span className="text-zinc-500">
             ({formatMs(seg.endMs - seg.startMs)})
           </span>
           <span className="flex gap-1">
@@ -179,7 +200,7 @@ export function SegmentPicker({
                 key={delta}
                 type="button"
                 onClick={() => shift(which, delta)}
-                className="min-w-11 rounded-md border border-stone-300 px-2 py-2 text-xs hover:bg-stone-100"
+                className="min-w-11 cursor-pointer rounded-lg border border-white/15 px-2 py-2 text-xs text-zinc-300 transition hover:bg-white/10"
               >
                 {delta > 0 ? `+${delta / 1000}s` : `${delta / 1000}s`}
               </button>
@@ -189,9 +210,9 @@ export function SegmentPicker({
             <button
               type="button"
               onClick={() => onChange(seg1, null)}
-              className="text-xs text-red-600 hover:underline"
+              className="cursor-pointer text-xs text-red-300 hover:text-red-200 hover:underline"
             >
-              Remove
+              {t.common.remove}
             </button>
           )}
         </div>
@@ -201,9 +222,10 @@ export function SegmentPicker({
         <button
           type="button"
           onClick={addSecondSegment}
-          className="mt-3 rounded-md border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100"
+          className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
         >
-          + Add a second minute (really good song)
+          <PlusIcon className="h-4 w-4" />
+          {t.klub100.addSecondMinute}
         </button>
       )}
     </div>
@@ -235,7 +257,7 @@ function TimeField({
           e.currentTarget.blur();
         }
       }}
-      className="w-16 rounded-md border border-stone-300 px-2 py-2 text-center text-sm"
+      className="w-16 rounded-lg border border-white/15 bg-white/[0.06] px-2 py-2 text-center text-sm text-zinc-100"
       aria-label="time"
     />
   );

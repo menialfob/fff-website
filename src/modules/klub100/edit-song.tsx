@@ -1,16 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useI18n } from "@/lib/i18n/client";
+import { btnPrimary, btnSecondary, chip, errorText, input, linkDanger } from "@/components/ui";
+import { PencilIcon } from "@/components/icons";
 import { attachCheers, editSong, removeCheers } from "./actions";
 import { CheersCapture } from "./cheers-recorder";
 import { SegmentPicker, type Segment } from "./segment-picker";
-import { placementLabels, type Placement, type SongView } from "./shared";
+import { placements, type Placement, type SongView } from "./shared";
 
 /**
  * Pencil button + dialog to edit an existing suggestion's timing, placement and
  * cheers. Rendered only for the suggestor or a project curator.
  */
 export function EditSongButton({ song }: { song: SongView }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   return (
@@ -18,9 +22,10 @@ export function EditSongButton({ song }: { song: SongView }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md border border-stone-300 px-2.5 py-1.5 text-xs hover:bg-stone-100"
+        className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-zinc-300 transition hover:bg-white/10"
       >
-        ✎ Edit
+        <PencilIcon className="h-3.5 w-3.5" />
+        {t.common.edit}
       </button>
       {open && <EditSongDialog song={song} onClose={() => setOpen(false)} />}
     </>
@@ -34,6 +39,7 @@ function EditSongDialog({
   song: SongView;
   onClose: () => void;
 }) {
+  const { t, fmt } = useI18n();
   const [seg1, setSeg1] = useState<Segment>({
     startMs: song.seg1StartMs,
     endMs: song.seg1EndMs,
@@ -82,7 +88,11 @@ function EditSongDialog({
         formData.set("file", cheersFile);
         const cheersResult = await attachCheers(formData);
         if (cheersResult?.error) {
-          setError(`Timing saved, but the cheers failed: ${cheersResult.error}`);
+          setError(
+            fmt(t.klub100.timingSavedCheersFailed, {
+              error: cheersResult.error,
+            }),
+          );
           setCheersFile(null);
           return;
         }
@@ -92,25 +102,23 @@ function EditSongDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center bg-black/40 sm:items-center sm:p-4">
-      <div className="flex h-full w-full flex-col bg-white sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl">
-        <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-          <h3 className="min-w-0 truncate text-lg font-semibold">
-            Edit “{song.title}”
+    <div className="fixed inset-0 z-50 flex justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="flex h-full w-full flex-col bg-panel sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl sm:border sm:border-white/10 sm:shadow-2xl sm:shadow-black/50">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <h3 className="min-w-0 truncate text-lg font-semibold text-white">
+            {fmt(t.klub100.editSongTitle, { title: song.title })}
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100"
+            className={`${btnSecondary} min-h-9 shrink-0 px-3 py-1.5`}
           >
-            Close
+            {t.common.close}
           </button>
         </div>
 
         <div className="flex-1 space-y-6 overflow-y-auto p-4">
-          <p className="text-sm text-stone-600">
-            Drag the window to the best part of the song (~1 minute).
-          </p>
+          <p className="text-sm text-zinc-400">{t.klub100.dragHint}</p>
           <SegmentPicker
             durationMs={song.durationMs}
             seg1={seg1}
@@ -122,22 +130,18 @@ function EditSongDialog({
           />
 
           <div>
-            <p className="mb-2 text-sm font-medium">
-              Where does it belong in the mix?
+            <p className="mb-2 text-sm font-medium text-zinc-200">
+              {t.klub100.whereInMix}
             </p>
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(placementLabels) as Placement[]).map((p) => (
+              {placements.map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setPlacement(placement === p ? null : p)}
-                  className={`rounded-full border px-4 py-2 text-sm ${
-                    placement === p
-                      ? "border-stone-900 bg-stone-900 text-white"
-                      : "border-stone-300 hover:bg-stone-100"
-                  }`}
+                  className={chip(placement === p)}
                 >
-                  {placementLabels[p]}
+                  {t.klub100.placements[p]}
                 </button>
               ))}
             </div>
@@ -146,16 +150,16 @@ function EditSongDialog({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={300}
-              placeholder="Optional note — “late song for when people are hyped”"
-              className="mt-2 w-full rounded-md border border-stone-300 px-3 py-2.5 text-base sm:text-sm"
+              placeholder={t.klub100.notePlaceholder}
+              className={`${input} mt-2`}
             />
           </div>
 
           <div>
-            <p className="mb-2 text-sm font-medium">
-              Cheers recording{" "}
-              <span className="font-normal text-stone-500">
-                {hasCheers ? "(recording a new one replaces it)" : "(optional)"}
+            <p className="mb-2 text-sm font-medium text-zinc-200">
+              {t.klub100.cheersRecording}{" "}
+              <span className="font-normal text-zinc-500">
+                {hasCheers ? t.klub100.cheersReplaces : t.klub100.cheersOptional}
               </span>
             </p>
             {hasCheers && !cheersFile && (
@@ -170,9 +174,9 @@ function EditSongDialog({
                   type="button"
                   disabled={isPending}
                   onClick={dropCheers}
-                  className="text-sm text-red-600 hover:underline disabled:opacity-50"
+                  className={linkDanger}
                 >
-                  Remove
+                  {t.common.remove}
                 </button>
               </div>
             )}
@@ -180,20 +184,20 @@ function EditSongDialog({
           </div>
 
           {error && (
-            <p className="text-sm text-red-600" role="alert">
+            <p className={errorText} role="alert">
               {error}
             </p>
           )}
         </div>
 
-        <div className="border-t border-stone-200 p-4">
+        <div className="border-t border-white/10 p-4">
           <button
             type="button"
             disabled={isPending}
             onClick={save}
-            className="w-full rounded-md bg-stone-900 px-4 py-3 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50"
+            className={`${btnPrimary} w-full py-3`}
           >
-            {isPending ? "Saving…" : "Save changes"}
+            {isPending ? t.common.saving : t.klub100.saveChanges}
           </button>
         </div>
       </div>

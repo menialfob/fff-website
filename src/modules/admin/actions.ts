@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getDict } from "@/lib/i18n/server";
 
 const createUserSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -15,6 +16,7 @@ const createUserSchema = z.object({
 
 export async function createUser(formData: FormData) {
   await requireAdmin();
+  const t = await getDict();
 
   const parsed = createUserSchema.safeParse({
     name: formData.get("name"),
@@ -23,12 +25,12 @@ export async function createUser(formData: FormData) {
     role: formData.get("role"),
   });
   if (!parsed.success) {
-    return { error: "Invalid input (password must be at least 8 characters)." };
+    return { error: t.errors.invalidPassword };
   }
 
   const email = parsed.data.email.toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return { error: "A user with that email already exists." };
+  if (existing) return { error: t.errors.userExists };
 
   await prisma.user.create({
     data: {
@@ -45,7 +47,7 @@ export async function createUser(formData: FormData) {
 export async function deleteUser(userId: string) {
   const session = await requireAdmin();
   if (userId === session.user.id) {
-    return { error: "You cannot delete your own account." };
+    return { error: (await getDict()).errors.cannotDeleteSelf };
   }
   await prisma.user.delete({ where: { id: userId } });
   revalidatePath("/admin");

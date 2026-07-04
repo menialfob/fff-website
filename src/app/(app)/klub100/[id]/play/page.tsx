@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { spotifyConfigured } from "@/lib/spotify";
+import { getDict } from "@/lib/i18n/server";
+import { cardPad, PageTitle } from "@/components/ui";
+import { ArrowLeftIcon } from "@/components/icons";
 import { PlayScreen } from "@/modules/klub100/play-screen";
 import { computeIsCurator, TRACKLIST_SIZE } from "@/modules/klub100/shared";
 import type { PlaybackSong } from "@/modules/klub100/playback-engine";
@@ -14,6 +17,7 @@ export default async function Klub100PlayPage({
 }) {
   const session = await requireSession();
   const { id } = await params;
+  const t = await getDict();
 
   const project = await prisma.klub100Project.findUnique({
     where: { id },
@@ -58,7 +62,8 @@ export default async function Klub100PlayPage({
 
   // Only offer resume if the saved song is still on the tracklist.
   const resumeSongId =
-    project.playbackState && songs.some((s) => s.id === project.playbackState!.songId)
+    project.playbackState &&
+    songs.some((s) => s.id === project.playbackState!.songId)
       ? project.playbackState.songId
       : null;
 
@@ -66,11 +71,14 @@ export default async function Klub100PlayPage({
     <div>
       <Link
         href={`/klub100/${project.id}`}
-        className="text-sm text-stone-500 hover:underline"
+        className="inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-200"
       >
-        ← {project.name}
+        <ArrowLeftIcon className="h-4 w-4" />
+        {project.name}
       </Link>
-      <h1 className="mb-6 mt-2 text-3xl font-bold">Play mix</h1>
+      <div className="mt-2">
+        <PageTitle>{t.klub100.playMixTitle}</PageTitle>
+      </div>
 
       {isHost ? (
         <PlayScreen
@@ -86,10 +94,7 @@ export default async function Klub100PlayPage({
           tracklistTarget={TRACKLIST_SIZE}
         />
       ) : (
-        <p className="rounded-xl border border-stone-200 bg-white p-4 text-stone-600 shadow-sm">
-          Only the project owner or an admin can host playback — their device
-          is the one plugged into the speakers. You just drink. 🍻
-        </p>
+        <p className={`${cardPad} text-zinc-400`}>{t.klub100.onlyHostInfo}</p>
       )}
     </div>
   );

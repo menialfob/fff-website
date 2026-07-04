@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/auth";
+import { getDict } from "@/lib/i18n/server";
 import { prisma } from "@/lib/db";
 import {
   searchTracks,
@@ -16,13 +17,11 @@ export type SearchResult = SpotifyTrack & {
 
 export async function searchSongs(projectId: string, query: string) {
   await requireSession();
+  const t = await getDict();
   const trimmed = query.trim();
   if (!trimmed) return { tracks: [] as SearchResult[] };
   if (!spotifyConfigured()) {
-    return {
-      error:
-        "Spotify search is not configured — an admin needs to set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.",
-    };
+    return { error: t.errors.searchNotConfigured };
   }
 
   let tracks: SpotifyTrack[];
@@ -32,12 +31,9 @@ export async function searchSongs(projectId: string, query: string) {
     // Full cause lands in the server logs (`docker compose logs app`).
     console.error("Klub 100 Spotify search failed:", e);
     if (e instanceof SpotifyAuthError) {
-      return {
-        error:
-          "Spotify rejected the app credentials — double-check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET on the server.",
-      };
+      return { error: t.errors.searchAuthFailed };
     }
-    return { error: "Spotify search failed — try again in a moment." };
+    return { error: t.errors.searchFailed };
   }
 
   const existing = await prisma.klub100Song.findMany({

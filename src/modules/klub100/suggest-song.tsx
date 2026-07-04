@@ -3,15 +3,25 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useI18n } from "@/lib/i18n/client";
+import {
+  btnPrimary,
+  btnSecondary,
+  chip,
+  errorText,
+  input,
+} from "@/components/ui";
+import { ExternalLinkIcon, PlusIcon } from "@/components/icons";
 import { attachCheers, suggestSong } from "./actions";
 import { searchSongs, type SearchResult } from "./search-actions";
 import { CheersCapture } from "./cheers-recorder";
 import { SegmentPicker, type Segment } from "./segment-picker";
-import { formatMs, placementLabels, type Placement } from "./shared";
+import { formatMs, placements, type Placement } from "./shared";
 
 const DEFAULT_SEGMENT_MS = 60_000;
 
 export function SuggestSongButton({ projectId }: { projectId: string }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   return (
@@ -19,12 +29,16 @@ export function SuggestSongButton({ projectId }: { projectId: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md bg-stone-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-stone-700"
+        className={btnPrimary}
       >
-        + Suggest a song
+        <PlusIcon className="h-4 w-4" />
+        {t.klub100.suggestSong}
       </button>
       {open && (
-        <SuggestSongDialog projectId={projectId} onClose={() => setOpen(false)} />
+        <SuggestSongDialog
+          projectId={projectId}
+          onClose={() => setOpen(false)}
+        />
       )}
     </>
   );
@@ -37,11 +51,15 @@ function SuggestSongDialog({
   projectId: string;
   onClose: () => void;
 }) {
+  const { t, fmt } = useI18n();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searched, setSearched] = useState(false);
   const [track, setTrack] = useState<SearchResult | null>(null);
-  const [seg1, setSeg1] = useState<Segment>({ startMs: 0, endMs: DEFAULT_SEGMENT_MS });
+  const [seg1, setSeg1] = useState<Segment>({
+    startMs: 0,
+    endMs: DEFAULT_SEGMENT_MS,
+  });
   const [seg2, setSeg2] = useState<Segment | null>(null);
   const [placement, setPlacement] = useState<Placement | null>(null);
   const [note, setNote] = useState("");
@@ -78,15 +96,18 @@ function SuggestSongDialog({
     return () => clearTimeout(timer);
   }, [query, projectId]);
 
-  const selectTrack = (t: SearchResult) => {
-    setTrack(t);
+  const selectTrack = (tr: SearchResult) => {
+    setTrack(tr);
     setError(undefined);
     // Default window: a minute starting a third in — usually near the chorus.
     const start = Math.max(
       0,
-      Math.min(Math.round(t.durationMs / 3), t.durationMs - DEFAULT_SEGMENT_MS),
+      Math.min(Math.round(tr.durationMs / 3), tr.durationMs - DEFAULT_SEGMENT_MS),
     );
-    setSeg1({ startMs: start, endMs: Math.min(start + DEFAULT_SEGMENT_MS, t.durationMs) });
+    setSeg1({
+      startMs: start,
+      endMs: Math.min(start + DEFAULT_SEGMENT_MS, tr.durationMs),
+    });
     setSeg2(null);
   };
 
@@ -120,7 +141,9 @@ function SuggestSongDialog({
         const cheersResult = await attachCheers(formData);
         if (cheersResult?.error) {
           // The song is saved; surface the cheers problem instead of closing.
-          setError(`Song suggested, but the cheers failed: ${cheersResult.error}`);
+          setError(
+            fmt(t.klub100.songSavedCheersFailed, { error: cheersResult.error }),
+          );
           setCheersFile(null);
           return;
         }
@@ -130,18 +153,18 @@ function SuggestSongDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center bg-black/40 sm:items-center sm:p-4">
-      <div className="flex h-full w-full flex-col bg-white sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl">
-        <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-          <h3 className="text-lg font-semibold">
-            {track ? "Pick the best minute" : "Suggest a song"}
+    <div className="fixed inset-0 z-50 flex justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="flex h-full w-full flex-col bg-panel sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl sm:border sm:border-white/10 sm:shadow-2xl sm:shadow-black/50">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <h3 className="text-lg font-semibold text-white">
+            {track ? t.klub100.pickBestMinute : t.klub100.suggestSong}
           </h3>
           <button
             type="button"
             onClick={track ? () => setTrack(null) : onClose}
-            className="rounded-md border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100"
+            className={`${btnSecondary} min-h-9 px-3 py-1.5`}
           >
-            {track ? "← Back" : "Close"}
+            {track ? t.common.back : t.common.close}
           </button>
         </div>
 
@@ -153,52 +176,60 @@ function SuggestSongDialog({
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search Spotify — song or artist"
+                  placeholder={t.klub100.searchPlaceholder}
                   autoFocus
-                  className="w-full rounded-md border border-stone-300 px-3 py-2.5 pr-10 text-base sm:text-sm"
+                  className={`${input} mt-0 pr-10`}
                 />
                 {isPending && (
                   <span
                     aria-hidden
-                    className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-stone-300 border-t-stone-700"
+                    className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-white/20 border-t-amber-400"
                   />
                 )}
               </div>
               {error && (
-                <p className="mt-3 text-sm text-red-600" role="alert">
+                <p className={`${errorText} mt-3`} role="alert">
                   {error}
                 </p>
               )}
-              <ul className="mt-4 divide-y divide-stone-100">
-                {results.map((t) => (
-                  <li key={t.id}>
+              <ul className="mt-4 divide-y divide-white/[0.06]">
+                {results.map((tr) => (
+                  <li key={tr.id}>
                     <button
                       type="button"
-                      disabled={!!t.alreadySuggestedBy}
-                      onClick={() => selectTrack(t)}
-                      className="flex w-full items-center gap-3 px-1 py-2.5 text-left hover:bg-stone-50 disabled:opacity-50"
+                      disabled={!!tr.alreadySuggestedBy}
+                      onClick={() => selectTrack(tr)}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-1 py-2.5 text-left transition hover:bg-white/5 disabled:opacity-50"
                     >
-                      {t.albumArtUrl && (
+                      {tr.albumArtUrl && (
                         <img
-                          src={t.albumArtUrl}
+                          src={tr.albumArtUrl}
                           alt=""
-                          className="h-12 w-12 rounded-md object-cover"
+                          className="h-12 w-12 rounded-lg object-cover"
                         />
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{t.title}</span>
-                        <span className="block truncate text-sm text-stone-500">
-                          {t.artist} · {formatMs(t.durationMs)}
-                          {t.alreadySuggestedBy &&
-                            ` · already suggested by ${t.alreadySuggestedBy}`}
+                        <span className="block truncate font-medium text-zinc-100">
+                          {tr.title}
+                        </span>
+                        <span className="block truncate text-sm text-zinc-500">
+                          {tr.artist} · {formatMs(tr.durationMs)}
+                          {tr.alreadySuggestedBy &&
+                            ` · ${fmt(t.klub100.alreadySuggestedBy, { name: tr.alreadySuggestedBy })}`}
                         </span>
                       </span>
                     </button>
                   </li>
                 ))}
-                {searched && !isPending && query.trim() && results.length === 0 && !error && (
-                  <li className="py-4 text-sm text-stone-500">No tracks found.</li>
-                )}
+                {searched &&
+                  !isPending &&
+                  query.trim() &&
+                  results.length === 0 &&
+                  !error && (
+                    <li className="py-4 text-sm text-zinc-500">
+                      {t.klub100.noTracksFound}
+                    </li>
+                  )}
               </ul>
             </>
           ) : (
@@ -208,12 +239,14 @@ function SuggestSongDialog({
                   <img
                     src={track.albumArtUrl}
                     alt=""
-                    className="h-14 w-14 rounded-md object-cover"
+                    className="h-14 w-14 rounded-lg object-cover shadow-md shadow-black/30"
                   />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{track.title}</p>
-                  <p className="truncate text-sm text-stone-500">
+                  <p className="truncate font-medium text-zinc-100">
+                    {track.title}
+                  </p>
+                  <p className="truncate text-sm text-zinc-500">
                     {track.artist} · {formatMs(track.durationMs)}
                   </p>
                 </div>
@@ -221,16 +254,14 @@ function SuggestSongDialog({
                   href={track.spotifyUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="shrink-0 rounded-md border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100"
+                  className={`${btnSecondary} shrink-0 px-3 py-2`}
                 >
-                  Open in Spotify ↗
+                  {t.klub100.openInSpotify}
+                  <ExternalLinkIcon className="h-3.5 w-3.5" />
                 </a>
               </div>
 
-              <p className="text-sm text-stone-600">
-                Listen in Spotify and drag the window to the best part of the
-                song (~1 minute).
-              </p>
+              <p className="text-sm text-zinc-400">{t.klub100.dragHint}</p>
               <SegmentPicker
                 durationMs={track.durationMs}
                 seg1={seg1}
@@ -242,22 +273,18 @@ function SuggestSongDialog({
               />
 
               <div>
-                <p className="mb-2 text-sm font-medium">
-                  Where does it belong in the mix?
+                <p className="mb-2 text-sm font-medium text-zinc-200">
+                  {t.klub100.whereInMix}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {(Object.keys(placementLabels) as Placement[]).map((p) => (
+                  {placements.map((p) => (
                     <button
                       key={p}
                       type="button"
                       onClick={() => setPlacement(placement === p ? null : p)}
-                      className={`rounded-full border px-4 py-2 text-sm ${
-                        placement === p
-                          ? "border-stone-900 bg-stone-900 text-white"
-                          : "border-stone-300 hover:bg-stone-100"
-                      }`}
+                      className={chip(placement === p)}
                     >
-                      {placementLabels[p]}
+                      {t.klub100.placements[p]}
                     </button>
                   ))}
                 </div>
@@ -266,20 +293,23 @@ function SuggestSongDialog({
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   maxLength={300}
-                  placeholder="Optional note — “late song for when people are hyped”"
-                  className="mt-2 w-full rounded-md border border-stone-300 px-3 py-2.5 text-base sm:text-sm"
+                  placeholder={t.klub100.notePlaceholder}
+                  className={`${input} mt-2`}
                 />
               </div>
 
               <div>
-                <p className="mb-2 text-sm font-medium">
-                  Cheers recording <span className="font-normal text-stone-500">(optional — can be added later)</span>
+                <p className="mb-2 text-sm font-medium text-zinc-200">
+                  {t.klub100.cheersRecording}{" "}
+                  <span className="font-normal text-zinc-500">
+                    {t.klub100.cheersOptionalLater}
+                  </span>
                 </p>
                 <CheersCapture value={cheersFile} onChange={setCheersFile} />
               </div>
 
               {error && (
-                <p className="text-sm text-red-600" role="alert">
+                <p className={errorText} role="alert">
                   {error}
                 </p>
               )}
@@ -288,14 +318,14 @@ function SuggestSongDialog({
         </div>
 
         {track && (
-          <div className="border-t border-stone-200 p-4">
+          <div className="border-t border-white/10 p-4">
             <button
               type="button"
               disabled={isPending}
               onClick={submit}
-              className="w-full rounded-md bg-stone-900 px-4 py-3 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50"
+              className={`${btnPrimary} w-full py-3`}
             >
-              {isPending ? "Suggesting…" : "Suggest this song"}
+              {isPending ? t.klub100.suggesting : t.klub100.suggestThis}
             </button>
           </div>
         )}

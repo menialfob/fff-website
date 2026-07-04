@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getDict } from "@/lib/i18n/server";
 
 const profileSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -17,7 +18,7 @@ export async function updateProfile(formData: FormData) {
     name: formData.get("name"),
     bio: formData.get("bio") ?? "",
   });
-  if (!parsed.success) return { error: "Invalid input." };
+  if (!parsed.success) return { error: (await getDict()).errors.invalidInput };
 
   await prisma.user.update({
     where: { id: session.user.id },
@@ -39,7 +40,7 @@ export async function changePassword(formData: FormData) {
     newPassword: formData.get("newPassword"),
   });
   if (!parsed.success) {
-    return { error: "New password must be at least 8 characters." };
+    return { error: (await getDict()).errors.passwordTooShort };
   }
 
   const user = await prisma.user.findUniqueOrThrow({
@@ -49,7 +50,7 @@ export async function changePassword(formData: FormData) {
     parsed.data.currentPassword,
     user.passwordHash,
   );
-  if (!valid) return { error: "Current password is incorrect." };
+  if (!valid) return { error: (await getDict()).errors.wrongCurrentPassword };
 
   await prisma.user.update({
     where: { id: user.id },

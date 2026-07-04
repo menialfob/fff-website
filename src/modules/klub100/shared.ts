@@ -10,11 +10,7 @@ export const SPOTIFY_ALLOWLIST_SLOTS = 5;
 
 export type Placement = "EARLY" | "MIDDLE" | "LATE";
 
-export const placementLabels: Record<Placement, string> = {
-  EARLY: "Early",
-  MIDDLE: "Middle",
-  LATE: "Late",
-};
+export const placements: Placement[] = ["EARLY", "MIDDLE", "LATE"];
 
 /**
  * Whether a user may curate a project: the site admin, the creator, or anyone

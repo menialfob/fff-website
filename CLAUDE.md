@@ -41,11 +41,29 @@ guards used in server actions. The middleware protects **everything** except
 **Modular features.** Each feature lives in `src/modules/<id>/` (server
 actions, client components) with its pages in `src/app/(app)/<id>/` and an
 entry in `src/modules/registry.ts`, which drives the nav bar and dashboard
-cards. Follow this pattern when adding features (forum, calendar, …); see the
-`files` module for the reference implementation. Server actions return
+cards (labels/descriptions come from the i18n dictionaries, icons + accent
+colors from `src/components/nav.tsx` / `src/components/ui.tsx`). Follow this
+pattern when adding features (forum, calendar, …); see the `files` module for
+the reference implementation. Server actions return
 `{ error?: string; ok?: boolean }` and are called from small `"use client"`
 components via `useTransition`; every mutating action starts with
 `requireSession()` or `requireAdmin()`.
+
+**i18n.** All UI strings live in `src/lib/i18n/dictionaries/{da,en}.ts` —
+Danish is the default locale and the source of truth; `en` must satisfy
+`typeof da`, so a missing key is a type error. A `locale` cookie picks the
+language (switcher on the profile + login pages). Server components and
+actions use `getDict()` / `getLocale()` from `src/lib/i18n/server`; client
+components use `useI18n()` from `src/lib/i18n/client` (provider mounted in
+the root layout). Interpolation uses `fmt("… {name}", { name })`. Never
+hardcode user-facing strings — including error messages in server actions.
+
+**Design system.** Dark theme only (`color-scheme: dark`, canvas/panel colors
+in `globals.css` `@theme`). Shared class recipes (cards, buttons, inputs,
+chips) and per-module accent gradients live in `src/components/ui.tsx`;
+SVG icons in `src/components/icons.tsx` — use these instead of unicode
+glyphs or new one-off styles. Navigation is a bottom tab bar on mobile and
+header pills on desktop (`src/components/nav.tsx`).
 
 **File storage.** Uploads are written to `UPLOAD_DIR` (a Docker volume in
 production) under randomized names via `src/lib/storage.ts`; metadata lives in

@@ -1,9 +1,12 @@
 "use client";
 
 import { useActionState } from "react";
+import { useI18n } from "@/lib/i18n/client";
+import { btnPrimary, errorText, input, label } from "@/components/ui";
 import { authenticate } from "./actions";
 
 export function LoginForm() {
+  const { t } = useI18n();
   const [errorMessage, formAction, isPending] = useActionState(
     authenticate,
     undefined,
@@ -12,8 +15,8 @@ export function LoginForm() {
   return (
     <form action={formAction} className="space-y-4">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium">
-          Email
+        <label htmlFor="email" className={label}>
+          {t.login.email}
         </label>
         <input
           id="email"
@@ -21,12 +24,12 @@ export function LoginForm() {
           type="email"
           autoComplete="email"
           required
-          className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 shadow-sm focus:border-stone-500 focus:outline-none"
+          className={input}
         />
       </div>
       <div>
-        <label htmlFor="password" className="block text-sm font-medium">
-          Password
+        <label htmlFor="password" className={label}>
+          {t.login.password}
         </label>
         <input
           id="password"
@@ -34,20 +37,20 @@ export function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
-          className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 shadow-sm focus:border-stone-500 focus:outline-none"
+          className={input}
         />
       </div>
       {errorMessage && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className={errorText} role="alert">
           {errorMessage}
         </p>
       )}
       <button
         type="submit"
         disabled={isPending}
-        className="w-full rounded-md bg-stone-900 px-4 py-2 font-medium text-white hover:bg-stone-700 disabled:opacity-50"
+        className={`${btnPrimary} w-full`}
       >
-        {isPending ? "Signing in…" : "Sign in"}
+        {isPending ? t.login.signingIn : t.login.signIn}
       </button>
     </form>
   );

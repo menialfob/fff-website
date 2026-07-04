@@ -5,12 +5,25 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useI18n } from "@/lib/i18n/client";
+import { btnSpotify, card } from "@/components/ui";
+import {
+  AlertTriangleIcon,
+  CheckIcon,
+  PauseIcon,
+  PlayIcon,
+  SkipForwardIcon,
+  XIcon,
+} from "@/components/icons";
 import {
   PlaybackEngine,
   type EngineState,
   type PlaybackSong,
 } from "./playback-engine";
-import { clearPlaybackProgress, savePlaybackProgress } from "./playback-actions";
+import {
+  clearPlaybackProgress,
+  savePlaybackProgress,
+} from "./playback-actions";
 
 export type PlayScreenProps = {
   projectId: string;
@@ -35,7 +48,10 @@ function isIos() {
 export function PlayScreen(props: PlayScreenProps) {
   const { projectId, songs } = props;
   const [ios, setIos] = useState(false);
-  const [device, setDevice] = useState<{ status: "pending" | "ready" | "failed"; message?: string }>({ status: "pending" });
+  const [device, setDevice] = useState<{
+    status: "pending" | "ready" | "failed";
+    message?: string;
+  }>({ status: "pending" });
   const [started, setStarted] = useState(false);
   const [engineState, setEngineState] = useState<EngineState | null>(null);
   const engineRef = useRef<PlaybackEngine | null>(null);
@@ -59,7 +75,9 @@ export function PlayScreen(props: PlayScreenProps) {
       callbacks: {
         onState: setEngineState,
         persistProgress: (songId, segmentNo) => {
-          void savePlaybackProgress(projectId, songId, segmentNo).catch(() => {});
+          void savePlaybackProgress(projectId, songId, segmentNo).catch(
+            () => {},
+          );
         },
         clearProgress: () => {
           void clearPlaybackProgress(projectId).catch(() => {});
@@ -69,7 +87,9 @@ export function PlayScreen(props: PlayScreenProps) {
     engineRef.current = engine;
     void engine.init().then((result) => {
       setDevice(
-        "error" in result ? { status: "failed", message: result.error } : { status: "ready" },
+        "error" in result
+          ? { status: "failed", message: result.error }
+          : { status: "ready" },
       );
     });
     return () => {
@@ -150,33 +170,36 @@ function PreFlight({
   resumeIndex: number;
   onStart: (fromIndex: number) => void;
 }) {
+  const { t, fmt } = useI18n();
   const missingCheers = songs.filter((s) => !s.hasCheers);
   const playPath = `/klub100/${projectId}/play`;
 
   const ready =
-    songs.length > 0 && spotify.connected && spotify.premium && device.status === "ready";
+    songs.length > 0 &&
+    spotify.connected &&
+    spotify.premium &&
+    device.status === "ready";
 
   return (
     <div className="space-y-3">
-      <h2 className="text-xl font-semibold">Pre-flight</h2>
+      <h2 className="text-xl font-semibold text-white">
+        {t.klub100.preflight}
+      </h2>
 
-      {ios && (
-        <Check
-          ok={false}
-          warn
-          label="iPhone/iPad detected — Spotify's web player can be unreliable on iOS (every iOS browser, Chrome included, uses Safari's engine). You can try, but a laptop or Android device is the safe choice."
-        />
-      )}
+      {ios && <Check ok={false} warn label={t.klub100.iosWarning} />}
 
       <Check
         ok={songs.length >= tracklistTarget}
         warn={songs.length > 0 && songs.length < tracklistTarget}
         label={
           songs.length >= tracklistTarget
-            ? `Tracklist complete (${songs.length} songs)`
+            ? fmt(t.klub100.tracklistComplete, { count: songs.length })
             : songs.length > 0
-              ? `Tracklist has only ${songs.length}/${tracklistTarget} songs — you can still play the partial list`
-              : "The tracklist is empty — accept some songs first"
+              ? fmt(t.klub100.tracklistPartial, {
+                  count: songs.length,
+                  total: tracklistTarget,
+                })
+              : t.klub100.tracklistEmpty
         }
       />
 
@@ -185,12 +208,16 @@ function PreFlight({
         warn={missingCheers.length > 0}
         label={
           missingCheers.length === 0
-            ? "Every song has a cheers recording"
-            : `${missingCheers.length} song${missingCheers.length === 1 ? "" : "s"} missing cheers — the default clip will play`
+            ? t.klub100.allSongsHaveCheers
+            : missingCheers.length === 1
+              ? t.klub100.missingCheersOne
+              : fmt(t.klub100.missingCheersMany, {
+                  count: missingCheers.length,
+                })
         }
       >
         {missingCheers.length > 0 && (
-          <ul className="mt-1 list-inside list-disc text-sm text-stone-600">
+          <ul className="mt-1 list-inside list-disc text-sm text-zinc-400">
             {missingCheers.map((s) => (
               <li key={s.id}>
                 #{s.position} {s.title} — {s.artist}
@@ -204,20 +231,20 @@ function PreFlight({
         ok={spotify.connected && spotify.premium}
         label={
           !spotify.configured
-            ? "Spotify isn't configured on the server (SPOTIFY_CLIENT_ID)"
+            ? t.klub100.spotifyNotConfigured
             : !spotify.connected
-              ? "Spotify account not connected"
+              ? t.klub100.spotifyNotConnectedCheck
               : spotify.premium
-                ? "Spotify connected (Premium)"
-                : "Spotify connected, but hosting requires Premium"
+                ? t.klub100.spotifyPremiumOk
+                : t.klub100.spotifyNeedsPremium
         }
       >
         {spotify.configured && !spotify.connected && (
           <a
             href={`/api/spotify/login?returnTo=${encodeURIComponent(playPath)}`}
-            className="mt-1 inline-block rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+            className={`${btnSpotify} mt-2`}
           >
-            Connect Spotify
+            {t.klub100.connect}
           </a>
         )}
       </Check>
@@ -228,10 +255,10 @@ function PreFlight({
           warn={device.status === "pending"}
           label={
             device.status === "ready"
-              ? "Spotify player ready on this device"
+              ? t.klub100.playerReady
               : device.status === "pending"
-                ? "Setting up the Spotify player…"
-                : `Spotify player failed: ${device.message}`
+                ? t.klub100.playerPending
+                : fmt(t.klub100.playerFailed, { message: device.message ?? "" })
           }
         />
       )}
@@ -242,16 +269,19 @@ function PreFlight({
             <button
               type="button"
               onClick={() => onStart(resumeIndex)}
-              className="w-full rounded-xl bg-stone-900 px-6 py-4 text-lg font-semibold text-white hover:bg-stone-700 sm:w-auto"
+              className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-6 py-4 text-lg font-bold text-zinc-950 shadow-xl shadow-orange-500/25 transition hover:brightness-110 active:scale-[0.98] sm:w-auto"
             >
-              ▶ Resume from #{songs[resumeIndex].position}
+              <PlayIcon className="h-5 w-5" />
+              {fmt(t.klub100.resumeFrom, {
+                position: songs[resumeIndex].position,
+              })}
             </button>
             <button
               type="button"
               onClick={() => onStart(0)}
-              className="block text-sm text-stone-500 hover:underline"
+              className="block cursor-pointer text-sm text-zinc-500 hover:text-zinc-300 hover:underline"
             >
-              …or start over from #1
+              {t.klub100.startOver}
             </button>
           </div>
         ) : (
@@ -259,14 +289,14 @@ function PreFlight({
             type="button"
             disabled={!ready}
             onClick={() => onStart(0)}
-            className="w-full rounded-xl bg-stone-900 px-6 py-4 text-lg font-semibold text-white hover:bg-stone-700 disabled:opacity-40 sm:w-auto"
+            className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-6 py-4 text-lg font-bold text-zinc-950 shadow-xl shadow-orange-500/25 transition hover:brightness-110 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 sm:w-auto"
           >
-            ▶ Start the mix
+            <PlayIcon className="h-5 w-5" />
+            {t.klub100.startMix}
           </button>
         )}
-        <p className="mt-2 text-sm text-stone-500">
-          {projectName} · plug this device into the speakers, then keep this
-          tab open and in the foreground for the whole run.
+        <p className="mt-2 text-sm text-zinc-500">
+          {fmt(t.klub100.keepOpenHint, { name: projectName })}
         </p>
       </div>
     </div>
@@ -285,12 +315,22 @@ function Check({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
-      <p className="text-sm">
-        <span className={ok ? "text-emerald-600" : warn ? "text-amber-600" : "text-red-600"}>
-          {ok ? "✓" : warn ? "⚠" : "✗"}
-        </span>{" "}
-        {label}
+    <div className={`${card} p-3`}>
+      <p className="flex items-start gap-2 text-sm text-zinc-200">
+        <span
+          className={`mt-0.5 shrink-0 ${
+            ok ? "text-emerald-400" : warn ? "text-amber-400" : "text-red-400"
+          }`}
+        >
+          {ok ? (
+            <CheckIcon className="h-4 w-4" />
+          ) : warn ? (
+            <AlertTriangleIcon className="h-4 w-4" />
+          ) : (
+            <XIcon className="h-4 w-4" />
+          )}
+        </span>
+        <span>{label}</span>
       </p>
       {children}
     </div>
@@ -310,6 +350,7 @@ function NowPlaying({
   engine: PlaybackEngine | null;
   projectId: string;
 }) {
+  const { t, fmt } = useI18n();
   const router = useRouter();
   const song = songs[state.songIndex];
   const progress =
@@ -319,113 +360,142 @@ function NowPlaying({
 
   // Big type on a dark screen — it sits across the room at the party.
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-stone-950 p-6 text-center text-white">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 overflow-hidden bg-canvas p-6 text-center text-white">
+      {/* Party glow behind the album art */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div className="absolute left-1/2 top-1/3 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-fuchsia-600/15 blur-3xl" />
+        <div className="absolute bottom-[-10%] left-1/4 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl" />
+      </div>
       <button
         type="button"
-        aria-label="Stop and leave"
+        aria-label={t.klub100.exit}
         onClick={() => {
           if (
             state.phase === "finished" ||
             state.phase === "error" ||
-            confirm(`Stop the mix? You can resume from #${song?.position} later.`)
+            confirm(fmt(t.klub100.confirmStop, { position: song?.position }))
           ) {
             // Unmounting stops the engine; progress is already persisted.
             router.push(`/klub100/${projectId}`);
           }
         }}
-        className="absolute right-4 top-4 rounded-full border border-stone-700 px-4 py-2 text-sm text-stone-400 hover:bg-stone-800"
+        className="absolute right-4 top-4 z-10 inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-white/15 px-4 py-2 text-sm text-zinc-400 transition hover:bg-white/10"
       >
-        ✕ Exit
+        <XIcon className="h-4 w-4" />
+        {t.klub100.exit}
       </button>
       {state.phase === "finished" ? (
         <>
-          <p className="text-6xl">🍻</p>
-          <h2 className="text-4xl font-bold">That was the mix!</h2>
-          <p className="text-stone-400">
-            {songs.length} songs down.{" "}
-            {state.skipped.length > 0 && `${state.skipped.length} lost to Spotify.`}
+          <p className="relative text-6xl">🍻</p>
+          <h2 className="relative text-4xl font-bold">
+            {t.klub100.finishedTitle}
+          </h2>
+          <p className="relative text-zinc-400">
+            {fmt(t.klub100.finishedSongs, { count: songs.length })}{" "}
+            {state.skipped.length > 0 &&
+              fmt(t.klub100.lostCount, { count: state.skipped.length })}
           </p>
           <Link
             href={`/klub100/${projectId}`}
-            className="rounded-xl bg-white px-6 py-3 font-semibold text-stone-900"
+            className="relative rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-6 py-3 font-bold text-zinc-950 shadow-xl shadow-orange-500/25"
           >
-            Back to the project
+            {t.klub100.backToProject}
           </Link>
         </>
       ) : state.phase === "error" ? (
         <>
-          <h2 className="text-3xl font-bold text-red-400">Playback stopped</h2>
-          <p className="max-w-md text-stone-300">{state.error}</p>
+          <h2 className="relative text-3xl font-bold text-red-400">
+            {t.klub100.playbackStopped}
+          </h2>
+          <p className="relative max-w-md text-zinc-300">{state.error}</p>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-xl bg-white px-6 py-3 font-semibold text-stone-900"
+            className="relative cursor-pointer rounded-2xl bg-white px-6 py-3 font-semibold text-zinc-950"
           >
-            Reload — you can resume from #{song?.position}
+            {fmt(t.klub100.reloadResume, { position: song?.position ?? 1 })}
           </button>
         </>
       ) : (
         <>
-          <p className="text-xl font-medium text-stone-400">
+          <p className="relative text-xl font-medium text-zinc-400">
             #{song.position} / {songs.length}
-            {song.segments.length > 1 && ` · segment ${state.segmentIndex + 1} of 2`}
+            {song.segments.length > 1 &&
+              ` ${fmt(t.klub100.segmentOf, { n: state.segmentIndex + 1 })}`}
           </p>
 
           {song.albumArtUrl && (
             <img
               src={song.albumArtUrl}
               alt=""
-              className={`h-48 w-48 rounded-2xl object-cover shadow-2xl transition-opacity sm:h-64 sm:w-64 ${
+              className={`relative h-48 w-48 rounded-2xl object-cover shadow-2xl shadow-fuchsia-500/20 transition-opacity sm:h-64 sm:w-64 ${
                 state.phase === "cheers" ? "opacity-40" : ""
               }`}
             />
           )}
 
-          <div className="max-w-2xl">
+          <div className="relative max-w-2xl">
             <h2 className="text-3xl font-bold sm:text-5xl">{song.title}</h2>
-            <p className="mt-2 text-xl text-stone-300 sm:text-2xl">{song.artist}</p>
-            <p className="mt-1 text-stone-500">suggested by {song.suggestedByName}</p>
+            <p className="mt-2 text-xl text-zinc-300 sm:text-2xl">
+              {song.artist}
+            </p>
+            <p className="mt-1 text-zinc-500">
+              {fmt(t.klub100.suggestedByLine, { name: song.suggestedByName })}
+            </p>
           </div>
 
           {state.phase === "cheers" ? (
-            <div className="text-4xl font-bold text-amber-300 sm:text-6xl">
-              🍻 CHEERS!
+            <div className="relative bg-gradient-to-r from-amber-300 via-orange-400 to-amber-300 bg-clip-text text-4xl font-extrabold text-transparent sm:text-6xl">
+              🍻 {t.klub100.cheersShout}
               {state.usingDefaultCheers && (
-                <p className="mt-1 text-sm font-normal text-stone-500">
-                  (no cheers recorded — default clip)
+                <p className="mt-1 text-sm font-normal text-zinc-500">
+                  {t.klub100.defaultCheersNote}
                 </p>
               )}
             </div>
           ) : (
-            <div className="h-3 w-full max-w-xl overflow-hidden rounded-full bg-stone-800">
+            <div className="relative h-3 w-full max-w-xl overflow-hidden rounded-full bg-white/10">
               <div
-                className="h-3 rounded-full bg-emerald-400 transition-[width] duration-200"
+                className="h-3 rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-fuchsia-500 transition-[width] duration-200"
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
           )}
 
-          <div className="flex items-center gap-4">
+          <div className="relative flex items-center gap-4">
             <button
               type="button"
               onClick={() => (state.paused ? engine?.resume() : engine?.pause())}
-              className="min-w-32 rounded-xl bg-white px-6 py-4 text-lg font-semibold text-stone-900"
+              className="inline-flex min-w-32 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-lg font-bold text-zinc-950 transition active:scale-[0.98]"
             >
-              {state.paused ? "▶ Resume" : "⏸ Pause"}
+              {state.paused ? (
+                <>
+                  <PlayIcon className="h-5 w-5" />
+                  {t.klub100.resume}
+                </>
+              ) : (
+                <>
+                  <PauseIcon className="h-5 w-5" />
+                  {t.klub100.pause}
+                </>
+              )}
             </button>
             <button
               type="button"
               onClick={() => engine?.skip()}
-              className="rounded-xl border border-stone-600 px-6 py-4 text-lg font-semibold text-stone-300 hover:bg-stone-800"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-white/20 px-6 py-4 text-lg font-semibold text-zinc-300 transition hover:bg-white/10 active:scale-[0.98]"
             >
-              ⏭ Skip song
+              <SkipForwardIcon className="h-5 w-5" />
+              {t.klub100.skip}
             </button>
           </div>
 
           {state.skipped.length > 0 && (
-            <p className="max-w-xl text-sm text-stone-500">
-              Lost to Spotify (sips owed!):{" "}
-              {state.skipped.map((s) => `#${s.position} ${s.title}`).join(" · ")}
+            <p className="relative max-w-xl text-sm text-zinc-500">
+              {t.klub100.lostToSpotify}{" "}
+              {state.skipped
+                .map((s) => `#${s.position} ${s.title}`)
+                .join(" · ")}
             </p>
           )}
         </>
