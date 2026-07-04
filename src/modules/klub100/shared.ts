@@ -5,6 +5,12 @@
 
 export const TRACKLIST_SIZE = 100;
 
+/** Shortest allowed segment when picking a song's best part. */
+export const MIN_SEGMENT_MS = 10_000;
+
+/** The classic Klub 100 segment length — one minute. */
+export const DEFAULT_SEGMENT_MS = 60_000;
+
 /** Spotify's dev-mode allowlist cap (Feb 2026 rules) — surfaced in the UI. */
 export const SPOTIFY_ALLOWLIST_SLOTS = 5;
 

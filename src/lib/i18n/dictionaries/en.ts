@@ -162,6 +162,18 @@ export const en: typeof da = {
     segment: "Segment:",
     minuteN: "Minute {n}:",
     addSecondMinute: "Add a second minute (really good song)",
+    // Lyrics assist
+    chorusN: "Chorus {n}",
+    chorusSuggestionsLabel: "Suggestions from the lyrics:",
+    minuteChipN: "Minute {n}",
+    applyToMinute: "Set times for:",
+    showLyrics: "Show lyrics",
+    hideLyrics: "Hide lyrics",
+    noLyricsFound: "No synced lyrics found for this track.",
+    lyricsHint: "Tap a line to move the segment there.",
+    lyricsTimingNote:
+      "Timestamps can be off by a couple of seconds — fine-tune with the handles.",
+    lyricsAttribution: "Lyrics from LRCLIB",
     // Cheers capture
     addCheers: "Add cheers",
     replaceCheers: "Replace cheers",
