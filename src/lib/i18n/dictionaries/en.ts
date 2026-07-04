@@ -244,6 +244,20 @@ export const en: typeof da = {
     resume: "Resume",
     skip: "Skip song",
     lostToSpotify: "Lost to Spotify (sips owed!):",
+    engineSdkLoadFailed: "Could not load the Spotify player — check the network.",
+    engineClosed: "Playback was closed.",
+    engineInitFailed: "The Spotify player failed to start.",
+    engineAuthFailed: "Spotify rejected the connection.",
+    engineAccountError: "Spotify rejected the account — hosting requires Premium.",
+    engineConnectFailed: "Could not connect the Spotify player.",
+    engineReadyTimeout: "The Spotify player took too long to get ready.",
+    engineTokenFailed: "Could not refresh the Spotify access — reload to continue.",
+    engineDeviceLost:
+      "The Spotify player lost its connection — reload to pick up from here.",
+    engineConnectionLost:
+      "Lost the connection to Spotify — reload to pick up from here.",
+    engineUnexpected:
+      "Playback hit an unexpected error — reload to pick up from here.",
   },
   errors: {
     invalidInput: "Invalid input.",
