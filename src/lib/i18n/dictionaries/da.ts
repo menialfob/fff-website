@@ -163,6 +163,18 @@ export const da = {
     segment: "Udsnit:",
     minuteN: "Minut {n}:",
     addSecondMinute: "Tilføj et minut mere (rigtig god sang)",
+    // Lyrics assist
+    chorusN: "Omkvæd {n}",
+    chorusSuggestionsLabel: "Forslag fra sangteksten:",
+    minuteChipN: "Minut {n}",
+    applyToMinute: "Sæt tider for:",
+    showLyrics: "Vis sangtekst",
+    hideLyrics: "Skjul sangtekst",
+    noLyricsFound: "Ingen synkroniseret sangtekst fundet til dette nummer.",
+    lyricsHint: "Tryk på en linje for at flytte udsnittet dertil.",
+    lyricsTimingNote:
+      "Tiderne kan afvige et par sekunder — finjustér med håndtagene.",
+    lyricsAttribution: "Sangtekst fra LRCLIB",
     // Cheers capture
     addCheers: "Tilføj skål",
     replaceCheers: "Erstat skål",

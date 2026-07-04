@@ -3,12 +3,14 @@
 import { useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n/client";
 import { PlusIcon } from "@/components/icons";
-import { formatMs, parseTime } from "./shared";
+import {
+  DEFAULT_SEGMENT_MS,
+  formatMs,
+  MIN_SEGMENT_MS,
+  parseTime,
+} from "./shared";
 
 export type Segment = { startMs: number; endMs: number };
-
-const MIN_SEGMENT_MS = 10_000;
-const DEFAULT_SEGMENT_MS = 60_000;
 
 type DragState = {
   seg: 1 | 2;
@@ -27,11 +29,14 @@ export function SegmentPicker({
   seg1,
   seg2,
   onChange,
+  chorusRegions,
 }: {
   durationMs: number;
   seg1: Segment;
   seg2: Segment | null;
   onChange: (seg1: Segment, seg2: Segment | null) => void;
+  /** Detected chorus windows, shown as faint bands under the segments. */
+  chorusRegions?: { startMs: number; endMs: number }[];
 }) {
   const { t, fmt } = useI18n();
   const barRef = useRef<HTMLDivElement>(null);
@@ -129,6 +134,17 @@ export function SegmentPicker({
         onPointerCancel={() => setDrag(null)}
         className="relative h-12 touch-none rounded-xl bg-white/10"
       >
+        {chorusRegions?.map((region, i) => (
+          <div
+            key={i}
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 rounded-lg bg-fuchsia-400/15 ring-1 ring-inset ring-fuchsia-300/25"
+            style={{
+              left: `${(region.startMs / durationMs) * 100}%`,
+              width: `${((region.endMs - region.startMs) / durationMs) * 100}%`,
+            }}
+          />
+        ))}
         {segments.map(({ which, seg }) => (
           <div
             key={which}

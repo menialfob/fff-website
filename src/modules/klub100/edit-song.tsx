@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useI18n } from "@/lib/i18n/client";
 import { btnPrimary, btnSecondary, chip, errorText, input, linkDanger } from "@/components/ui";
 import { PencilIcon } from "@/components/icons";
 import { attachCheers, editSong, removeCheers } from "./actions";
+import { getLyrics } from "./lyrics-actions";
+import type { LyricsPayload } from "./lyrics";
 import { CheersCapture } from "./cheers-recorder";
+import { LyricsAssist } from "./lyrics-assist";
 import { SegmentPicker, type Segment } from "./segment-picker";
 import { placements, type Placement, type SongView } from "./shared";
 
@@ -54,7 +57,29 @@ function EditSongDialog({
   const [cheersFile, setCheersFile] = useState<File | null>(null);
   const [hasCheers, setHasCheers] = useState(song.hasCheers);
   const [error, setError] = useState<string>();
+  const [lyrics, setLyrics] = useState<LyricsPayload | null | "loading">(
+    "loading",
+  );
   const [isPending, startTransition] = useTransition();
+
+  // No auto-apply here (unlike the suggest dialog) — the stored times were
+  // picked deliberately; the suggestions are just chips to tap.
+  useEffect(() => {
+    let cancelled = false;
+    getLyrics({
+      spotifyTrackId: song.spotifyTrackId,
+      artist: song.artist,
+      title: song.title,
+      album: song.album,
+      durationMs: song.durationMs,
+    }).then((result) => {
+      if (!cancelled) setLyrics(result.lyrics);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song.id]);
 
   const dropCheers = () => {
     startTransition(async () => {
@@ -120,6 +145,17 @@ function EditSongDialog({
         <div className="flex-1 space-y-6 overflow-y-auto p-4">
           <p className="text-sm text-zinc-400">{t.klub100.dragHint}</p>
           <SegmentPicker
+            durationMs={song.durationMs}
+            seg1={seg1}
+            seg2={seg2}
+            chorusRegions={lyrics !== "loading" ? lyrics?.suggestions : undefined}
+            onChange={(s1, s2) => {
+              setSeg1(s1);
+              setSeg2(s2);
+            }}
+          />
+          <LyricsAssist
+            lyrics={lyrics}
             durationMs={song.durationMs}
             seg1={seg1}
             seg2={seg2}

@@ -14,11 +14,17 @@ import {
 import { ExternalLinkIcon, PlusIcon } from "@/components/icons";
 import { attachCheers, suggestSong } from "./actions";
 import { searchSongs, type SearchResult } from "./search-actions";
+import { getLyrics } from "./lyrics-actions";
+import type { LyricsPayload } from "./lyrics";
 import { CheersCapture } from "./cheers-recorder";
+import { LyricsAssist } from "./lyrics-assist";
 import { SegmentPicker, type Segment } from "./segment-picker";
-import { formatMs, placements, type Placement } from "./shared";
-
-const DEFAULT_SEGMENT_MS = 60_000;
+import {
+  DEFAULT_SEGMENT_MS,
+  formatMs,
+  placements,
+  type Placement,
+} from "./shared";
 
 export function SuggestSongButton({ projectId }: { projectId: string }) {
   const { t } = useI18n();
@@ -65,10 +71,17 @@ function SuggestSongDialog({
   const [note, setNote] = useState("");
   const [cheersFile, setCheersFile] = useState<File | null>(null);
   const [error, setError] = useState<string>();
+  const [lyrics, setLyrics] = useState<LyricsPayload | null | "loading">(null);
   const [isPending, startTransition] = useTransition();
   // Bumped on every search so out-of-order responses from earlier keystrokes
   // can be discarded — only the latest request gets to set state.
   const searchSeq = useRef(0);
+  // Same guard for lyrics: going back and picking another track must discard
+  // the previous track's in-flight response.
+  const lyricsSeq = useRef(0);
+  // Whether the segment still sits at the computed default, so an arriving
+  // chorus suggestion may replace it without stomping a manual adjustment.
+  const segUntouched = useRef(true);
 
   // Spotify-style live search: debounce the query and search as the user
   // types, instead of waiting for a button press.
@@ -100,6 +113,7 @@ function SuggestSongDialog({
     setTrack(tr);
     setError(undefined);
     // Default window: a minute starting a third in — usually near the chorus.
+    // Replaced by the top detected chorus if synced lyrics turn up below.
     const start = Math.max(
       0,
       Math.min(Math.round(tr.durationMs / 3), tr.durationMs - DEFAULT_SEGMENT_MS),
@@ -109,6 +123,30 @@ function SuggestSongDialog({
       endMs: Math.min(start + DEFAULT_SEGMENT_MS, tr.durationMs),
     });
     setSeg2(null);
+    segUntouched.current = true;
+
+    setLyrics("loading");
+    const seq = ++lyricsSeq.current;
+    getLyrics({
+      spotifyTrackId: tr.id,
+      artist: tr.artist,
+      title: tr.title,
+      album: tr.album,
+      durationMs: tr.durationMs,
+    }).then((result) => {
+      if (seq !== lyricsSeq.current) return; // user picked another track
+      setLyrics(result.lyrics);
+      const best = result.lyrics?.suggestions[0];
+      if (best && segUntouched.current) {
+        setSeg1({ startMs: best.startMs, endMs: best.endMs });
+      }
+    });
+  };
+
+  const backToSearch = () => {
+    setTrack(null);
+    setLyrics(null);
+    lyricsSeq.current += 1; // invalidate any in-flight lyrics request
   };
 
   const submit = () => {
@@ -161,7 +199,7 @@ function SuggestSongDialog({
           </h3>
           <button
             type="button"
-            onClick={track ? () => setTrack(null) : onClose}
+            onClick={track ? backToSearch : onClose}
             className={`${btnSecondary} min-h-9 px-3 py-1.5`}
           >
             {track ? t.common.back : t.common.close}
@@ -267,7 +305,22 @@ function SuggestSongDialog({
                 durationMs={track.durationMs}
                 seg1={seg1}
                 seg2={seg2}
+                chorusRegions={
+                  lyrics !== "loading" ? lyrics?.suggestions : undefined
+                }
                 onChange={(s1, s2) => {
+                  segUntouched.current = false;
+                  setSeg1(s1);
+                  setSeg2(s2);
+                }}
+              />
+              <LyricsAssist
+                lyrics={lyrics}
+                durationMs={track.durationMs}
+                seg1={seg1}
+                seg2={seg2}
+                onChange={(s1, s2) => {
+                  segUntouched.current = false;
                   setSeg1(s1);
                   setSeg2(s2);
                 }}
