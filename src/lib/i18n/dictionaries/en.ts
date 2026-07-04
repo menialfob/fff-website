@@ -16,6 +16,12 @@ export const en: typeof da = {
     saved: "Saved.",
     signOut: "Sign out",
     dismiss: "Dismiss",
+    bestyrelse: "Board",
+    bestyrelseTitles: {
+      FARMAND: "Farmand",
+      BEDSTEFAR: "Bedstefar",
+      SUKKERFAR: "Sukkerfar",
+    },
   },
   modules: {
     dashboard: {
@@ -101,6 +107,8 @@ export const en: typeof da = {
     reactivate: "Reactivate",
     confirmDeactivate:
       "Deactivate {name}? They won't be able to log in, but their content is kept.",
+    titleLabel: "Title",
+    noTitle: "No title",
     statsFiles: "{count} files ({size})",
     statsSongs: "{count} songs",
     statsCheers: "{count} cheers",
@@ -125,6 +133,10 @@ export const en: typeof da = {
         "user.reactivate": "Reactivated {targetName}",
         "user.grantRole": "Gave {targetName} the {role} role",
         "user.revokeRole": "Removed the {role} role from {targetName}",
+        "user.setTitle": "Gave {targetName} the title {title}",
+        "user.moveTitle":
+          "Gave {targetName} the title {title} (taken over from {previousHolderName})",
+        "user.clearTitle": "Removed the title {title} from {targetName}",
         "file.upload": "Uploaded the file {name}",
         "file.delete": "Deleted the file {name}",
         "klub100.projectCreate": "Created the Klub 100 project {name}",
@@ -332,6 +344,7 @@ export const en: typeof da = {
     cannotDeleteSelf: "You cannot delete your own account.",
     cannotDemoteSelf: "You cannot remove your own admin role.",
     cannotDeactivateSelf: "You cannot deactivate your own account.",
+    titleRequiresBestyrelse: "Only board members can hold a title.",
     userNotFound: "User not found.",
     chooseFile: "Choose a file to upload.",
     fileTooLarge: "File is too large (max 200 MB).",

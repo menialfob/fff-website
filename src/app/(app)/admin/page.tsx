@@ -60,6 +60,9 @@ export default async function AdminPage() {
                 isAdmin: user.role === "ADMIN",
                 isActive: user.isActive,
                 extraRoles: user.extraRoles.map((r) => r.role),
+                bestyrelseTitle:
+                  user.extraRoles.find((r) => r.role === "BESTYRELSE")?.title ??
+                  null,
               }}
               stats={{
                 files: files.get(user.id)?.count ?? 0,

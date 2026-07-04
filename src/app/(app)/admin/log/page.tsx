@@ -34,6 +34,10 @@ function describeEvent(
   if (typeof params.role === "string" && params.role in roleNames) {
     params.role = roleNames[params.role];
   }
+  const titleNames: Record<string, string> = t.common.bestyrelseTitles;
+  if (typeof params.title === "string" && params.title in titleNames) {
+    params.title = titleNames[params.title];
+  }
   const events: Record<string, string> = t.admin.log.events;
   const template = events[log.action];
   return template ? fmt(template, params) : log.action;

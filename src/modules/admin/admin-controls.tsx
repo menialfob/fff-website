@@ -3,10 +3,16 @@
 import { useRef, useState, useTransition } from "react";
 import { useI18n } from "@/lib/i18n/client";
 import { formatSize } from "@/lib/format";
-import { extraRoles, type ExtraRole } from "@/lib/roles";
+import {
+  bestyrelseTitles,
+  extraRoles,
+  type BestyrelseTitle,
+  type ExtraRole,
+} from "@/lib/roles";
 import {
   btnPrimary,
   btnSecondary,
+  chip,
   errorText,
   input,
   label,
@@ -19,6 +25,7 @@ import {
   deleteUser,
   renameUser,
   resetUserPassword,
+  setBestyrelseTitle,
   setExtraRole,
   setUserActive,
   setUserAdmin,
@@ -137,6 +144,7 @@ export type UserRowData = {
   isAdmin: boolean;
   isActive: boolean;
   extraRoles: ExtraRole[];
+  bestyrelseTitle: BestyrelseTitle | null;
 };
 
 export type UserRowStats = {
@@ -194,6 +202,11 @@ export function UserRow({
             {t.admin.roleNames[role]}
           </span>
         ))}
+        {user.bestyrelseTitle && (
+          <span className={`${badgeBase} border-amber-400/30 bg-amber-400/10 text-amber-300`}>
+            {t.common.bestyrelseTitles[user.bestyrelseTitle]}
+          </span>
+        )}
         {!user.isActive && (
           <span className={`${badgeBase} border-white/15 bg-white/[0.06] text-zinc-400`}>
             {t.admin.deactivatedBadge}
@@ -295,6 +308,42 @@ export function UserRow({
               <p className={`${okText} w-full`}>{t.admin.passwordWasReset}</p>
             )}
           </form>
+
+          {user.extraRoles.includes("BESTYRELSE") && (
+            <div>
+              <span className={label}>{t.admin.titleLabel}</span>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {bestyrelseTitles.map((title) => (
+                  <button
+                    key={title}
+                    type="button"
+                    disabled={isPending}
+                    onClick={() =>
+                      runToggle(() =>
+                        setBestyrelseTitle(
+                          user.id,
+                          user.bestyrelseTitle === title ? null : title,
+                        ),
+                      )
+                    }
+                    className={chip(user.bestyrelseTitle === title)}
+                  >
+                    {t.common.bestyrelseTitles[title]}
+                  </button>
+                ))}
+                {user.bestyrelseTitle && (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => runToggle(() => setBestyrelseTitle(user.id, null))}
+                    className={chip(false)}
+                  >
+                    {t.admin.noTitle}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-2">
             {!isSelf && (

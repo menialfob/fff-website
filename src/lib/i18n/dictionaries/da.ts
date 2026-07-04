@@ -18,6 +18,12 @@ export const da = {
     saved: "Gemt.",
     signOut: "Log ud",
     dismiss: "Luk besked",
+    bestyrelse: "Bestyrelse",
+    bestyrelseTitles: {
+      FARMAND: "Farmand",
+      BEDSTEFAR: "Bedstefar",
+      SUKKERFAR: "Sukkerfar",
+    },
   },
   modules: {
     dashboard: {
@@ -103,6 +109,8 @@ export const da = {
     reactivate: "Genaktiver",
     confirmDeactivate:
       "Deaktiver {name}? De kan ikke logge ind, men deres indhold bevares.",
+    titleLabel: "Titel",
+    noTitle: "Ingen titel",
     statsFiles: "{count} filer ({size})",
     statsSongs: "{count} sange",
     statsCheers: "{count} skåle",
@@ -127,6 +135,10 @@ export const da = {
         "user.reactivate": "Genaktiverede {targetName}",
         "user.grantRole": "Gav {targetName} rollen {role}",
         "user.revokeRole": "Fjernede rollen {role} fra {targetName}",
+        "user.setTitle": "Gav {targetName} titlen {title}",
+        "user.moveTitle":
+          "Gav {targetName} titlen {title} (overtaget fra {previousHolderName})",
+        "user.clearTitle": "Fjernede titlen {title} fra {targetName}",
         "file.upload": "Uploadede filen {name}",
         "file.delete": "Slettede filen {name}",
         "klub100.projectCreate": "Oprettede Klub 100-projektet {name}",
@@ -335,6 +347,7 @@ export const da = {
     cannotDeleteSelf: "Du kan ikke slette din egen konto.",
     cannotDemoteSelf: "Du kan ikke fjerne din egen admin-rolle.",
     cannotDeactivateSelf: "Du kan ikke deaktivere din egen konto.",
+    titleRequiresBestyrelse: "Kun bestyrelsesmedlemmer kan have en titel.",
     userNotFound: "Brugeren blev ikke fundet.",
     chooseFile: "Vælg en fil at uploade.",
     fileTooLarge: "Filen er for stor (maks 200 MB).",

@@ -7,7 +7,12 @@ import { logEvent } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
-import { isExtraRole, type ExtraRole } from "@/lib/roles";
+import {
+  isBestyrelseTitle,
+  isExtraRole,
+  type BestyrelseTitle,
+  type ExtraRole,
+} from "@/lib/roles";
 
 const createUserSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -208,5 +213,71 @@ export async function setExtraRole(
     meta: { targetName: user.name, role },
   });
   revalidatePath("/admin");
+  revalidatePath("/members");
+  return { ok: true };
+}
+
+export async function setBestyrelseTitle(
+  userId: string,
+  title: BestyrelseTitle | null,
+) {
+  const session = await requireAdmin();
+  const t = await getDict();
+  if (title !== null && !isBestyrelseTitle(title)) {
+    return { error: t.errors.invalidInput };
+  }
+
+  const roleRow = await prisma.userRole.findUnique({
+    where: { userId_role: { userId, role: "BESTYRELSE" } },
+    include: { user: { select: { name: true } } },
+  });
+  if (!roleRow) return { error: t.errors.titleRequiresBestyrelse };
+
+  let previousHolderName: string | null = null;
+  if (title) {
+    const previous = await prisma.userRole.findUnique({
+      where: { title },
+      include: { user: { select: { name: true } } },
+    });
+    if (previous?.userId === userId) return { ok: true }; // already holds it
+    previousHolderName = previous?.user.name ?? null;
+
+    // Elections move a title in one step: clear it from the previous holder
+    // and assign it atomically so the unique constraint is never violated.
+    await prisma.$transaction([
+      prisma.userRole.updateMany({
+        where: { title },
+        data: { title: null },
+      }),
+      prisma.userRole.update({
+        where: { userId_role: { userId, role: "BESTYRELSE" } },
+        data: { title },
+      }),
+    ]);
+  } else {
+    if (!roleRow.title) return { ok: true }; // nothing to clear
+    await prisma.userRole.update({
+      where: { userId_role: { userId, role: "BESTYRELSE" } },
+      data: { title: null },
+    });
+  }
+
+  await logEvent({
+    actorId: session.user.id,
+    action: title
+      ? previousHolderName
+        ? "user.moveTitle"
+        : "user.setTitle"
+      : "user.clearTitle",
+    targetType: "user",
+    targetId: userId,
+    meta: {
+      targetName: roleRow.user.name,
+      title: title ?? roleRow.title,
+      ...(previousHolderName ? { previousHolderName } : {}),
+    },
+  });
+  revalidatePath("/admin");
+  revalidatePath("/members");
   return { ok: true };
 }

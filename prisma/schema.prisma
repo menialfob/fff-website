@@ -19,6 +19,15 @@ enum ExtraRole {
   BESTYRELSE
 }
 
+// Elected board titles — each is held by at most one bestyrelse member at a
+// time (enforced by the unique constraint on UserRole.title). Mirrored as a
+// string-literal union in src/lib/roles.ts — keep the two in sync.
+enum BestyrelseTitle {
+  FARMAND
+  BEDSTEFAR
+  SUKKERFAR
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -46,6 +55,9 @@ model UserRole {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   role      ExtraRole
+  // Only meaningful on BESTYRELSE rows; lives here so a title can never
+  // outlive the role (revoking bestyrelse deletes the row and the title).
+  title     BestyrelseTitle? @unique
   createdAt DateTime  @default(now())
 
   @@id([userId, role])
