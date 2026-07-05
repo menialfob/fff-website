@@ -15,7 +15,13 @@ import type { ExtraRole } from "@/lib/roles";
  * registers with `requiredRole: "BESTYRELSE"` and guards its server actions
  * with `requireRole("BESTYRELSE")` from src/lib/auth). Admins see everything.
  */
-export type ModuleId = "calendar" | "files" | "klub100" | "members" | "admin";
+export type ModuleId =
+  | "calendar"
+  | "forum"
+  | "files"
+  | "klub100"
+  | "members"
+  | "admin";
 
 export type AppModule = {
   id: ModuleId;
@@ -28,6 +34,9 @@ export const modules: AppModule[] = [
   // Visible to everyone; recurring-event writes are gated to
   // ADMIN/BESTYRELSE inside the module's server actions.
   { id: "calendar", href: "/calendar" },
+  // Discussion forum. The seeded "Begivenheder" section mirrors calendar
+  // events; ordinary sections are member-created content.
+  { id: "forum", href: "/forum" },
   { id: "files", href: "/files" },
   { id: "klub100", href: "/klub100" },
   { id: "members", href: "/members" },

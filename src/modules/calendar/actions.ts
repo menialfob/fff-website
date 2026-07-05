@@ -7,7 +7,13 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
 import type { Dictionary } from "@/lib/i18n";
-import { saveUpload } from "@/lib/storage";
+import { claimAssets, parseContentFields } from "@/modules/content/assets";
+import {
+  createEventThread,
+  ensureOccurrenceThread,
+  renameEventThread,
+  renameOccurrenceThreadsForEvent,
+} from "@/modules/forum/events";
 import {
   daysInMonth,
   isOccurrenceDate,
@@ -17,9 +23,6 @@ import {
 
 const MAX_TITLE = 120;
 const MAX_LOCATION = 120;
-// Generous cap for a TipTap document — images live in files, not inline.
-const MAX_CONTENT_BYTES = 512 * 1024;
-const MAX_FILE_SIZE = 200 * 1024 * 1024; // matches serverActions.bodySizeLimit
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const FREQS = [
@@ -62,34 +65,6 @@ function intInRange(raw: string, min: number, max: number): number | null {
   if (!/^-?\d+$/.test(raw)) return null;
   const n = Number(raw);
   return n >= min && n <= max ? n : null;
-}
-
-/**
- * Rich content + attachment ids from a form. Returns null on invalid
- * content; an empty document is normalized to null.
- */
-function parseContentFields(
-  formData: FormData,
-): { contentJson: string | null; attachmentIds: string[] } | null {
-  let contentJson: string | null = str(formData, "contentJson") || null;
-  if (contentJson) {
-    if (Buffer.byteLength(contentJson, "utf8") > MAX_CONTENT_BYTES) return null;
-    try {
-      const doc = JSON.parse(contentJson);
-      if (!doc || typeof doc !== "object" || doc.type !== "doc") return null;
-      // An empty document is stored as null.
-      if (doc.content?.length === 0) contentJson = null;
-    } catch {
-      return null;
-    }
-  }
-
-  const attachmentIds = formData
-    .getAll("attachmentIds")
-    .filter(
-      (v): v is string => typeof v === "string" && /^[A-Za-z0-9]+$/.test(v),
-    );
-  return { contentJson, attachmentIds };
 }
 
 /** Shared field validation for create + update. Returns null on bad input. */
@@ -228,59 +203,11 @@ async function requireEventPermission(
   return { error: null, session };
 }
 
-/** File ids of inline images (`/api/files/<id>` sources) in a TipTap doc. */
-function extractImageFileIds(contentJson: string | null): string[] {
-  if (!contentJson) return [];
-  const ids: string[] = [];
-  const walk = (node: unknown) => {
-    if (!node || typeof node !== "object") return;
-    const n = node as {
-      type?: string;
-      attrs?: { src?: unknown };
-      content?: unknown[];
-    };
-    if (n.type === "image" && typeof n.attrs?.src === "string") {
-      const m = /^\/api\/files\/([A-Za-z0-9]+)$/.exec(n.attrs.src);
-      if (m) ids.push(m[1]);
-    }
-    if (Array.isArray(n.content)) n.content.forEach(walk);
-  };
-  try {
-    walk(JSON.parse(contentJson));
-  } catch {
-    // Validated earlier; ignore.
-  }
-  return ids;
-}
-
-/**
- * Move the event's assets (inline images + attachments) into its folder so
- * they are discoverable in the files section. Only unfiled uploads owned by
- * the acting user are claimed — a foreign id can't steal files from other
- * folders or users.
- */
-async function claimAssets(
-  parsed: { contentJson: string | null; attachmentIds: string[] },
-  folderId: string,
-  userId: string,
-) {
-  const ids = [
-    ...new Set([
-      ...extractImageFileIds(parsed.contentJson),
-      ...parsed.attachmentIds,
-    ]),
-  ];
-  if (ids.length === 0) return;
-  await prisma.fileItem.updateMany({
-    where: { id: { in: ids }, folderId: null, uploadedById: userId },
-    data: { folderId },
-  });
-}
-
 function revalidateCalendar(eventId?: string) {
   revalidatePath("/calendar");
   if (eventId) revalidatePath(`/calendar/${eventId}`);
   revalidatePath("/files");
+  revalidatePath("/forum");
 }
 
 export async function createEvent(formData: FormData) {
@@ -322,6 +249,16 @@ export async function createEvent(formData: FormData) {
     },
   });
   if (folder) await claimAssets(parsed, folder.id, session.user.id);
+  // Ad hoc events get a discussion thread in the Begivenheder forum section
+  // right away. Recurring events instead get a thread per instance, created
+  // when that occurrence is first edited (see saveOccurrenceContent).
+  if (kind === "ADHOC") {
+    await createEventThread({
+      eventId: event.id,
+      title: parsed.title,
+      createdById: session.user.id,
+    });
+  }
   await logEvent({
     actorId: session.user.id,
     action: "calendar.create",
@@ -387,6 +324,13 @@ export async function updateEvent(eventId: string, formData: FormData) {
   if (existing.kind === "ADHOC" && folderId) {
     await claimAssets(parsed, folderId, session.user.id);
   }
+  // Keep linked Begivenheder threads in sync with the event's title: the
+  // single ad hoc thread, or every instance thread of a recurring series.
+  if (existing.kind === "ADHOC") {
+    await renameEventThread(eventId, parsed.title);
+  } else {
+    await renameOccurrenceThreadsForEvent(eventId, parsed.title);
+  }
   await logEvent({
     actorId: session.user.id,
     action: "calendar.update",
@@ -409,6 +353,8 @@ export async function deleteEvent(eventId: string) {
   if (error || !session) return { error: error ?? t.errors.invalidInput };
 
   // The folder and its files survive: assets stay discoverable in /files.
+  // The linked Begivenheder thread also survives — its eventId is SetNull, so
+  // the discussion remains as an archived thread.
   await prisma.calendarEvent.delete({ where: { id: eventId } });
   await logEvent({
     actorId: session.user.id,
@@ -470,12 +416,19 @@ export async function saveOccurrenceContent(
     folderId = folder.id;
   }
 
-  await prisma.calendarOccurrence.upsert({
+  const occurrence = await prisma.calendarOccurrence.upsert({
     where: { eventId_date: { eventId, date } },
     create: { eventId, date, contentJson: content.contentJson, folderId },
     update: { contentJson: content.contentJson, folderId },
   });
   await claimAssets(content, folderId, session.user.id);
+  // Editing an instance gives it its own Begivenheder thread (the date is
+  // rendered from the occurrence; the title stays the series title).
+  await ensureOccurrenceThread({
+    occurrenceId: occurrence.id,
+    title: event.title,
+    createdById: session.user.id,
+  });
   await logEvent({
     actorId: session.user.id,
     action: "calendar.occurrence.update",
@@ -505,47 +458,4 @@ export async function regenerateCalendarToken() {
   });
   revalidatePath("/profile");
   return { ok: true };
-}
-
-/**
- * Upload one image/attachment from the event editor. The file lands unfiled
- * (folderId null) and is claimed into the event's folder on save.
- */
-export async function uploadCalendarAsset(formData: FormData) {
-  const session = await requireSession();
-  const t = await getDict();
-
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: t.errors.chooseFile };
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    return { error: t.errors.fileTooLarge };
-  }
-
-  const storedName = await saveUpload(file);
-  const item = await prisma.fileItem.create({
-    data: {
-      name: file.name,
-      storedName,
-      mimeType: file.type || "application/octet-stream",
-      size: file.size,
-      uploadedById: session.user.id,
-    },
-  });
-  await logEvent({
-    actorId: session.user.id,
-    action: "file.upload",
-    targetType: "file",
-    targetId: item.id,
-    meta: { name: file.name, size: file.size },
-  });
-  return {
-    ok: true,
-    id: item.id,
-    url: `/api/files/${item.id}`,
-    name: file.name,
-    size: file.size,
-    isImage: (file.type || "").startsWith("image/"),
-  };
 }

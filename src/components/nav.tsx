@@ -8,19 +8,28 @@ import {
   CalendarIcon,
   FolderIcon,
   HomeIcon,
+  MessageIcon,
   MusicIcon,
   ShieldIcon,
   UsersIcon,
 } from "@/components/icons";
 
 export type NavItem = {
-  id: "dashboard" | "calendar" | "files" | "klub100" | "members" | "admin";
+  id:
+    | "dashboard"
+    | "calendar"
+    | "forum"
+    | "files"
+    | "klub100"
+    | "members"
+    | "admin";
   href: string;
 };
 
 const navIcons: Record<NavItem["id"], (p: { className?: string }) => React.ReactNode> = {
   dashboard: HomeIcon,
   calendar: CalendarIcon,
+  forum: MessageIcon,
   files: FolderIcon,
   klub100: MusicIcon,
   members: UsersIcon,

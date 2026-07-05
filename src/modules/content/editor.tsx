@@ -5,8 +5,8 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { useI18n } from "@/lib/i18n/client";
 import { errorText } from "@/components/ui";
 import { ImageIcon, LinkIcon } from "@/components/icons";
-import { eventContentExtensions } from "./extensions";
-import { uploadCalendarAsset } from "./actions";
+import { contentExtensions } from "./extensions";
+import { uploadContentAsset } from "./actions";
 
 function ToolbarButton({
   label,
@@ -50,7 +50,7 @@ function Toolbar({ editor }: { editor: Editor }) {
 
   const setLink = () => {
     const previous = editor.getAttributes("link").href as string | undefined;
-    const url = prompt(t.calendar.editor.linkPrompt, previous ?? "https://");
+    const url = prompt(t.content.editor.linkPrompt, previous ?? "https://");
     if (url === null) return;
     if (url === "") {
       editor.chain().focus().unsetLink().run();
@@ -65,7 +65,7 @@ function Toolbar({ editor }: { editor: Editor }) {
     try {
       const formData = new FormData();
       formData.set("file", file);
-      const result = await uploadCalendarAsset(formData);
+      const result = await uploadContentAsset(formData);
       if (result.error) {
         setError(result.error);
       } else if (result.ok && result.url) {
@@ -84,21 +84,21 @@ function Toolbar({ editor }: { editor: Editor }) {
     <div>
       <div className="flex flex-wrap items-center gap-1 border-b border-white/10 pb-2">
         <ToolbarButton
-          label={t.calendar.editor.bold}
+          label={t.content.editor.bold}
           active={editor.isActive("bold")}
           onClick={() => editor.chain().focus().toggleBold().run()}
         >
           B
         </ToolbarButton>
         <ToolbarButton
-          label={t.calendar.editor.italic}
+          label={t.content.editor.italic}
           active={editor.isActive("italic")}
           onClick={() => editor.chain().focus().toggleItalic().run()}
         >
           <span className="italic">I</span>
         </ToolbarButton>
         <ToolbarButton
-          label={t.calendar.editor.heading}
+          label={t.content.editor.heading}
           active={editor.isActive("heading", { level: 2 })}
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 2 }).run()
@@ -107,7 +107,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           H2
         </ToolbarButton>
         <ToolbarButton
-          label={t.calendar.editor.subheading}
+          label={t.content.editor.subheading}
           active={editor.isActive("heading", { level: 3 })}
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 3 }).run()
@@ -116,28 +116,28 @@ function Toolbar({ editor }: { editor: Editor }) {
           H3
         </ToolbarButton>
         <ToolbarButton
-          label={t.calendar.editor.bulletList}
+          label={t.content.editor.bulletList}
           active={editor.isActive("bulletList")}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
         >
           ••
         </ToolbarButton>
         <ToolbarButton
-          label={t.calendar.editor.orderedList}
+          label={t.content.editor.orderedList}
           active={editor.isActive("orderedList")}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
         >
           1.
         </ToolbarButton>
         <ToolbarButton
-          label={t.calendar.editor.link}
+          label={t.content.editor.link}
           active={editor.isActive("link")}
           onClick={setLink}
         >
           <LinkIcon className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
-          label={t.calendar.editor.image}
+          label={t.content.editor.image}
           disabled={uploading}
           onClick={() => imageInputRef.current?.click()}
         >
@@ -165,11 +165,11 @@ function Toolbar({ editor }: { editor: Editor }) {
 }
 
 /**
- * Rich content editor for calendar events. Keeps the serialized TipTap
- * document in a hidden input named `contentJson`, so the surrounding
- * <form action={…}> picks it up like any other field.
+ * Rich content editor shared by calendar events and forum posts. Keeps the
+ * serialized TipTap document in a hidden input named `contentJson`, so the
+ * surrounding <form action={…}> picks it up like any other field.
  */
-export function EventContentEditor({
+export function ContentEditor({
   initialContent,
 }: {
   initialContent: string | null;
@@ -177,13 +177,12 @@ export function EventContentEditor({
   const [contentJson, setContentJson] = useState(initialContent ?? "");
 
   const editor = useEditor({
-    extensions: eventContentExtensions,
+    extensions: contentExtensions,
     content: initialContent ? JSON.parse(initialContent) : undefined,
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class:
-          "min-h-40 pt-3 focus:outline-none",
+        class: "min-h-40 pt-3 focus:outline-none",
       },
     },
     onUpdate: ({ editor }) => {

@@ -3,39 +3,38 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useI18n } from "@/lib/i18n/client";
-import { btnPrimary, btnSecondary, errorText } from "@/components/ui";
+import { btnPrimary, cardPad, errorText, label } from "@/components/ui";
 import { ContentAndAttachments } from "@/modules/content/content-fields";
-import { saveOccurrenceContent } from "./actions";
+import { createReply } from "./actions";
 
-/** Edits the description + attachments of one occurrence date. */
-export function OccurrenceContentForm({
-  eventId,
-  date,
-  initialContent,
-}: {
-  eventId: string;
-  date: string;
-  initialContent: string | null;
-}) {
+/** Reply box anchored at the bottom of a thread. */
+export function ReplyForm({ threadId }: { threadId: string }) {
   const { t } = useI18n();
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [uploading, setUploading] = useState(false);
   const [isPending, startTransition] = useTransition();
+  // Bumping this remounts the editor to clear it after a successful reply.
+  const [formKey, setFormKey] = useState(0);
 
   return (
     <form
+      key={formKey}
       action={(formData) =>
         startTransition(async () => {
-          const result = await saveOccurrenceContent(eventId, date, formData);
+          const result = await createReply(threadId, formData);
           setError(result?.error);
-          if (result?.ok) router.push(`/calendar/${eventId}?d=${date}`);
+          if (result?.ok) {
+            setFormKey((k) => k + 1);
+            router.refresh();
+          }
         })
       }
-      className="grid gap-5"
+      className={`${cardPad} grid gap-4`}
     >
+      <span className={label}>{t.forum.replyLabel}</span>
       <ContentAndAttachments
-        initialContent={initialContent}
+        initialContent={null}
         onUploadingChange={setUploading}
       />
       {error && (
@@ -43,20 +42,13 @@ export function OccurrenceContentForm({
           {error}
         </p>
       )}
-      <div className="flex items-center gap-3">
+      <div>
         <button
           type="submit"
           disabled={isPending || uploading}
           className={btnPrimary}
         >
-          {isPending ? t.common.saving : t.common.save}
-        </button>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className={btnSecondary}
-        >
-          {t.common.cancel}
+          {isPending ? t.common.saving : t.forum.postReply}
         </button>
       </div>
     </form>
