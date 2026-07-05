@@ -26,8 +26,10 @@ export type EventFormValues = {
   location: string | null;
   allDay: boolean;
   startMinutes: number | null;
-  durationMinutes: number | null;
+  endMinutes: number | null;
   date: string | null;
+  endDate: string | null;
+  endDayOffset: number | null;
   freq: Freq | null;
   weekday: number | null;
   ordinal: number | null;
@@ -47,10 +49,13 @@ function minutesToTime(minutes: number | null): string {
 
 const ORDINALS = ["1", "2", "3", "4", "-1"] as const;
 
-// <input type="time"> has a locale-dependent intrinsic width ("07:00 PM" +
-// clock icon) that overflows a 1fr grid column on phones — min-w-0 lets it
-// shrink, tighter padding and a smaller indicator keep it compact.
-const timeInput = `${input} min-w-0 px-3 tabular-nums [&::-webkit-calendar-picker-indicator]:ml-0.5 [&::-webkit-calendar-picker-indicator]:opacity-60`;
+// iOS Safari gives date/time inputs a large intrinsic width the UA won't
+// let shrink, so side-by-side fields overflowed their grid columns and
+// clipped into each other. appearance-none drops the UA sizing entirely
+// (the native picker still opens on tap); h-11 keeps the height stable
+// when the field is empty.
+const pickerInput = `${input} h-11 min-w-0 appearance-none px-3 [&::-webkit-calendar-picker-indicator]:ml-0.5 [&::-webkit-calendar-picker-indicator]:opacity-60`;
+const timeInput = `${pickerInput} tabular-nums`;
 
 /**
  * Rich content editor + attachment uploader, shared by the ad hoc event
@@ -254,18 +259,32 @@ export function EventForm({
       </div>
 
       {kind === "ADHOC" ? (
-        <div>
-          <label className={label} htmlFor="event-date">
-            {t.calendar.form.dateLabel}
-          </label>
-          <input
-            id="event-date"
-            type="date"
-            name="date"
-            required
-            defaultValue={event?.date ?? defaultDate ?? ""}
-            className={`${input} mt-1.5`}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="min-w-0">
+            <label className={label} htmlFor="event-date">
+              {t.calendar.form.dateLabel}
+            </label>
+            <input
+              id="event-date"
+              type="date"
+              name="date"
+              required
+              defaultValue={event?.date ?? defaultDate ?? ""}
+              className={`${pickerInput} mt-1.5`}
+            />
+          </div>
+          <div className="min-w-0">
+            <label className={label} htmlFor="event-end-date">
+              {t.calendar.form.endDateLabel}
+            </label>
+            <input
+              id="event-end-date"
+              type="date"
+              name="endDate"
+              defaultValue={event?.endDate ?? ""}
+              className={`${pickerInput} mt-1.5`}
+            />
+          </div>
         </div>
       ) : (
         <div className="grid gap-4">
@@ -367,6 +386,23 @@ export function EventForm({
                 />
               </div>
             )}
+            <div>
+              <label className={label} htmlFor="event-days">
+                {t.calendar.form.daysLabel}
+              </label>
+              <input
+                id="event-days"
+                type="number"
+                name="days"
+                min={1}
+                max={14}
+                defaultValue={(event?.endDayOffset ?? 0) + 1}
+                className={`${input} mt-1.5`}
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                {t.calendar.form.daysHint}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -405,11 +441,7 @@ export function EventForm({
                 id="event-end"
                 type="time"
                 name="endTime"
-                defaultValue={
-                  event && event.startMinutes !== null && event.durationMinutes
-                    ? minutesToTime(event.startMinutes + event.durationMinutes)
-                    : ""
-                }
+                defaultValue={minutesToTime(event?.endMinutes ?? null)}
                 className={`${timeInput} mt-1.5`}
               />
             </div>

@@ -146,10 +146,17 @@ model CalendarEvent {
   contentJson     String?
   location        String?
   allDay          Boolean           @default(true)
+  // Wall-clock minutes since Danish midnight on the first/last day of the
+  // event (null when allDay). endMinutes may be earlier than startMinutes
+  // when the event ends on a later day.
   startMinutes    Int?
-  durationMinutes Int?
-  // ADHOC only: the event's date.
+  endMinutes      Int?
+  // ADHOC only: first and (for multi-day events) last calendar day.
   date            String?
+  endDate         String?
+  // RECURRING only: days the event continues past its occurrence date
+  // (0/null = single-day, 2 = Friday→Sunday).
+  endDayOffset    Int?
   // RECURRING only ↓
   freq            RecurrenceFreq?
   // ISO weekday, 1 = Monday … 7 = Sunday (nth-weekday patterns).

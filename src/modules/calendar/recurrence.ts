@@ -98,6 +98,14 @@ export function occurrenceInMonth(
   }
 }
 
+/** "YYYY-MM-DD" + n days → "YYYY-MM-DD" (UTC math, timezone-free). */
+export function addDays(iso: string, days: number): string {
+  const p = parseISODate(iso);
+  if (!p) return iso;
+  const d = new Date(Date.UTC(p.year, p.month - 1, p.day + days));
+  return d.toISOString().slice(0, 10);
+}
+
 /** Whether a "YYYY-MM-DD" date is an occurrence of the rule. */
 export function isOccurrenceDate(rule: RecurrenceRule, iso: string): boolean {
   const parsed = parseISODate(iso);
