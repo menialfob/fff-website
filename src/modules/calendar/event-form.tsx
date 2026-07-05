@@ -47,6 +47,11 @@ function minutesToTime(minutes: number | null): string {
 
 const ORDINALS = ["1", "2", "3", "4", "-1"] as const;
 
+// <input type="time"> has a locale-dependent intrinsic width ("07:00 PM" +
+// clock icon) that overflows a 1fr grid column on phones — min-w-0 lets it
+// shrink, tighter padding and a smaller indicator keep it compact.
+const timeInput = `${input} min-w-0 px-3 tabular-nums [&::-webkit-calendar-picker-indicator]:ml-0.5 [&::-webkit-calendar-picker-indicator]:opacity-60`;
+
 /**
  * Rich content editor + attachment uploader, shared by the ad hoc event
  * form and the per-date occurrence form. Emits `contentJson` (hidden input
@@ -378,8 +383,8 @@ export function EventForm({
           {t.calendar.form.allDayLabel}
         </label>
         {!allDay && (
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div>
+          <div className="mt-3 grid max-w-xs grid-cols-2 gap-3">
+            <div className="min-w-0">
               <label className={label} htmlFor="event-start">
                 {t.calendar.form.startLabel}
               </label>
@@ -389,10 +394,10 @@ export function EventForm({
                 name="startTime"
                 required
                 defaultValue={minutesToTime(event?.startMinutes ?? null)}
-                className={`${input} mt-1.5`}
+                className={`${timeInput} mt-1.5`}
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className={label} htmlFor="event-end">
                 {t.calendar.form.endLabel}
               </label>
@@ -405,7 +410,7 @@ export function EventForm({
                     ? minutesToTime(event.startMinutes + event.durationMinutes)
                     : ""
                 }
-                className={`${input} mt-1.5`}
+                className={`${timeInput} mt-1.5`}
               />
             </div>
           </div>
