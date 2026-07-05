@@ -153,11 +153,14 @@ export function ContentAndAttachments({
 export function EventForm({
   event,
   canRecurring,
+  defaultDate,
 }: {
   /** Present when editing; absent when creating. */
   event?: EventFormValues;
   /** Whether the viewer may manage recurring events (ADMIN/BESTYRELSE). */
   canRecurring: boolean;
+  /** Pre-fills the ad hoc date field (day selected in the month view). */
+  defaultDate?: string;
 }) {
   const { t, locale } = useI18n();
   const router = useRouter();
@@ -255,7 +258,7 @@ export function EventForm({
             type="date"
             name="date"
             required
-            defaultValue={event?.date ?? ""}
+            defaultValue={event?.date ?? defaultDate ?? ""}
             className={`${input} mt-1.5`}
           />
         </div>

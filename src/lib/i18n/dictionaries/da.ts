@@ -88,6 +88,7 @@ export const da = {
   },
   calendar: {
     empty: "Ingen begivenheder i denne måned.",
+    noEventsThisDay: "Ingen begivenheder denne dag.",
     newEvent: "Ny begivenhed",
     today: "I dag",
     allDay: "Hele dagen",

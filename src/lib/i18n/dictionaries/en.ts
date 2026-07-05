@@ -86,6 +86,7 @@ export const en: typeof da = {
   },
   calendar: {
     empty: "No events this month.",
+    noEventsThisDay: "No events on this day.",
     newEvent: "New event",
     today: "Today",
     allDay: "All day",

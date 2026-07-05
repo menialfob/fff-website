@@ -4,14 +4,22 @@ import { getDict } from "@/lib/i18n/server";
 import { PageTitle } from "@/components/ui";
 import { ArrowLeftIcon } from "@/components/icons";
 import { EventForm } from "@/modules/calendar/event-form";
+import { parseISODate } from "@/modules/calendar/recurrence";
 
-export default async function NewEventPage() {
+export default async function NewEventPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   const session = await requireSession();
+  const { date } = await searchParams;
   const t = await getDict();
 
   const canRecurring =
     session.user.role === "ADMIN" ||
     session.user.extraRoles.includes("BESTYRELSE");
+  // A day selected in the month overview pre-fills the ad hoc date field.
+  const defaultDate = date && parseISODate(date) ? date : undefined;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -23,7 +31,7 @@ export default async function NewEventPage() {
         {t.modules.calendar.label}
       </Link>
       <PageTitle>{t.calendar.newEvent}</PageTitle>
-      <EventForm canRecurring={canRecurring} />
+      <EventForm canRecurring={canRecurring} defaultDate={defaultDate} />
     </div>
   );
 }
