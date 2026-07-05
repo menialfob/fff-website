@@ -8,6 +8,12 @@ concurrency:
   group: deploy
   cancel-in-progress: false
 
+env:
+  # Canonical production domain. Enforced in the server's .env on every
+  # deploy (like the Caddyfile, which is synced from the repo), so changing
+  # the domain is just an edit here + DNS records — no manual SSH.
+  SITE_DOMAIN: fffloge.dk
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -54,6 +60,12 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             cd /opt/fff-website
+            # The domain is repo-driven: overwrite it in the server .env so a
+            # domain change deploys like any other change. Secrets stay
+            # server-only; only the domain lines are touched.
+            sed -i -e 's|^SITE_DOMAIN=.*|SITE_DOMAIN=${{ env.SITE_DOMAIN }}|' \
+                -e 's|^AUTH_URL=.*|AUTH_URL=https://${{ env.SITE_DOMAIN }}|' \
+                .env
             # Derive the staging env from prod, overriding only the domain, so
             # .env.staging always exists (compose references it) and stays in
             # sync with prod secrets.
@@ -62,7 +74,10 @@ jobs:
                 -e "s|^AUTH_URL=.*|AUTH_URL=https://test.${PROD_DOMAIN}|" \
                 .env > .env.staging
             docker compose pull app
-            docker compose up -d app caddy
+            # app-staging is included so a domain change (regenerated
+            # .env.staging) reaches the running staging container too, not
+            # just on the next staging push.
+            docker compose up -d app app-staging caddy
             # Restart Caddy so it picks up the synced Caddyfile (a bind-mount
             # content change alone does not recreate the container) and makes a
             # fresh certificate-issuance attempt for any newly added site.

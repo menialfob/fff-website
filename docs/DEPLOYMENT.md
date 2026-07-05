@@ -52,10 +52,18 @@ Total cost: ~€5/month (smallest CX server + IPv4).
 
 ### DNS (e.g. Cloudflare)
 
-Point an **A record** for your domain (e.g. `fff.example.com`) at the
-server's IP and wait until `dig +short fff.example.com` returns it.
+Point **A records** at the server's IP for all three hostnames the Caddyfile
+serves (the site runs at `fffloge.dk`):
 
-With Cloudflare specifically, set the record to **DNS only** (grey cloud).
+| Record | Purpose |
+|---|---|
+| `fffloge.dk` (apex/`@`) | Production site |
+| `www.fffloge.dk` | Redirected to the apex by Caddy |
+| `test.fffloge.dk` | Staging (see §4) |
+
+Wait until `dig +short fffloge.dk` returns the server IP.
+
+With Cloudflare specifically, set the records to **DNS only** (grey cloud).
 Caddy then obtains Let's Encrypt certificates itself and nothing else needs
 configuring. Proxied mode (orange cloud) also works — set SSL/TLS to
 **Full (strict)** in Cloudflare — but it hides real client IPs from the app
@@ -103,6 +111,17 @@ ssh deploy@<server-ip> 'cd /opt/fff-website && mv .env.example .env'
 Then edit `/opt/fff-website/.env` on the server and fill in every value
 (`SITE_DOMAIN`, `AUTH_SECRET` via `openssl rand -base64 32`, `AUTH_URL`, and
 the `INITIAL_ADMIN_*` account).
+
+**Changing the domain later** (e.g. moving to `fffloge.dk`): the domain is
+repo-driven — `deploy.yml` overwrites `SITE_DOMAIN`/`AUTH_URL` in the
+server's `.env` on every production deploy, so the `.env` values only matter
+for the very first start. To switch domains: add the DNS records above for
+the new domain, change `SITE_DOMAIN` in `.github/workflows/deploy.yml` (and
+`deploy/.env.example` to keep it honest), and push to `main`. The deploy
+restarts the app, staging, and Caddy, which fetches certificates for the new
+hostnames. Also add `https://<new-domain>/api/spotify/callback` as a
+Redirect URI in the Spotify dashboard (§5), or the Spotify connect flow
+breaks.
 
 ### Registry access
 
@@ -155,7 +174,7 @@ previous commit SHA and `docker compose up -d`.
 to `main` — no manual SSH, only a one-time DNS record. It's built for solo,
 one-branch-at-a-time work: every push to a **non-`main`** branch rebuilds the
 `:staging` image and refreshes a single `app-staging` container served at
-`test.<your-domain>` (e.g. `test.fff.example.com`).
+`test.<your-domain>` (i.e. `test.fffloge.dk`).
 
 How it stays hands-off:
 
