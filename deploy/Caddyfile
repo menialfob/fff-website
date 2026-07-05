@@ -7,6 +7,13 @@
 	}
 }
 
+# Redirect www to the bare domain so there is one canonical host — auth
+# cookies and AUTH_URL are bound to the apex, so www must not serve the app
+# directly. Requires a DNS record for www pointing at this server.
+www.{$SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}
+
 # Staging: a live copy of whatever branch was last pushed (non-main). The
 # hostname is derived from the production domain, e.g. test.fff.example.com.
 # Served by the app-staging container against its own separate database.
