@@ -5,16 +5,16 @@ import { useState, useTransition } from "react";
 import { useI18n } from "@/lib/i18n/client";
 import { btnPrimary, btnSecondary, errorText } from "@/components/ui";
 import { ContentAndAttachments } from "@/modules/content/content-fields";
-import { saveOccurrenceContent } from "./actions";
+import { updatePost } from "./actions";
 
-/** Edits the description + attachments of one occurrence date. */
-export function OccurrenceContentForm({
-  eventId,
-  date,
+/** Edit an existing forum post. */
+export function PostEditForm({
+  postId,
+  threadId,
   initialContent,
 }: {
-  eventId: string;
-  date: string;
+  postId: string;
+  threadId: string;
   initialContent: string | null;
 }) {
   const { t } = useI18n();
@@ -27,9 +27,9 @@ export function OccurrenceContentForm({
     <form
       action={(formData) =>
         startTransition(async () => {
-          const result = await saveOccurrenceContent(eventId, date, formData);
+          const result = await updatePost(postId, formData);
           setError(result?.error);
-          if (result?.ok) router.push(`/calendar/${eventId}?d=${date}`);
+          if (result?.ok) router.push(`/forum/t/${threadId}`);
         })
       }
       className="grid gap-5"

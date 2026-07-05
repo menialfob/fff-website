@@ -3,12 +3,12 @@ import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 
 /**
- * The one TipTap schema for event content, shared by the client editor and
- * the server-side renderer. Because generateHTML() can only emit nodes and
- * marks defined here, the schema doubles as the sanitizer — no raw HTML from
- * users ever reaches the page.
+ * The one TipTap schema for rich content (calendar event descriptions, forum
+ * posts, …), shared by the client editor and the server-side renderer. Because
+ * generateHTML() can only emit nodes and marks defined here, the schema doubles
+ * as the sanitizer — no raw HTML from users ever reaches the page.
  */
-export const eventContentExtensions = [
+export const contentExtensions = [
   StarterKit.configure({
     heading: { levels: [2, 3] },
     codeBlock: false,

@@ -8,7 +8,7 @@ import { formatSize } from "@/lib/format";
 import { btnSecondary, cardPad, PageTitle } from "@/components/ui";
 import { ArrowLeftIcon, FolderIcon, PencilIcon } from "@/components/icons";
 import { EventControls } from "@/modules/calendar/event-controls";
-import { renderEventContent } from "@/modules/calendar/render";
+import { renderContent } from "@/modules/content/render";
 import {
   describeRule,
   formatISODate,
@@ -110,7 +110,7 @@ export default async function EventPage({
           time: formatMinutes(minutes),
         });
 
-  const contentHtml = renderEventContent(
+  const contentHtml = renderContent(
     rule ? (occurrence?.contentJson ?? null) : event.contentJson,
   );
   const assetFolder = rule ? (occurrence?.folder ?? null) : event.folder;

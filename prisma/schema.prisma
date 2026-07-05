@@ -48,6 +48,8 @@ model User {
   files        FileItem[]
   folders      Folder[]
   calendarEvents CalendarEvent[]
+  forumThreads ForumThread[]
+  forumPosts   ForumPost[]
   klub100Projects Klub100Project[]
   klub100Songs    Klub100Song[]
   klub100Cheers   Klub100Cheers[]
@@ -115,6 +117,7 @@ model Folder {
   files       FileItem[]
   event       CalendarEvent?
   occurrence  CalendarOccurrence?
+  forumThread ForumThread?
   createdAt   DateTime   @default(now())
 }
 
@@ -176,6 +179,10 @@ model CalendarEvent {
   createdBy       User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById     String?
   occurrences     CalendarOccurrence[]
+  // The Begivenheder forum thread mirroring this event (both ad hoc and
+  // recurring events get one). SetNull on the thread side keeps the
+  // discussion as an archive after the event is deleted.
+  forumThread     ForumThread?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -324,4 +331,65 @@ model Klub100Vote {
   createdAt DateTime    @default(now())
 
   @@id([songId, userId])
+}
+
+// A forum section. Ordinary categories are admin-managed (name/description in
+// the DB). The single `isEvents` category ("Begivenheder") is seeded lazily,
+// mirrors calendar events, cannot be deleted, and rejects manually-created
+// threads; the UI shows an i18n label for it instead of `name`.
+model ForumCategory {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  name        String
+  description String?
+  order       Int           @default(0)
+  isEvents    Boolean       @default(false)
+  threads     ForumThread[]
+  createdAt   DateTime      @default(now())
+}
+
+// A discussion topic. A normal thread's first post is its body. An
+// event-linked thread (Begivenheder) instead renders the live CalendarEvent on
+// top and holds member replies below.
+model ForumThread {
+  id          String        @id @default(cuid())
+  category    ForumCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId  String
+  title       String
+  pinned      Boolean       @default(false)
+  locked      Boolean       @default(false)
+  // Event-linked threads render the live event on top; SetNull keeps the
+  // discussion after the event is deleted.
+  event       CalendarEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventId     String?       @unique
+  // Lazy folder in the files section holding images/attachments from the
+  // thread's posts (created on first upload; SetNull keeps assets discoverable
+  // once the thread is gone).
+  folder      Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folderId    String?       @unique
+  // SetNull: forum content is group content and outlives its author.
+  createdBy   User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  posts       ForumPost[]
+  createdAt   DateTime      @default(now())
+  // Bumped on every new reply so category listings can sort by recent activity.
+  updatedAt   DateTime      @updatedAt
+
+  @@index([categoryId, updatedAt])
+}
+
+model ForumPost {
+  id          String      @id @default(cuid())
+  thread      ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId    String
+  // TipTap document as a JSON string (SQLite has no Json type).
+  contentJson String
+  createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  // Set when the post has been edited after creation.
+  editedAt    DateTime?
+
+  @@index([threadId, createdAt])
 }
