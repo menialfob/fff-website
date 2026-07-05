@@ -10,7 +10,9 @@ import type { Dictionary } from "@/lib/i18n";
 import { claimAssets, parseContentFields } from "@/modules/content/assets";
 import {
   createEventThread,
+  ensureOccurrenceThread,
   renameEventThread,
+  renameOccurrenceThreadsForEvent,
 } from "@/modules/forum/events";
 import {
   daysInMonth,
@@ -247,12 +249,16 @@ export async function createEvent(formData: FormData) {
     },
   });
   if (folder) await claimAssets(parsed, folder.id, session.user.id);
-  // Every event gets a discussion thread in the Begivenheder forum section.
-  await createEventThread({
-    eventId: event.id,
-    title: parsed.title,
-    createdById: session.user.id,
-  });
+  // Ad hoc events get a discussion thread in the Begivenheder forum section
+  // right away. Recurring events instead get a thread per instance, created
+  // when that occurrence is first edited (see saveOccurrenceContent).
+  if (kind === "ADHOC") {
+    await createEventThread({
+      eventId: event.id,
+      title: parsed.title,
+      createdById: session.user.id,
+    });
+  }
   await logEvent({
     actorId: session.user.id,
     action: "calendar.create",
@@ -318,8 +324,13 @@ export async function updateEvent(eventId: string, formData: FormData) {
   if (existing.kind === "ADHOC" && folderId) {
     await claimAssets(parsed, folderId, session.user.id);
   }
-  // Keep the linked Begivenheder thread's title in sync with the event.
-  await renameEventThread(eventId, parsed.title);
+  // Keep linked Begivenheder threads in sync with the event's title: the
+  // single ad hoc thread, or every instance thread of a recurring series.
+  if (existing.kind === "ADHOC") {
+    await renameEventThread(eventId, parsed.title);
+  } else {
+    await renameOccurrenceThreadsForEvent(eventId, parsed.title);
+  }
   await logEvent({
     actorId: session.user.id,
     action: "calendar.update",
@@ -405,12 +416,19 @@ export async function saveOccurrenceContent(
     folderId = folder.id;
   }
 
-  await prisma.calendarOccurrence.upsert({
+  const occurrence = await prisma.calendarOccurrence.upsert({
     where: { eventId_date: { eventId, date } },
     create: { eventId, date, contentJson: content.contentJson, folderId },
     update: { contentJson: content.contentJson, folderId },
   });
   await claimAssets(content, folderId, session.user.id);
+  // Editing an instance gives it its own Begivenheder thread (the date is
+  // rendered from the occurrence; the title stays the series title).
+  await ensureOccurrenceThread({
+    occurrenceId: occurrence.id,
+    title: event.title,
+    createdById: session.user.id,
+  });
   await logEvent({
     actorId: session.user.id,
     action: "calendar.occurrence.update",

@@ -202,6 +202,10 @@ model CalendarOccurrence {
   contentJson String?
   folder      Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
   folderId    String?       @unique
+  // The Begivenheder forum thread mirroring this specific instance (created
+  // when the occurrence is first edited). SetNull on the thread side keeps the
+  // discussion as an archive after the occurrence/series is deleted.
+  forumThread ForumThread?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -348,9 +352,10 @@ model ForumCategory {
   createdAt   DateTime      @default(now())
 }
 
-// A discussion topic. A normal thread's first post is its body. An
-// event-linked thread (Begivenheder) instead renders the live CalendarEvent on
-// top and holds member replies below.
+// A discussion topic. A normal thread's first post is its body. A thread linked
+// to an ad hoc event (via eventId) or a single recurring instance (via
+// occurrenceId) instead renders that live event/occurrence on top and holds
+// member replies below.
 model ForumThread {
   id          String        @id @default(cuid())
   category    ForumCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -358,10 +363,15 @@ model ForumThread {
   title       String
   pinned      Boolean       @default(false)
   locked      Boolean       @default(false)
-  // Event-linked threads render the live event on top; SetNull keeps the
-  // discussion after the event is deleted.
+  // Ad hoc events link here; recurring events link per instance via
+  // occurrenceId below. SetNull keeps the discussion after the event is deleted.
   event       CalendarEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
   eventId     String?       @unique
+  // A single recurring-event instance. The thread's title is the series title;
+  // the date comes from the occurrence. SetNull keeps the discussion after the
+  // occurrence/series is deleted.
+  occurrence   CalendarOccurrence? @relation(fields: [occurrenceId], references: [id], onDelete: SetNull)
+  occurrenceId String?             @unique
   // Lazy folder in the files section holding images/attachments from the
   // thread's posts (created on first upload; SetNull keeps assets discoverable
   // once the thread is gone).

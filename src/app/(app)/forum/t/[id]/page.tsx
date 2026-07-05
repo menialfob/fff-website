@@ -48,6 +48,12 @@ export default async function ThreadPage({
       event: {
         include: { folder: { include: { files: { orderBy: { createdAt: "asc" } } } } },
       },
+      occurrence: {
+        include: {
+          event: true,
+          folder: { include: { files: { orderBy: { createdAt: "asc" } } } },
+        },
+      },
     },
   });
   if (!thread) notFound();
@@ -56,13 +62,32 @@ export default async function ThreadPage({
   const canDelete = thread.createdById === session.user.id || isAdmin;
   const canReply = !thread.locked || isAdmin;
 
-  // Live event header (event-linked threads only): render the current event
-  // rather than a stored copy, so edits reflect instantly.
+  const timeLabel = (
+    ev: { allDay: boolean; startMinutes: number | null; endMinutes: number | null },
+  ) =>
+    !ev.allDay && ev.startMinutes !== null
+      ? formatMinutes(ev.startMinutes) +
+        (ev.endMinutes !== null ? `–${formatMinutes(ev.endMinutes)}` : "")
+      : t.calendar.allDay;
+
+  // Live event/occurrence header: render the current event (ad hoc thread) or
+  // the specific recurring instance (occurrence thread) rather than a stored
+  // copy, so edits reflect instantly. The thread title already carries the
+  // (series) title; `when` supplies the concrete date(s).
   const event = thread.event;
-  let eventWhen = "";
-  let eventTime = "";
-  let eventContentHtml: string | null = null;
+  const occ = thread.occurrence;
+  let header: {
+    when: string;
+    time: string;
+    location: string | null;
+    contentHtml: string | null;
+    files: { id: string; name: string; size: number }[];
+    folderId: string | null;
+    calendarHref: string;
+  } | null = null;
+
   if (event) {
+    let when = "";
     if (event.kind === "RECURRING" && event.freq) {
       const rule: RecurrenceRule = {
         freq: event.freq,
@@ -71,20 +96,30 @@ export default async function ThreadPage({
         month: event.month,
         dayOfMonth: event.dayOfMonth,
       };
-      eventWhen = describeRule(rule, locale, t.calendar.recurrence);
+      when = describeRule(rule, locale, t.calendar.recurrence);
     } else if (event.date) {
-      eventWhen = formatISODate(event.date, locale);
+      when = formatISODate(event.date, locale);
     }
-    if (!event.allDay && event.startMinutes !== null) {
-      eventTime =
-        formatMinutes(event.startMinutes) +
-        (event.endMinutes !== null ? `–${formatMinutes(event.endMinutes)}` : "");
-    } else {
-      eventTime = t.calendar.allDay;
-    }
-    eventContentHtml = renderContent(event.contentJson);
+    header = {
+      when,
+      time: timeLabel(event),
+      location: event.location,
+      contentHtml: renderContent(event.contentJson),
+      files: event.folder?.files ?? [],
+      folderId: event.folder?.id ?? null,
+      calendarHref: `/calendar/${event.id}`,
+    };
+  } else if (occ) {
+    header = {
+      when: formatISODate(occ.date, locale),
+      time: timeLabel(occ.event),
+      location: occ.event.location,
+      contentHtml: renderContent(occ.contentJson),
+      files: occ.folder?.files ?? [],
+      folderId: occ.folder?.id ?? null,
+      calendarHref: `/calendar/${occ.event.id}?d=${occ.date}`,
+    };
   }
-  const eventFiles = event?.folder?.files ?? [];
 
   return (
     <div>
@@ -111,37 +146,39 @@ export default async function ThreadPage({
         )}
       </div>
 
-      {/* Event header for event-linked threads */}
-      {event && (
+      {/* Live event/occurrence header for event-linked threads */}
+      {header && (
         <section className={`${cardPad} mb-6`}>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <CalendarIcon className="h-4 w-4 text-lime-300" />
             <Link
-              href={`/calendar/${event.id}`}
+              href={header.calendarHref}
               className="text-sm font-medium text-lime-300 hover:underline"
             >
               {t.forum.openEvent}
             </Link>
           </div>
           <dl className="grid gap-1 text-sm text-zinc-300">
-            {eventWhen && <div className="first-letter:uppercase">{eventWhen}</div>}
-            {eventTime && <div>{eventTime}</div>}
-            {event.location && (
+            {header.when && (
+              <div className="first-letter:uppercase">{header.when}</div>
+            )}
+            {header.time && <div>{header.time}</div>}
+            {header.location && (
               <div>
-                {t.calendar.location}: {event.location}
+                {t.calendar.location}: {header.location}
               </div>
             )}
           </dl>
-          {eventContentHtml && (
+          {header.contentHtml && (
             <div
               className="event-content mt-3"
-              dangerouslySetInnerHTML={{ __html: eventContentHtml }}
+              dangerouslySetInnerHTML={{ __html: header.contentHtml }}
             />
           )}
-          {eventFiles.length > 0 && event.folder && (
+          {header.files.length > 0 && header.folderId && (
             <div className="mt-4">
               <Link
-                href={`/files/${event.folder.id}`}
+                href={`/files/${header.folderId}`}
                 className="inline-flex items-center gap-1.5 text-sm text-sky-300 hover:underline"
               >
                 <FolderIcon className="h-4 w-4" />
@@ -154,7 +191,7 @@ export default async function ThreadPage({
 
       {/* Posts */}
       {thread.posts.length === 0 ? (
-        event ? (
+        header ? (
           <p className={`${emptyBox} mb-6`}>{t.forum.noRepliesYet}</p>
         ) : null
       ) : (

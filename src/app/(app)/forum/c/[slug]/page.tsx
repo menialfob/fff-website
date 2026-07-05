@@ -12,6 +12,7 @@ import {
   PageTitle,
 } from "@/components/ui";
 import { ArrowLeftIcon, CalendarIcon, PlusIcon } from "@/components/icons";
+import { formatISODate } from "@/modules/calendar/recurrence";
 
 export default async function CategoryPage({
   params,
@@ -29,6 +30,7 @@ export default async function CategoryPage({
         orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
         include: {
           createdBy: { select: { name: true } },
+          occurrence: { select: { date: true } },
           _count: { select: { posts: true } },
         },
       },
@@ -72,11 +74,17 @@ export default async function CategoryPage({
                 href={`/forum/t/${thread.id}`}
                 className={`${cardHover} flex flex-wrap items-center gap-x-3 gap-y-1 border-0 bg-transparent px-4 py-3 shadow-none sm:px-6`}
               >
-                {thread.eventId && (
+                {(thread.eventId || thread.occurrenceId) && (
                   <CalendarIcon className="h-4 w-4 shrink-0 text-lime-300" />
                 )}
                 <span className="min-w-0 font-medium text-zinc-100">
                   {thread.title}
+                  {thread.occurrence && (
+                    <span className="text-zinc-500">
+                      {" "}
+                      · {formatISODate(thread.occurrence.date, locale)}
+                    </span>
+                  )}
                 </span>
                 {thread.pinned && (
                   <span className="rounded-full bg-blue-400/10 px-2 py-0.5 text-[11px] font-medium text-blue-300">
