@@ -1,7 +1,7 @@
-import { headers } from "next/headers";
 import { requireSession, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
+import { hostOf, siteOrigin } from "@/lib/site-url";
 import { btnDangerOutline, cardPad, PageTitle } from "@/components/ui";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LogOutIcon } from "@/components/icons";
@@ -15,14 +15,13 @@ export default async function ProfilePage() {
     where: { id: session.user.id },
   });
 
-  const headerList = await headers();
-  const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
-  const proto = headerList.get("x-forwarded-proto") ?? "https";
+  const origin = await siteOrigin();
   const feedPath = user.calendarToken
     ? `/api/calendar/feed/${user.calendarToken}`
     : null;
-  const httpsUrl = feedPath && host ? `${proto}://${host}${feedPath}` : null;
-  const webcalUrl = feedPath && host ? `webcal://${host}${feedPath}` : null;
+  const httpsUrl = feedPath && origin ? `${origin}${feedPath}` : null;
+  const webcalUrl =
+    feedPath && origin ? `webcal://${hostOf(origin)}${feedPath}` : null;
 
   return (
     <div className="max-w-lg">

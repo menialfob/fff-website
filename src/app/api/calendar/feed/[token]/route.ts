@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { siteOrigin } from "@/lib/site-url";
 import { buildIcs } from "@/modules/calendar/ics";
 
 /**
@@ -29,9 +30,11 @@ export async function GET(
     orderBy: { createdAt: "asc" },
     include: { occurrences: true },
   });
+  // Absolute event links must use the public host, not the container's
+  // internal 0.0.0.0 bind that request.nextUrl.origin can resolve to.
   const ics = buildIcs(events, {
     calendarName: "FFF",
-    baseUrl: request.nextUrl.origin,
+    baseUrl: (await siteOrigin()) || request.nextUrl.origin,
   });
 
   return new NextResponse(ics, {

@@ -81,14 +81,34 @@ export default async function EventPage({
 
   const upcoming = rule ? nextOccurrences(rule, today, 3) : [];
 
+  // Multi-day ad hoc events show explicit start/end lines instead of a
+  // single date + time; recurring multi-day ones annotate the time range
+  // with the day span (each occurrence's concrete dates vary).
+  const multiDayAdhoc = Boolean(
+    event.kind === "ADHOC" &&
+      event.date &&
+      event.endDate &&
+      event.endDate > event.date,
+  );
+  const dayOffset = event.endDayOffset ?? 0;
+  const daySuffix =
+    dayOffset > 0 ? ` (${fmt(t.calendar.plusDays, { count: dayOffset })})` : "";
   const time = event.allDay
-    ? t.calendar.allDay
+    ? t.calendar.allDay + daySuffix
     : event.startMinutes !== null
       ? formatMinutes(event.startMinutes) +
-        (event.durationMinutes
-          ? `–${formatMinutes(event.startMinutes + event.durationMinutes)}`
-          : "")
+        (event.endMinutes !== null
+          ? `–${formatMinutes(event.endMinutes)}`
+          : "") +
+        daySuffix
       : "";
+  const dateAtTime = (date: string, minutes: number | null) =>
+    minutes === null || event.allDay
+      ? formatISODate(date, locale)
+      : fmt(t.calendar.dateAtTime, {
+          date: formatISODate(date, locale),
+          time: formatMinutes(minutes),
+        });
 
   const contentHtml = renderEventContent(
     rule ? (occurrence?.contentJson ?? null) : event.contentJson,
@@ -131,14 +151,27 @@ export default async function EventPage({
           )}
         </div>
         <dl className="mt-3 grid gap-1 text-sm text-zinc-300">
-          <div>
-            {rule
-              ? describeRule(rule, locale, t.calendar.recurrence)
-              : event.date
-                ? formatISODate(event.date, locale)
-                : ""}
-          </div>
-          {time && <div>{time}</div>}
+          {multiDayAdhoc && event.date && event.endDate ? (
+            <>
+              <div className="first-letter:uppercase">
+                {t.calendar.starts}: {dateAtTime(event.date, event.startMinutes)}
+              </div>
+              <div className="first-letter:uppercase">
+                {t.calendar.ends}: {dateAtTime(event.endDate, event.endMinutes)}
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                {rule
+                  ? describeRule(rule, locale, t.calendar.recurrence)
+                  : event.date
+                    ? formatISODate(event.date, locale)
+                    : ""}
+              </div>
+              {time && <div>{time}</div>}
+            </>
+          )}
           {event.location && (
             <div>
               {t.calendar.location}: {event.location}

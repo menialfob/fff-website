@@ -21,16 +21,23 @@ import {
 
 export type MonthOccurrence = {
   date: string;
+  /** Last covered day for multi-day events, null for single-day. */
+  endDate: string | null;
   event: {
     id: string;
     kind: "ADHOC" | "RECURRING";
     title: string;
     allDay: boolean;
     startMinutes: number | null;
-    durationMinutes: number | null;
+    endMinutes: number | null;
     location: string | null;
   };
 };
+
+/** Whether an occurrence covers the given day. */
+function covers(occ: MonthOccurrence, iso: string): boolean {
+  return occ.date <= iso && iso <= (occ.endDate ?? occ.date);
+}
 
 function OccurrenceCard({
   occ,
@@ -42,14 +49,19 @@ function OccurrenceCard({
   const { t } = useI18n();
   const accent = moduleAccents.calendar;
   const day = Number(occ.date.slice(8, 10));
-  const time = occ.event.allDay
+  const multiDay = occ.endDate !== null && occ.endDate > occ.date;
+  let time = occ.event.allDay
     ? t.calendar.allDay
     : occ.event.startMinutes !== null
       ? formatMinutes(occ.event.startMinutes) +
-        (occ.event.durationMinutes
-          ? `–${formatMinutes(occ.event.startMinutes + occ.event.durationMinutes)}`
+        (occ.event.endMinutes !== null
+          ? `–${formatMinutes(occ.event.endMinutes)}`
           : "")
       : "";
+  if (multiDay) {
+    // e.g. "17.–19." prefix so the span is visible in the list.
+    time = `${day}.–${Number(occ.endDate!.slice(8, 10))}. · ${time}`;
+  }
   return (
     <Link
       href={
@@ -116,14 +128,16 @@ export function MonthView({
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
+  // Multi-day occurrences put a dot on every covered day of this month.
   const byDay = new Map<number, MonthOccurrence[]>();
-  for (const occ of occurrences) {
-    const day = Number(occ.date.slice(8, 10));
-    byDay.set(day, [...(byDay.get(day) ?? []), occ]);
+  for (let day = 1; day <= daysInThisMonth; day++) {
+    const iso = toISODate(year, month, day);
+    const dayOccs = occurrences.filter((occ) => covers(occ, iso));
+    if (dayOccs.length > 0) byDay.set(day, dayOccs);
   }
 
   const shown = selected
-    ? occurrences.filter((occ) => occ.date === selected)
+    ? occurrences.filter((occ) => covers(occ, selected))
     : occurrences;
   const newEventHref = selected
     ? `/calendar/new?date=${selected}`
@@ -205,7 +219,13 @@ export function MonthView({
               <OccurrenceCard
                 occ={occ}
                 weekdayLabel={weekdayShort(
-                  isoWeekday(year, month, Number(occ.date.slice(8, 10))),
+                  // From the occurrence's own date — it may have started in
+                  // the previous month.
+                  isoWeekday(
+                    Number(occ.date.slice(0, 4)),
+                    Number(occ.date.slice(5, 7)),
+                    Number(occ.date.slice(8, 10)),
+                  ),
                 )}
               />
             </li>

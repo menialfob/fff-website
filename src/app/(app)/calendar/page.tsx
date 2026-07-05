@@ -6,6 +6,7 @@ import { btnSecondary, PageTitle } from "@/components/ui";
 import { MonthView, type MonthOccurrence } from "@/modules/calendar/month-view";
 import type { RecurrenceRule } from "@/modules/calendar/recurrence";
 import {
+  addDays,
   daysInMonth,
   occurrenceInMonth,
   todayInCopenhagen,
@@ -38,14 +39,24 @@ export default async function CalendarPage({
   const monthEnd = toISODate(year, month, daysInMonth(year, month));
 
   const [adhocEvents, recurringEvents] = await Promise.all([
+    // Any ad hoc event whose [date, endDate] range overlaps the month —
+    // multi-day events show up even when they started last month.
     prisma.calendarEvent.findMany({
-      where: { kind: "ADHOC", date: { gte: monthStart, lte: monthEnd } },
+      where: {
+        kind: "ADHOC",
+        date: { lte: monthEnd },
+        OR: [
+          { endDate: null, date: { gte: monthStart } },
+          { endDate: { gte: monthStart } },
+        ],
+      },
     }),
     prisma.calendarEvent.findMany({ where: { kind: "RECURRING" } }),
   ]);
 
   const occurrences: MonthOccurrence[] = adhocEvents.map((e) => ({
     date: e.date!,
+    endDate: e.endDate,
     event: e,
   }));
   for (const e of recurringEvents) {
@@ -57,8 +68,21 @@ export default async function CalendarPage({
       month: e.month,
       dayOfMonth: e.dayOfMonth,
     };
-    const date = occurrenceInMonth(rule, year, month);
-    if (date) occurrences.push({ date, event: e });
+    // Check the previous month too: a multi-day occurrence near the end of
+    // it can spill into the first days of this one.
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevMonth = month === 1 ? 12 : month - 1;
+    for (const [y, m] of [
+      [prevYear, prevMonth],
+      [year, month],
+    ] as const) {
+      const date = occurrenceInMonth(rule, y, m);
+      if (!date) continue;
+      const endDate = e.endDayOffset ? addDays(date, e.endDayOffset) : null;
+      const lastDay = endDate ?? date;
+      if (date > monthEnd || lastDay < monthStart) continue;
+      occurrences.push({ date, endDate, event: e });
+    }
   }
   occurrences.sort(
     (a, b) =>
@@ -84,13 +108,14 @@ export default async function CalendarPage({
         today={today}
         occurrences={occurrences.map((occ) => ({
           date: occ.date,
+          endDate: occ.endDate,
           event: {
             id: occ.event.id,
             kind: occ.event.kind,
             title: occ.event.title,
             allDay: occ.event.allDay,
             startMinutes: occ.event.startMinutes,
-            durationMinutes: occ.event.durationMinutes,
+            endMinutes: occ.event.endMinutes,
             location: occ.event.location,
           },
         }))}

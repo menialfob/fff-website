@@ -34,10 +34,12 @@ type ParsedEvent = {
   location: string | null;
   allDay: boolean;
   startMinutes: number | null;
-  durationMinutes: number | null;
+  endMinutes: number | null;
   contentJson: string | null;
   attachmentIds: string[];
   date: string | null;
+  endDate: string | null;
+  endDayOffset: number | null;
   freq: Freq | null;
   weekday: number | null;
   ordinal: number | null;
@@ -103,15 +105,33 @@ function parseEventForm(
 
   const allDay = formData.get("allDay") === "on";
   let startMinutes: number | null = null;
-  let durationMinutes: number | null = null;
+  let endMinutes: number | null = null;
   if (!allDay) {
     startMinutes = toMinutes(str(formData, "startTime"));
     if (startMinutes === null) return null;
     const endRaw = str(formData, "endTime");
     if (endRaw) {
-      const end = toMinutes(endRaw);
-      if (end === null || end <= startMinutes) return null;
-      durationMinutes = end - startMinutes;
+      endMinutes = toMinutes(endRaw);
+      if (endMinutes === null) return null;
+    }
+  }
+
+  // Multi-day: ad hoc events may end on a later date; recurring events may
+  // continue endDayOffset days past each occurrence (Friday -> Sunday).
+  let endDate: string | null = null;
+  let endDayOffset: number | null = null;
+  if (kind === "ADHOC") {
+    const raw = str(formData, "endDate");
+    if (raw) {
+      if (!parseISODate(raw)) return null;
+      endDate = raw;
+    }
+  } else {
+    const days = str(formData, "days");
+    if (days) {
+      const n = intInRange(days, 1, 14);
+      if (n === null) return null;
+      endDayOffset = n - 1 === 0 ? null : n - 1;
     }
   }
 
@@ -129,10 +149,12 @@ function parseEventForm(
     location: location || null,
     allDay,
     startMinutes,
-    durationMinutes,
+    endMinutes,
     contentJson,
     attachmentIds,
     date: null,
+    endDate,
+    endDayOffset,
     freq: null,
     weekday: null,
     ordinal: null,
@@ -140,10 +162,22 @@ function parseEventForm(
     dayOfMonth: null,
   };
 
+  const multiDay = endDate !== null || endDayOffset !== null;
+  // On a single day the end time must come after the start; across days
+  // any end time is valid (Friday 16:00 -> Sunday 13:00).
+  if (!multiDay && endMinutes !== null && startMinutes !== null && endMinutes <= startMinutes) {
+    return null;
+  }
+
   if (kind === "ADHOC") {
     const date = str(formData, "date");
     if (!parseISODate(date)) return null;
     parsed.date = date;
+    // A same-or-earlier end date means a single-day event.
+    if (parsed.endDate && parsed.endDate <= date) parsed.endDate = null;
+    if (!parsed.endDate && endMinutes !== null && startMinutes !== null && endMinutes <= startMinutes) {
+      return null;
+    }
     return parsed;
   }
 
@@ -274,8 +308,10 @@ export async function createEvent(formData: FormData) {
       location: parsed.location,
       allDay: parsed.allDay,
       startMinutes: parsed.startMinutes,
-      durationMinutes: parsed.durationMinutes,
+      endMinutes: parsed.endMinutes,
       date: parsed.date,
+      endDate: parsed.endDate,
+      endDayOffset: parsed.endDayOffset,
       freq: parsed.freq,
       weekday: parsed.weekday,
       ordinal: parsed.ordinal,
@@ -336,8 +372,10 @@ export async function updateEvent(eventId: string, formData: FormData) {
       location: parsed.location,
       allDay: parsed.allDay,
       startMinutes: parsed.startMinutes,
-      durationMinutes: parsed.durationMinutes,
+      endMinutes: parsed.endMinutes,
       date: parsed.date,
+      endDate: parsed.endDate,
+      endDayOffset: parsed.endDayOffset,
       freq: parsed.freq,
       weekday: parsed.weekday,
       ordinal: parsed.ordinal,

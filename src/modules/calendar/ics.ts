@@ -1,7 +1,7 @@
 import type { CalendarEvent, CalendarOccurrence } from "@prisma/client";
 import {
+  addDays,
   nextOccurrences,
-  parseISODate,
   type RecurrenceRule,
 } from "./recurrence";
 
@@ -74,14 +74,6 @@ function foldLine(line: string): string[] {
 /** "YYYY-MM-DD" → "YYYYMMDD". */
 function basicDate(iso: string): string {
   return iso.replaceAll("-", "");
-}
-
-/** "YYYY-MM-DD" + n days → "YYYY-MM-DD" (UTC math, timezone-free). */
-function addDays(iso: string, days: number): string {
-  const p = parseISODate(iso);
-  if (!p) return iso;
-  const d = new Date(Date.UTC(p.year, p.month - 1, p.day + days));
-  return d.toISOString().slice(0, 10);
 }
 
 /** UTC timestamp in iCalendar basic format, e.g. 20260704T120000Z. */
@@ -163,27 +155,33 @@ function dateProps(
   event: CalendarEvent,
   date: string,
 ): { start: string; startEnd: string[] } {
+  // Last calendar day of this instance: an explicit end date for ad hoc
+  // events, occurrence + offset for recurring ones.
+  const endDay =
+    event.kind === "ADHOC" && event.endDate && event.endDate > date
+      ? event.endDate
+      : addDays(date, event.endDayOffset ?? 0);
+
   if (event.allDay || event.startMinutes === null) {
     return {
       start: `;VALUE=DATE:${basicDate(date)}`,
       startEnd: [
         `DTSTART;VALUE=DATE:${basicDate(date)}`,
         // DTEND is exclusive for all-day events.
-        `DTEND;VALUE=DATE:${basicDate(addDays(date, 1))}`,
+        `DTEND;VALUE=DATE:${basicDate(addDays(endDay, 1))}`,
       ],
     };
   }
   const start = event.startMinutes;
-  const end = start + (event.durationMinutes ?? 60);
+  // Same-day events default to one hour; multi-day ones end at the start
+  // time on the last day unless an end time was given.
+  const sameDay = endDay === date;
+  const end = event.endMinutes ?? (sameDay ? start + 60 : start);
   return {
     start: `;TZID=${TZID}:${localDateTime(date, start)}`,
     startEnd: [
       `DTSTART;TZID=${TZID}:${localDateTime(date, start)}`,
-      // Events ending past midnight roll onto the next day.
-      `DTEND;TZID=${TZID}:${localDateTime(
-        addDays(date, Math.floor(end / 1440)),
-        end % 1440,
-      )}`,
+      `DTEND;TZID=${TZID}:${localDateTime(endDay, end)}`,
     ],
   };
 }
