@@ -112,13 +112,16 @@ Then edit `/opt/fff-website/.env` on the server and fill in every value
 (`SITE_DOMAIN`, `AUTH_SECRET` via `openssl rand -base64 32`, `AUTH_URL`, and
 the `INITIAL_ADMIN_*` account).
 
-**Changing the domain later** (e.g. moving to `fffloge.dk`): add the DNS
-records above for the new domain, update `SITE_DOMAIN` and `AUTH_URL` in
-`/opt/fff-website/.env`, then run `docker compose up -d && docker compose
-restart caddy` — Caddy fetches certificates for the new hostnames on
-startup, and the next staging push regenerates `.env.staging` automatically.
-Also add `https://<new-domain>/api/spotify/callback` as a Redirect URI in
-the Spotify dashboard (§5), or the Spotify connect flow breaks.
+**Changing the domain later** (e.g. moving to `fffloge.dk`): the domain is
+repo-driven — `deploy.yml` overwrites `SITE_DOMAIN`/`AUTH_URL` in the
+server's `.env` on every production deploy, so the `.env` values only matter
+for the very first start. To switch domains: add the DNS records above for
+the new domain, change `SITE_DOMAIN` in `.github/workflows/deploy.yml` (and
+`deploy/.env.example` to keep it honest), and push to `main`. The deploy
+restarts the app, staging, and Caddy, which fetches certificates for the new
+hostnames. Also add `https://<new-domain>/api/spotify/callback` as a
+Redirect URI in the Spotify dashboard (§5), or the Spotify connect flow
+breaks.
 
 ### Registry access
 
