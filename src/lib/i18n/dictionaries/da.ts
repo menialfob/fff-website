@@ -125,6 +125,14 @@ export const da = {
       "Ingen beskrivelse til denne dato endnu.",
     editOccurrence: "Rediger indhold for denne dato",
     occurrenceEditSub: "Gælder kun {date} — andre datoer påvirkes ikke.",
+    attendance: {
+      title: "Deltagelse",
+      forDate: "Gælder kun {date}.",
+      going: "Deltager",
+      maybe: "Deltager måske",
+      notGoing: "Deltager ikke",
+      none: "Ingen har svaret endnu.",
+    },
     recurrence: {
       ordinals: {
         "1": "Første",

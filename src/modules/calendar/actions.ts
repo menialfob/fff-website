@@ -653,6 +653,71 @@ export async function saveOccurrenceContent(
   return { ok: true, id: eventId };
 }
 
+const ATTENDANCE_STATUSES = ["GOING", "MAYBE", "NOT_GOING"] as const;
+type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
+
+/**
+ * Register (or update/clear) the caller's attendance for one specific event
+ * instance. Any logged-in member may RSVP to any event — this is the member's
+ * own attendance, not series management, so the ADMIN/BESTYRELSE gate does not
+ * apply.
+ *
+ * The instance is identified by its date: for a recurring event it must be a
+ * real occurrence date (re-validated against the rule, since the value comes
+ * from a user-controlled page), and for an ad hoc event it must equal the
+ * event's own date. Passing status `null` removes the registration (toggling
+ * an already-selected choice back off).
+ */
+export async function setAttendance(
+  eventId: string,
+  date: string,
+  status: AttendanceStatus | null,
+) {
+  const t = await getDict();
+  const session = await requireSession();
+
+  const event = await prisma.calendarEvent.findUnique({
+    where: { id: eventId },
+  });
+  if (!event) return { error: t.errors.eventNotFound };
+
+  if (status !== null && !ATTENDANCE_STATUSES.includes(status)) {
+    return { error: t.errors.invalidInput };
+  }
+
+  // Validate the instance date against the event kind.
+  if (event.kind === "RECURRING") {
+    if (!event.freq) return { error: t.errors.eventNotFound };
+    const rule: RecurrenceRule = {
+      freq: event.freq,
+      weekday: event.weekday,
+      ordinal: event.ordinal,
+      month: event.month,
+      dayOfMonth: event.dayOfMonth,
+    };
+    if (!isOccurrenceDate(rule, date)) return { error: t.errors.invalidInput };
+  } else if (date !== event.date) {
+    return { error: t.errors.invalidInput };
+  }
+
+  if (status === null) {
+    await prisma.eventAttendance.deleteMany({
+      where: { eventId, date, userId: session.user.id },
+    });
+  } else {
+    await prisma.eventAttendance.upsert({
+      where: {
+        eventId_date_userId: { eventId, date, userId: session.user.id },
+      },
+      create: { eventId, date, userId: session.user.id, status },
+      update: { status },
+    });
+  }
+
+  revalidateCalendar(eventId);
+  return { ok: true };
+}
+
 /**
  * Create or rotate the caller's personal iCal feed token. Rotating
  * invalidates the previous feed URL immediately.

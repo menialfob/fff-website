@@ -122,6 +122,14 @@ export const en: typeof da = {
     noOccurrenceContent: "No description for this date yet.",
     editOccurrence: "Edit content for this date",
     occurrenceEditSub: "Applies only to {date} — other dates are unaffected.",
+    attendance: {
+      title: "Attendance",
+      forDate: "Applies only to {date}.",
+      going: "Attending",
+      maybe: "Maybe",
+      notGoing: "Not attending",
+      none: "No one has responded yet.",
+    },
     recurrence: {
       ordinals: {
         "1": "First",

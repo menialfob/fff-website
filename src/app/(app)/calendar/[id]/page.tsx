@@ -9,6 +9,11 @@ import { btnSecondary, cardPad, PageTitle } from "@/components/ui";
 import { ArrowLeftIcon, FolderIcon, PencilIcon } from "@/components/icons";
 import { EventControls } from "@/modules/calendar/event-controls";
 import {
+  AttendanceControls,
+  type AttendanceGroups,
+  type AttendanceStatus,
+} from "@/modules/calendar/attendance";
+import {
   StructuredFields,
   toRenderFields,
 } from "@/modules/calendar/structured-fields";
@@ -133,6 +138,29 @@ export default async function EventPage({
       ? toRenderFields(event.fields, occurrence?.fieldValues ?? [])
       : [];
 
+  // Attendance is registered per instance: the focused occurrence date for a
+  // recurring event, or the single date of an ad hoc event.
+  const attendanceDate = rule ? focusDate : event.date;
+  const attendanceRows = attendanceDate
+    ? await prisma.eventAttendance.findMany({
+        where: { eventId: event.id, date: attendanceDate },
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { user: { name: "asc" } },
+      })
+    : [];
+  const attendanceGroups: AttendanceGroups = {
+    GOING: [],
+    MAYBE: [],
+    NOT_GOING: [],
+  };
+  let myAttendance: AttendanceStatus | null = null;
+  for (const row of attendanceRows) {
+    attendanceGroups[row.status as AttendanceStatus].push(row.user.name);
+    if (row.user.id === session.user.id) {
+      myAttendance = row.status as AttendanceStatus;
+    }
+  }
+
   return (
     <div>
       <Link
@@ -236,6 +264,29 @@ export default async function EventPage({
             </Link>
           )}
         </div>
+      )}
+
+      {attendanceDate && (
+        <section className={`${cardPad} mb-6`}>
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold text-white">
+              {t.calendar.attendance.title}
+            </h2>
+            {rule && (
+              <p className="mt-0.5 text-sm text-zinc-500">
+                {fmt(t.calendar.attendance.forDate, {
+                  date: formatISODate(attendanceDate, locale),
+                })}
+              </p>
+            )}
+          </div>
+          <AttendanceControls
+            eventId={event.id}
+            date={attendanceDate}
+            myStatus={myAttendance}
+            groups={attendanceGroups}
+          />
+        </section>
       )}
 
       {contentHtml ? (
