@@ -10,7 +10,7 @@ const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 
 export const metadata: Metadata = {
   title: "FFF",
-  description: "Privat side for vennegruppen",
+  description: "Hjemsted for Fælles Formiddags Fædre",
   robots: { index: false, follow: false },
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "FFF", statusBarStyle: "black-translucent" },

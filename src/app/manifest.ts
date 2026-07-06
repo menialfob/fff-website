@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "FFF",
     short_name: "FFF",
-    description: "Privat side for vennegruppen",
+    description: "Hjemsted for Fælles Formiddags Fædre",
     start_url: "/",
     display: "standalone",
     background_color: "#0c0a12",

@@ -59,7 +59,7 @@ export const en: typeof da = {
     },
   },
   login: {
-    tagline: "Our own clubhouse — events, beers and good friends.",
+    tagline: "Fælles Formiddags Fædre — our own clubhouse.",
     email: "Email",
     password: "Password",
     signIn: "Sign in",
