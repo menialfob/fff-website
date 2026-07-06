@@ -16,7 +16,15 @@ export default async function EditEventPage({
   const { id } = await params;
   const t = await getDict();
 
-  const event = await prisma.calendarEvent.findUnique({ where: { id } });
+  const event = await prisma.calendarEvent.findUnique({
+    where: { id },
+    include: {
+      fields: {
+        orderBy: { position: "asc" },
+        select: { id: true, label: true, type: true },
+      },
+    },
+  });
   if (!event) notFound();
 
   const canRecurring =
@@ -57,6 +65,7 @@ export default async function EditEventPage({
           month: event.month,
           dayOfMonth: event.dayOfMonth,
           contentJson: event.contentJson,
+          fields: event.fields,
         }}
       />
     </div>

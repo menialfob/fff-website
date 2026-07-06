@@ -1,6 +1,7 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { logEvent } from "@/lib/audit";
 import { requireSession } from "@/lib/auth";
@@ -23,6 +24,17 @@ import {
 
 const MAX_TITLE = 120;
 const MAX_LOCATION = 120;
+const MAX_FIELDS = 20;
+const MAX_FIELD_LABEL = 80;
+
+const FIELD_TYPES = ["PERSON", "TEXT", "DOCUMENT"] as const;
+type FieldType = (typeof FIELD_TYPES)[number];
+
+type ParsedField = {
+  id: string | null;
+  label: string;
+  type: FieldType;
+};
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const FREQS = [
@@ -185,6 +197,179 @@ function parseEventForm(
 }
 
 /**
+ * Parse the recurring series' structured field definitions from the form's
+ * single `fieldsJson` input. Returns null on any malformed/oversized input.
+ * An absent input is an empty list (event has no fields). `position` is the
+ * array index, applied by the caller.
+ */
+function parseEventFields(formData: FormData): ParsedField[] | null {
+  const raw = formData.get("fieldsJson");
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(data) || data.length > MAX_FIELDS) return null;
+
+  const fields: ParsedField[] = [];
+  for (const item of data) {
+    if (!item || typeof item !== "object") return null;
+    const { id, label, type } = item as Record<string, unknown>;
+    if (id !== undefined && typeof id !== "string") return null;
+    if (typeof label !== "string") return null;
+    const trimmed = label.trim();
+    if (!trimmed || trimmed.length > MAX_FIELD_LABEL) return null;
+    if (typeof type !== "string" || !FIELD_TYPES.includes(type as FieldType)) {
+      return null;
+    }
+    fields.push({
+      id: typeof id === "string" ? id : null,
+      label: trimmed,
+      type: type as FieldType,
+    });
+  }
+  return fields;
+}
+
+/**
+ * Reconcile a recurring event's field definitions against a parsed payload.
+ * Matching ids are updated (label + position only — type is immutable);
+ * id-less entries are created; existing fields absent from the payload are
+ * deleted (cascading their per-date values). Every write is scoped by eventId
+ * so a forged id can never touch another series' fields.
+ */
+async function reconcileEventFields(eventId: string, fields: ParsedField[]) {
+  const existing = await prisma.eventField.findMany({
+    where: { eventId },
+    select: { id: true },
+  });
+  const existingIds = new Set(existing.map((f) => f.id));
+  const keptIds = new Set<string>();
+
+  const ops: Prisma.PrismaPromise<unknown>[] = [];
+  fields.forEach((field, index) => {
+    if (field.id && existingIds.has(field.id)) {
+      keptIds.add(field.id);
+      ops.push(
+        prisma.eventField.update({
+          where: { id: field.id },
+          data: { label: field.label, position: index },
+        }),
+      );
+    } else {
+      // No id, or an id that isn't ours — treat as a brand-new field.
+      ops.push(
+        prisma.eventField.create({
+          data: {
+            eventId,
+            label: field.label,
+            type: field.type,
+            position: index,
+          },
+        }),
+      );
+    }
+  });
+
+  const removedIds = [...existingIds].filter((id) => !keptIds.has(id));
+  if (removedIds.length > 0) {
+    ops.push(
+      prisma.eventField.deleteMany({
+        where: { id: { in: removedIds }, eventId },
+      }),
+    );
+  }
+
+  if (ops.length > 0) await prisma.$transaction(ops);
+}
+
+const ID_RE = /^[A-Za-z0-9]+$/;
+
+/**
+ * Persist the structured field values for one occurrence. Drives off the
+ * event's authoritative field list (so a stale/forged input can't create a
+ * value for a foreign field). Each field: a present value is upserted into the
+ * one relevant column (others nulled); an empty value deletes any existing row.
+ * Document files are then claimed into the occurrence folder so they surface in
+ * /files, mirroring claimAssets for attachments.
+ */
+async function saveOccurrenceFieldValues(
+  eventId: string,
+  occurrenceId: string,
+  folderId: string,
+  formData: FormData,
+  userId: string,
+) {
+  const fields = await prisma.eventField.findMany({
+    where: { eventId },
+    select: { id: true, type: true },
+  });
+  if (fields.length === 0) return;
+
+  // Only load the membership set when a PERSON field actually exists.
+  let memberIds: Set<string> | null = null;
+  if (fields.some((f) => f.type === "PERSON")) {
+    const users = await prisma.user.findMany({ select: { id: true } });
+    memberIds = new Set(users.map((u) => u.id));
+  }
+
+  const ops: Prisma.PrismaPromise<unknown>[] = [];
+  const docFileIds: string[] = [];
+
+  for (const field of fields) {
+    let text: string | null = null;
+    let personId: string | null = null;
+    let fileId: string | null = null;
+
+    if (field.type === "TEXT") {
+      const v = str(formData, `fv_text_${field.id}`);
+      text = v || null;
+    } else if (field.type === "PERSON") {
+      const v = str(formData, `fv_person_${field.id}`);
+      if (v && memberIds?.has(v)) personId = v;
+    } else if (field.type === "DOCUMENT") {
+      const v = str(formData, `fv_file_${field.id}`);
+      if (v && ID_RE.test(v)) {
+        fileId = v;
+        docFileIds.push(v);
+      }
+    }
+
+    const hasValue = text !== null || personId !== null || fileId !== null;
+    if (hasValue) {
+      ops.push(
+        prisma.occurrenceFieldValue.upsert({
+          where: {
+            occurrenceId_fieldId: { occurrenceId, fieldId: field.id },
+          },
+          create: { occurrenceId, fieldId: field.id, text, personId, fileId },
+          update: { text, personId, fileId },
+        }),
+      );
+    } else {
+      ops.push(
+        prisma.occurrenceFieldValue.deleteMany({
+          where: { occurrenceId, fieldId: field.id },
+        }),
+      );
+    }
+  }
+
+  if (ops.length > 0) await prisma.$transaction(ops);
+
+  // Move the acting user's freshly uploaded documents into the occurrence
+  // folder. The folderId:null guard skips already-claimed files on re-save.
+  if (docFileIds.length > 0) {
+    await prisma.fileItem.updateMany({
+      where: { id: { in: docFileIds }, folderId: null, uploadedById: userId },
+      data: { folderId },
+    });
+  }
+}
+
+/**
  * Session + permission check for a given event kind. Any member manages
  * ad hoc events (wiki-style); recurring events are ADMIN/BESTYRELSE only.
  */
@@ -219,6 +404,10 @@ export async function createEvent(formData: FormData) {
   const parsed = parseEventForm(kind, formData);
   if (!parsed) return { error: t.errors.invalidInput };
 
+  // Recurring events may define structured fields; ad hoc events never do.
+  const fields = kind === "RECURRING" ? parseEventFields(formData) : [];
+  if (!fields) return { error: t.errors.invalidInput };
+
   // Only ad hoc events own a series folder; recurring events get lazy
   // per-occurrence folders when content is added for a date.
   const folder =
@@ -249,6 +438,16 @@ export async function createEvent(formData: FormData) {
     },
   });
   if (folder) await claimAssets(parsed, folder.id, session.user.id);
+  if (fields.length > 0) {
+    await prisma.eventField.createMany({
+      data: fields.map((field, index) => ({
+        eventId: event.id,
+        label: field.label,
+        type: field.type,
+        position: index,
+      })),
+    });
+  }
   // Ad hoc events get a discussion thread in the Begivenheder forum section
   // right away. Recurring events instead get a thread per instance, created
   // when that occurrence is first edited (see saveOccurrenceContent).
@@ -283,6 +482,10 @@ export async function updateEvent(eventId: string, formData: FormData) {
 
   const parsed = parseEventForm(existing.kind, formData);
   if (!parsed) return { error: t.errors.invalidInput };
+
+  const fields =
+    existing.kind === "RECURRING" ? parseEventFields(formData) : [];
+  if (!fields) return { error: t.errors.invalidInput };
 
   // Ad hoc events keep a series folder in sync with the title; recurring
   // events have per-occurrence folders instead and never a series one.
@@ -323,6 +526,9 @@ export async function updateEvent(eventId: string, formData: FormData) {
   });
   if (existing.kind === "ADHOC" && folderId) {
     await claimAssets(parsed, folderId, session.user.id);
+  }
+  if (existing.kind === "RECURRING") {
+    await reconcileEventFields(eventId, fields);
   }
   // Keep linked Begivenheder threads in sync with the event's title: the
   // single ad hoc thread, or every instance thread of a recurring series.
@@ -422,6 +628,13 @@ export async function saveOccurrenceContent(
     update: { contentJson: content.contentJson, folderId },
   });
   await claimAssets(content, folderId, session.user.id);
+  await saveOccurrenceFieldValues(
+    eventId,
+    occurrence.id,
+    folderId,
+    formData,
+    session.user.id,
+  );
   // Editing an instance gives it its own Begivenheder thread (the date is
   // rendered from the occurrence; the title stays the series title).
   await ensureOccurrenceThread({

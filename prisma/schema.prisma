@@ -57,6 +57,8 @@ model User {
   klub100Votes    Klub100Vote[]
   klub100ProjectAdminOf Klub100ProjectAdmin[]
   spotifyAccount  SpotifyAccount?
+  // Person-type structured field values pointing at this member.
+  occurrenceFieldValues OccurrenceFieldValue[]
 }
 
 model UserRole {
@@ -193,6 +195,9 @@ model CalendarEvent {
   createdBy       User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById     String?
   occurrences     CalendarOccurrence[]
+  // RECURRING only — the structured field definitions shared by the series.
+  // Each occurrence date fills in values (OccurrenceFieldValue).
+  fields          EventField[]
   // The Begivenheder forum thread mirroring this event (both ad hoc and
   // recurring events get one). SetNull on the thread side keeps the
   // discussion as an archive after the event is deleted.
@@ -220,10 +225,55 @@ model CalendarOccurrence {
   // when the occurrence is first edited). SetNull on the thread side keeps the
   // discussion as an archive after the occurrence/series is deleted.
   forumThread ForumThread?
+  // Values for the series' structured fields on this specific date.
+  fieldValues OccurrenceFieldValue[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
   @@unique([eventId, date])
+}
+
+// A structured field defined on a RECURRING series (e.g. "Arrangør 1",
+// "Agenda"). The definition lives on the event; each occurrence date supplies
+// its own value in OccurrenceFieldValue. Type is fixed once created — to change
+// it, delete and re-add the field (which cascades its values away).
+enum EventFieldType {
+  PERSON // pick one member
+  TEXT // single line of text
+  DOCUMENT // an uploaded file (FileItem)
+}
+
+model EventField {
+  id       String         @id @default(cuid())
+  event    CalendarEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId  String
+  label    String
+  type     EventFieldType
+  // Display order within the series; reconciled from the editor's list index.
+  position Int
+  values   OccurrenceFieldValue[]
+
+  @@index([eventId])
+}
+
+// One field's value on one occurrence date. Exactly one of text/person/file is
+// meaningful, matching the field's type; all are optional (fields are never
+// mandatory). A deleted member/file leaves the row but nulls the reference
+// (SetNull) so it simply renders as empty.
+model OccurrenceFieldValue {
+  id           String             @id @default(cuid())
+  occurrence   CalendarOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+  occurrenceId String
+  field        EventField         @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  fieldId      String
+  text         String?
+  person       User?              @relation(fields: [personId], references: [id], onDelete: SetNull)
+  personId     String?
+  file         FileItem?          @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  fileId       String?
+
+  @@unique([occurrenceId, fieldId])
+  @@index([fieldId])
 }
 
 model FileItem {
@@ -239,6 +289,8 @@ model FileItem {
   folder       Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   folderId     String?
   createdAt    DateTime @default(now())
+  // Document-type structured field values pointing at this file.
+  occurrenceFieldValues OccurrenceFieldValue[]
 }
 
 enum Klub100SongStatus {
