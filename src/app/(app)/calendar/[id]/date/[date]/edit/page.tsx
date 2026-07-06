@@ -38,9 +38,36 @@ export default async function EditOccurrencePage({
   };
   if (!isOccurrenceDate(rule, date)) redirect(`/calendar/${id}`);
 
-  const occurrence = await prisma.calendarOccurrence.findUnique({
-    where: { eventId_date: { eventId: id, date } },
-  });
+  // Field definitions come from the event (not the occurrence), so the form
+  // lists all fields even before this date has any saved values. Members are
+  // all users (including inactive) so a previously-picked person still has an
+  // option. Existing values (if the occurrence exists) pre-fill the inputs.
+  const [occurrence, fields, members] = await Promise.all([
+    prisma.calendarOccurrence.findUnique({
+      where: { eventId_date: { eventId: id, date } },
+      include: {
+        fieldValues: {
+          include: { file: { select: { id: true, name: true, size: true } } },
+        },
+      },
+    }),
+    prisma.eventField.findMany({
+      where: { eventId: id },
+      orderBy: { position: "asc" },
+      select: { id: true, label: true, type: true },
+    }),
+    prisma.user.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+
+  const initialValues = Object.fromEntries(
+    (occurrence?.fieldValues ?? []).map((v) => [
+      v.fieldId,
+      { text: v.text, personId: v.personId, file: v.file },
+    ]),
+  );
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -62,6 +89,9 @@ export default async function EditOccurrencePage({
         eventId={id}
         date={date}
         initialContent={occurrence?.contentJson ?? null}
+        fields={fields}
+        members={members}
+        initialValues={initialValues}
       />
     </div>
   );

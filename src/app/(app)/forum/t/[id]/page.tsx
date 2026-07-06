@@ -19,6 +19,11 @@ import {
   formatMinutes,
   type RecurrenceRule,
 } from "@/modules/calendar/recurrence";
+import {
+  StructuredFields,
+  toRenderFields,
+  type RenderField,
+} from "@/modules/calendar/structured-fields";
 import { PostControls } from "@/modules/forum/post-controls";
 import { ReplyForm } from "@/modules/forum/reply-form";
 import { ThreadControls } from "@/modules/forum/thread-controls";
@@ -50,8 +55,14 @@ export default async function ThreadPage({
       },
       occurrence: {
         include: {
-          event: true,
+          event: { include: { fields: { orderBy: { position: "asc" } } } },
           folder: { include: { files: { orderBy: { createdAt: "asc" } } } },
+          fieldValues: {
+            include: {
+              person: { select: { name: true } },
+              file: { select: { id: true, name: true } },
+            },
+          },
         },
       },
     },
@@ -84,6 +95,7 @@ export default async function ThreadPage({
     files: { id: string; name: string; size: number }[];
     folderId: string | null;
     calendarHref: string;
+    structuredFields: RenderField[];
   } | null = null;
 
   if (event) {
@@ -108,6 +120,8 @@ export default async function ThreadPage({
       files: event.folder?.files ?? [],
       folderId: event.folder?.id ?? null,
       calendarHref: `/calendar/${event.id}`,
+      // Structured fields are per recurring occurrence, not per series/ad hoc.
+      structuredFields: [],
     };
   } else if (occ) {
     header = {
@@ -118,6 +132,7 @@ export default async function ThreadPage({
       files: occ.folder?.files ?? [],
       folderId: occ.folder?.id ?? null,
       calendarHref: `/calendar/${occ.event.id}?d=${occ.date}`,
+      structuredFields: toRenderFields(occ.event.fields, occ.fieldValues),
     };
   }
 
@@ -177,6 +192,11 @@ export default async function ThreadPage({
               className="event-content mt-3"
               dangerouslySetInnerHTML={{ __html: header.contentHtml }}
             />
+          )}
+          {header.structuredFields.length > 0 && (
+            <div className="mt-4">
+              <StructuredFields fields={header.structuredFields} />
+            </div>
           )}
           {header.files.length > 0 && header.folderId && (
             <div className="mt-4">

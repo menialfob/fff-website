@@ -5,23 +5,38 @@ import { useState, useTransition } from "react";
 import { useI18n } from "@/lib/i18n/client";
 import { btnPrimary, btnSecondary, errorText } from "@/components/ui";
 import { ContentAndAttachments } from "@/modules/content/content-fields";
+import {
+  OccurrenceFieldsInputs,
+  type FieldDef,
+  type FieldInitialValue,
+} from "./occurrence-fields-inputs";
 import { saveOccurrenceContent } from "./actions";
 
-/** Edits the description + attachments of one occurrence date. */
+type Member = { id: string; name: string };
+
+/** Edits the structured fields, description + attachments of one occurrence. */
 export function OccurrenceContentForm({
   eventId,
   date,
   initialContent,
+  fields,
+  members,
+  initialValues,
 }: {
   eventId: string;
   date: string;
   initialContent: string | null;
+  fields: FieldDef[];
+  members: Member[];
+  initialValues: Record<string, FieldInitialValue>;
 }) {
   const { t } = useI18n();
   const router = useRouter();
   const [error, setError] = useState<string>();
-  const [uploading, setUploading] = useState(false);
+  const [contentUploading, setContentUploading] = useState(false);
+  const [fieldsUploading, setFieldsUploading] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const uploading = contentUploading || fieldsUploading;
 
   return (
     <form
@@ -34,9 +49,15 @@ export function OccurrenceContentForm({
       }
       className="grid gap-5"
     >
+      <OccurrenceFieldsInputs
+        fields={fields}
+        members={members}
+        initialValues={initialValues}
+        onUploadingChange={setFieldsUploading}
+      />
       <ContentAndAttachments
         initialContent={initialContent}
-        onUploadingChange={setUploading}
+        onUploadingChange={setContentUploading}
       />
       {error && (
         <p className={errorText} role="alert">

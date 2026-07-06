@@ -8,6 +8,10 @@ import { formatSize } from "@/lib/format";
 import { btnSecondary, cardPad, PageTitle } from "@/components/ui";
 import { ArrowLeftIcon, FolderIcon, PencilIcon } from "@/components/icons";
 import { EventControls } from "@/modules/calendar/event-controls";
+import {
+  StructuredFields,
+  toRenderFields,
+} from "@/modules/calendar/structured-fields";
 import { renderContent } from "@/modules/content/render";
 import {
   describeRule,
@@ -38,6 +42,7 @@ export default async function EventPage({
       folder: {
         include: { files: { orderBy: { createdAt: "asc" } } },
       },
+      fields: { orderBy: { position: "asc" } },
     },
   });
   if (!event) notFound();
@@ -74,6 +79,12 @@ export default async function EventPage({
           include: {
             folder: {
               include: { files: { orderBy: { createdAt: "asc" } } },
+            },
+            fieldValues: {
+              include: {
+                person: { select: { name: true } },
+                file: { select: { id: true, name: true } },
+              },
             },
           },
         })
@@ -115,6 +126,12 @@ export default async function EventPage({
   );
   const assetFolder = rule ? (occurrence?.folder ?? null) : event.folder;
   const attachments = assetFolder?.files ?? [];
+
+  // Structured fields belong to the focused recurring occurrence only.
+  const structuredFields =
+    rule && focusDate
+      ? toRenderFields(event.fields, occurrence?.fieldValues ?? [])
+      : [];
 
   return (
     <div>
@@ -235,6 +252,15 @@ export default async function EventPage({
             {t.calendar.noOccurrenceContent}
           </p>
         )
+      )}
+
+      {structuredFields.length > 0 && (
+        <section className={`${cardPad} mb-6`}>
+          <h2 className="mb-3 text-lg font-semibold text-white">
+            {t.calendar.fields.sectionTitle}
+          </h2>
+          <StructuredFields fields={structuredFields} />
+        </section>
       )}
 
       {attachments.length > 0 && assetFolder && (

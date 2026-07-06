@@ -12,6 +12,10 @@ import {
   label,
 } from "@/components/ui";
 import { ContentAndAttachments } from "@/modules/content/content-fields";
+import {
+  EventFieldsEditor,
+  type EventFieldValue,
+} from "./event-fields-editor";
 import { monthName, weekdayName } from "./recurrence";
 import { createEvent, updateEvent } from "./actions";
 
@@ -34,6 +38,8 @@ export type EventFormValues = {
   month: number | null;
   dayOfMonth: number | null;
   contentJson: string | null;
+  /** RECURRING only — the series' structured field definitions. */
+  fields?: EventFieldValue[];
 };
 
 function minutesToTime(minutes: number | null): string {
@@ -348,7 +354,10 @@ export function EventForm({
           onUploadingChange={setUploading}
         />
       ) : (
-        <p className="text-sm text-zinc-500">{t.calendar.form.perDateHint}</p>
+        <>
+          <p className="text-sm text-zinc-500">{t.calendar.form.perDateHint}</p>
+          <EventFieldsEditor initialFields={event?.fields} />
+        </>
       )}
 
       {error && (
