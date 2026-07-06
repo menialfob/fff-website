@@ -380,6 +380,25 @@ export const en: typeof da = {
       androidSteps:
         "1. Copy the link.\n2. Open calendar.google.com in a browser (easiest on a computer).\n3. Next to \u201cOther calendars\u201d tap + \u2192 From URL, and paste the link.\n4. Tap Add calendar \u2014 it then syncs to Google Calendar on your phone.",
     },
+    notifications: {
+      title: "Notifications",
+      hint: "Get notified on your phone when something important happens \u2014 new messages and events. Works best once you've added FFF to your home screen.",
+      enable: "Turn on notifications",
+      enabledOn: "Notifications are on for this device.",
+      disable: "Turn off on this device",
+      test: "Send a test notification",
+      sending: "Sending\u2026",
+      sent: "Sent! Check your notifications.",
+      blocked:
+        "Notifications are blocked. Enable them for FFF in your browser settings to continue.",
+      unsupported: "This browser doesn't support notifications.",
+      enableFailed: "Couldn't turn on notifications \u2014 please try again.",
+      iosTitle: "Add FFF to your home screen first",
+      iosSteps:
+        "1. Tap the Share button at the bottom of Safari.\n2. Choose \u201cAdd to Home Screen\u201d.\n3. Open FFF from your home screen and come back here to turn on notifications.",
+      testTitle: "FFF",
+      testBody: "It works! You'll now get notifications. \ud83c\udf89",
+    },
   },
   klub100: {
     intro:

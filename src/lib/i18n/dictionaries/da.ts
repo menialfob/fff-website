@@ -383,6 +383,25 @@ export const da = {
       androidSteps:
         "1. Kopiér linket.\n2. Åbn calendar.google.com i en browser (fungerer bedst på computer).\n3. Ved “Andre kalendere” tryk + → Fra webadresse, og sæt linket ind.\n4. Tryk Tilføj kalender — den synkroniserer derefter til Google Kalender på din telefon.",
     },
+    notifications: {
+      title: "Notifikationer",
+      hint: "Få besked på din telefon når der sker noget vigtigt — nye beskeder og begivenheder. Virker bedst når du har lagt FFF på din hjemmeskærm.",
+      enable: "Slå notifikationer til",
+      enabledOn: "Notifikationer er slået til på denne enhed.",
+      disable: "Slå fra på denne enhed",
+      test: "Send en testnotifikation",
+      sending: "Sender…",
+      sent: "Sendt! Tjek din notifikationsbakke.",
+      blocked:
+        "Notifikationer er blokeret. Slå dem til for FFF i browserens indstillinger for at fortsætte.",
+      unsupported: "Denne browser understøtter ikke notifikationer.",
+      enableFailed: "Kunne ikke slå notifikationer til — prøv igen.",
+      iosTitle: "Læg FFF på din hjemmeskærm først",
+      iosSteps:
+        "1. Tryk på Del-knappen nederst i Safari.\n2. Vælg “Føj til hjemmeskærm”.\n3. Åbn FFF fra hjemmeskærmen og kom tilbage hertil for at slå notifikationer til.",
+      testTitle: "FFF",
+      testBody: "Det virker! Du får nu notifikationer. 🎉",
+    },
   },
   klub100: {
     intro:

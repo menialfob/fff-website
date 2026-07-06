@@ -5,6 +5,7 @@ import { getDict } from "@/lib/i18n/server";
 import { DesktopNav, MobileTabBar, type NavItem } from "@/components/nav";
 import { Brand } from "@/components/ui";
 import { LogOutIcon } from "@/components/icons";
+import { ServiceWorkerRegister } from "@/modules/notifications/service-worker-register";
 
 export default async function AppLayout({
   children,
@@ -24,6 +25,7 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen">
+      <ServiceWorkerRegister />
       <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-canvas/80 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
         <nav className="mx-auto flex h-16 max-w-5xl items-center gap-4 px-4">
           <Link href="/" className="shrink-0">
