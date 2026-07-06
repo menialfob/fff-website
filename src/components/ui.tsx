@@ -106,16 +106,26 @@ export function BackgroundGlow() {
 export function PageTitle({
   children,
   sub,
+  actions,
 }: {
   children: React.ReactNode;
   sub?: React.ReactNode;
+  /** Controls shown to the right of the title (e.g. edit/delete). Kept inside
+   *  this block so the heading's bottom margin always sits below them, even
+   *  when they wrap under the title on narrow screens. */
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="mb-6">
-      <h1 className="text-3xl font-bold tracking-tight text-white">
-        {children}
-      </h1>
-      <div className="mt-2 h-1 w-12 rounded-full bg-gradient-to-r from-amber-400 to-orange-500" />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-white">
+            {children}
+          </h1>
+          <div className="mt-2 h-1 w-12 rounded-full bg-gradient-to-r from-amber-400 to-orange-500" />
+        </div>
+        {actions}
+      </div>
       {sub && <p className="mt-3 max-w-2xl text-zinc-400">{sub}</p>}
     </div>
   );
