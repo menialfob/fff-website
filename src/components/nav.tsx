@@ -78,7 +78,7 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
   const { t } = useI18n();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-canvas/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-canvas pb-[env(safe-area-inset-bottom)] md:hidden">
       <div className="mx-auto flex max-w-md">
         {items.map((item) => {
           const active = isActive(pathname, item.href);
