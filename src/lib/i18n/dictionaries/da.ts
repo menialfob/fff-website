@@ -52,7 +52,7 @@ export const da = {
       description: "Byg 100-sanges festmixet sammen.",
     },
     members: {
-      label: "Medlemmer",
+      label: "Fædre",
       description: "Alle i gruppen.",
     },
     admin: {
