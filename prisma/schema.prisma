@@ -59,6 +59,8 @@ model User {
   spotifyAccount  SpotifyAccount?
   // Person-type structured field values pointing at this member.
   occurrenceFieldValues OccurrenceFieldValue[]
+  // The member's attendance registrations on specific event instances.
+  attendances     EventAttendance[]
 }
 
 model UserRole {
@@ -195,6 +197,9 @@ model CalendarEvent {
   createdBy       User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById     String?
   occurrences     CalendarOccurrence[]
+  // Per-instance attendance registrations (keyed by instance date, not by
+  // occurrence row — see EventAttendance).
+  attendances     EventAttendance[]
   // RECURRING only — the structured field definitions shared by the series.
   // Each occurrence date fills in values (OccurrenceFieldValue).
   fields          EventField[]
@@ -206,6 +211,35 @@ model CalendarEvent {
   updatedAt       DateTime          @updatedAt
 
   @@index([kind, date])
+}
+
+// A member's RSVP to one specific instance of an event. GOING / MAYBE /
+// NOT_GOING — Danish "Deltager / Deltager måske / Deltager ikke".
+enum AttendanceStatus {
+  GOING
+  MAYBE
+  NOT_GOING
+}
+
+// One member's attendance registration for a single event instance. The
+// instance is identified by its wall-clock date ("YYYY-MM-DD"), not by a
+// CalendarOccurrence row: recurring events are attended per occurrence date
+// (validated against the recurrence rule), while ad hoc events have a single
+// instance whose date equals the event's own `date`. Keying on the date
+// string means registering never has to lazily materialize an occurrence row.
+model EventAttendance {
+  id        String           @id @default(cuid())
+  event     CalendarEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId   String
+  date      String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  status    AttendanceStatus
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([eventId, date, userId])
+  @@index([eventId, date])
 }
 
 // Per-date content of a RECURRING event. The series shares rule/title/time,
