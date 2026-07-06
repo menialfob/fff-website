@@ -176,7 +176,12 @@ export function ChannelView({
         : "";
 
   return (
-    <div className="flex h-[calc(100dvh-10rem)] flex-col md:h-[calc(100dvh-9rem)]">
+    // Fill the space between the sticky app header (h-16 + safe-area) and the
+    // fixed mobile tab bar. Cancel the shared <main> bottom padding (-mb-28) so
+    // the column reaches the tab bar without adding page scroll, and reserve
+    // the tab bar's height as bottom padding so the composer stays above it.
+    // The message list (min-h-0 + overflow) is the only thing that scrolls.
+    <div className="-mb-28 flex h-[calc(100dvh-5.5rem-env(safe-area-inset-top))] flex-col pb-[calc(3.75rem+env(safe-area-inset-bottom))] md:-mb-12 md:h-[calc(100dvh-6rem)] md:pb-4">
       <header className="flex items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
         <h1 className="text-lg font-semibold text-white">{channelName}</h1>
         <span
@@ -188,7 +193,7 @@ export function ChannelView({
         </span>
       </header>
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto py-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">
         {messages.length === 0 ? (
           <p className="py-8 text-center text-sm text-zinc-500">
             {t.chat.empty}
