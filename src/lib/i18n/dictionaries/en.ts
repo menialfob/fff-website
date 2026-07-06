@@ -69,6 +69,14 @@ export const en: typeof da = {
   dashboard: {
     greeting: "Hi {name}",
     welcomeBack: "Welcome back to the clubhouse. What's the plan?",
+    recentActivity: {
+      title: "New since last time",
+      badge: "{count} new",
+      newFile: "New file: {name}",
+      newEvent: "New event: {title}",
+      newThread: "New thread: {title}",
+      newReply: "New reply in {title}",
+    },
   },
   files: {
     uploadTitle: "Upload a file",
@@ -261,6 +269,13 @@ export const en: typeof da = {
     statsCheers: "{count} cheers",
     staleSessionHint:
       "Role and deactivation changes take effect the next time the user logs in.",
+    sectionSeen: {
+      title: "Last seen",
+      forum: "Forum",
+      calendar: "Events",
+      files: "Files",
+      never: "never",
+    },
     log: {
       title: "Activity log",
       empty: "No events yet.",
@@ -296,6 +311,14 @@ export const en: typeof da = {
         "calendar.delete": "Deleted the event {title}",
         "calendar.occurrence.update": "Edited {title} on {date}",
         "calendar.token.regenerate": "Regenerated their calendar link",
+        "forum.category.create": "Created the forum category {name}",
+        "forum.category.rename": "Renamed a forum category to {name}",
+        "forum.category.delete": "Deleted the forum category {name}",
+        "forum.thread.create": "Created the thread {title}",
+        "forum.reply.create": "Replied in {title}",
+        "forum.thread.delete": "Deleted the thread {title}",
+        "forum.post.update": "Edited a post",
+        "forum.post.delete": "Deleted a post",
       },
     },
   },

@@ -154,17 +154,26 @@ export type UserRowStats = {
   cheers: number;
 };
 
+/** Pre-formatted last-seen date-time per section, or null if never opened. */
+export type UserRowLastSeen = {
+  forum: string | null;
+  calendar: string | null;
+  files: string | null;
+};
+
 export function UserRow({
   user,
   stats,
   isSelf,
   lastLogin,
+  lastSeen,
 }: {
   user: UserRowData;
   stats: UserRowStats;
   isSelf: boolean;
   /** Pre-formatted date-time string, or null if the user never logged in. */
   lastLogin: string | null;
+  lastSeen: UserRowLastSeen;
 }) {
   const { t, fmt } = useI18n();
   const [open, setOpen] = useState(false);
@@ -235,6 +244,15 @@ export function UserRow({
             {fmt(t.admin.statsSongs, { count: stats.songs })}
             {" · "}
             {fmt(t.admin.statsCheers, { count: stats.cheers })}
+          </p>
+
+          <p className="text-sm text-zinc-500">
+            {t.admin.sectionSeen.title}: {t.admin.sectionSeen.forum}{" "}
+            {lastSeen.forum ?? t.admin.sectionSeen.never} ·{" "}
+            {t.admin.sectionSeen.calendar}{" "}
+            {lastSeen.calendar ?? t.admin.sectionSeen.never} ·{" "}
+            {t.admin.sectionSeen.files}{" "}
+            {lastSeen.files ?? t.admin.sectionSeen.never}
           </p>
 
           <form

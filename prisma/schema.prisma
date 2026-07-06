@@ -45,6 +45,7 @@ model User {
   updatedAt    DateTime   @updatedAt
   extraRoles   UserRole[]
   auditLogs    AuditLog[]
+  sectionViews SectionView[]
   files        FileItem[]
   folders      Folder[]
   calendarEvents CalendarEvent[]
@@ -86,6 +87,19 @@ model AuditLog {
   createdAt  DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// Per-user "last visited" timestamp for a dashboard section ("forum" |
+// "calendar" | "files"), upserted when the member opens that section. The
+// home page compares it against content timestamps to show unread badges and
+// a recent-activity list; the admin Users tab shows it as a last-seen line.
+model SectionView {
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+  section String
+  seenAt  DateTime @default(now())
+
+  @@id([userId, section])
 }
 
 // Per-user Spotify connection (Authorization Code + PKCE). Only needed to

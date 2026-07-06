@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   title: "FFF",
   description: "Privat side for vennegruppen",
   robots: { index: false, follow: false },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "FFF", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

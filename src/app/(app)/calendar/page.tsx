@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { btnSecondary, PageTitle } from "@/components/ui";
+import { MarkSeen } from "@/components/mark-seen";
 import { MonthView, type MonthOccurrence } from "@/modules/calendar/month-view";
 import type { RecurrenceRule } from "@/modules/calendar/recurrence";
 import {
@@ -99,6 +100,7 @@ export default async function CalendarPage({
 
   return (
     <div>
+      <MarkSeen section="calendar" />
       <PageTitle>{t.modules.calendar.label}</PageTitle>
 
       <MonthView

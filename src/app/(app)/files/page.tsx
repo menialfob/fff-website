@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { fmt } from "@/lib/i18n";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { cardHover, cardPad, emptyBox, PageTitle } from "@/components/ui";
+import { MarkSeen } from "@/components/mark-seen";
 import { FolderIcon } from "@/components/icons";
 import { CreateFolderForm, UploadForm } from "@/modules/files/file-controls";
 import { FileList } from "@/modules/files/file-list";
@@ -25,6 +26,7 @@ export default async function FilesPage() {
 
   return (
     <div>
+      <MarkSeen section="files" />
       <PageTitle>{t.modules.files.label}</PageTitle>
       <section className={`${cardPad} mb-8`}>
         <h2 className="mb-3 text-lg font-semibold text-white">
