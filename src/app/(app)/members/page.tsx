@@ -68,11 +68,11 @@ export default async function MembersPage() {
           <li key={member.id} className={`${card} p-5`}>
             <div className="mb-2 flex items-center gap-3">
               <span
-                className={`flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br ${gradientFor(member.id)} font-bold text-white shadow-lg`}
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${gradientFor(member.id)} font-bold text-white shadow-lg`}
               >
                 {member.name.charAt(0).toUpperCase()}
               </span>
-              <div>
+              <div className="min-w-0">
                 <h2 className="flex flex-wrap items-center gap-2 font-semibold text-white">
                   {member.name}
                   <MemberBadge
