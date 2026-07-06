@@ -604,6 +604,12 @@ export const en: typeof da = {
     pollVotes: "{count} votes",
     pollMultiple: "multiple choice",
     pollClosed: "closed",
+    eventGoing: "{count} going",
+    eventSignUp: "Sign up",
+    shareToChat: "Share to chat",
+    shareNote: "Add a message (optional)",
+    shareSend: "Share",
+    shared: "Shared to chat ✓",
   },
   errors: {
     invalidInput: "Invalid input.",

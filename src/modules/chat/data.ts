@@ -11,6 +11,7 @@ import type {
 export const messageInclude = {
   author: { select: { id: true, name: true } },
   reactions: { select: { emoji: true, userId: true } },
+  event: { select: { id: true, title: true } },
   poll: {
     include: {
       options: {
@@ -68,6 +69,8 @@ type RawMessage = {
   author: { id: string; name: string } | null;
   reactions: RawReaction[];
   poll: RawPoll | null;
+  event: { id: string; title: string } | null;
+  eventDate: string | null;
 };
 
 export function buildMessageDTO(msg: RawMessage): MessageDTO {
@@ -79,7 +82,31 @@ export function buildMessageDTO(msg: RawMessage): MessageDTO {
     author: msg.author ? { id: msg.author.id, name: msg.author.name } : null,
     reactions: summarizeReactions(msg.reactions),
     poll: msg.poll ? buildPollDTO(msg.poll) : null,
+    // goingCount filled in by enrichEventCounts (needs a query).
+    event:
+      msg.event && msg.eventDate
+        ? {
+            eventId: msg.event.id,
+            date: msg.eventDate,
+            title: msg.event.title,
+            goingCount: 0,
+          }
+        : null,
   };
+}
+
+/** Fill in live "going" counts for any event-card messages (batched). */
+export async function enrichEventCounts(dtos: MessageDTO[]): Promise<MessageDTO[]> {
+  await Promise.all(
+    dtos
+      .filter((d) => d.event)
+      .map(async (d) => {
+        d.event!.goingCount = await prisma.eventAttendance.count({
+          where: { eventId: d.event!.eventId, date: d.event!.date, status: "GOING" },
+        });
+      }),
+  );
+  return dtos;
 }
 
 type Viewer = { role: "ADMIN" | "MEMBER"; extraRoles?: ExtraRole[] };
@@ -108,7 +135,7 @@ export async function channelMessages(channelId: string, take = 50) {
     take,
     include: messageInclude,
   });
-  return rows.reverse().map(buildMessageDTO);
+  return enrichEventCounts(rows.reverse().map(buildMessageDTO));
 }
 
 /** Active members who can access a channel (for presence name lookup). */

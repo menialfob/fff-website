@@ -18,6 +18,8 @@ import {
   toRenderFields,
 } from "@/modules/calendar/structured-fields";
 import { renderContent } from "@/modules/content/render";
+import { channelsForViewer } from "@/modules/chat/data";
+import { ShareToChat } from "@/modules/chat/share-to-chat";
 import {
   describeRule,
   formatISODate,
@@ -161,6 +163,17 @@ export default async function EventPage({
     }
   }
 
+  // Channels the viewer can share this event into (for the "Share to chat"
+  // action). Only meaningful when there's a concrete instance date to share.
+  const shareChannels = attendanceDate
+    ? (
+        await channelsForViewer({
+          role: session.user.role,
+          extraRoles: session.user.extraRoles,
+        })
+      ).map((c) => ({ id: c.id, name: c.name }))
+    : [];
+
   return (
     <div>
       <Link
@@ -286,6 +299,13 @@ export default async function EventPage({
             myStatus={myAttendance}
             groups={attendanceGroups}
           />
+          <div className="mt-4 border-t border-white/[0.06] pt-4">
+            <ShareToChat
+              eventId={event.id}
+              date={attendanceDate}
+              channels={shareChannels}
+            />
+          </div>
         </section>
       )}
 

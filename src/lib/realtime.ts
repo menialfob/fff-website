@@ -34,6 +34,13 @@ export type PollDTO = {
   tallies: PollTally[];
 };
 
+export type EventCardDTO = {
+  eventId: string;
+  date: string;
+  title: string;
+  goingCount: number;
+};
+
 export type MessageDTO = {
   id: string;
   channelId: string;
@@ -42,6 +49,7 @@ export type MessageDTO = {
   author: { id: string; name: string } | null;
   reactions: ReactionSummary[];
   poll: PollDTO | null;
+  event: EventCardDTO | null;
 };
 
 export type RealtimeEvent =

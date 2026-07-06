@@ -168,6 +168,14 @@ model ChannelMessage {
   body      String
   createdAt DateTime @default(now())
 
+  // Optional shared calendar event: rendered as an event card with a Sign-up
+  // deep link. Keyed by event + date (attendance is per eventId+date, and an
+  // occurrence row may not exist yet). SetNull so the message survives if the
+  // event is deleted; `eventDate` is the "YYYY-MM-DD" instance.
+  event     CalendarEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  eventId   String?
+  eventDate String?
+
   reactions MessageReaction[]
   poll      Poll?
 
@@ -343,6 +351,8 @@ model CalendarEvent {
   // recurring events get one). SetNull on the thread side keeps the
   // discussion as an archive after the event is deleted.
   forumThread     ForumThread?
+  // Chat messages that shared this event as an event card.
+  channelMessages ChannelMessage[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 

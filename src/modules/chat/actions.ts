@@ -10,6 +10,7 @@ import {
   buildMessageDTO,
   buildPollDTO,
   canAccessChannel,
+  enrichEventCounts,
   messageInclude,
   pushRecipients,
   summarizeReactions,
@@ -175,6 +176,60 @@ export async function createPoll(
     body: `📊 ${q}`.slice(0, 160),
     url: `/chat/${channel.key}`,
     tag: `chat-${channel.key}`,
+  });
+
+  return { ok: true };
+}
+
+/**
+ * Share a calendar event (a specific instance date) into a channel as an event
+ * card, and push everyone who isn't currently connected a notification that
+ * deep-links straight to the event's signup page. This is the flow that beats
+ * Messenger: recipients are already authenticated in the PWA, so the tap lands
+ * on signup with full context instead of a dead private link.
+ */
+export async function shareEventToChat(
+  eventId: string,
+  date: string,
+  channelId: string,
+  note?: string,
+): Promise<ActionResult> {
+  const t = await getDict();
+  const session = await requireSession();
+  const gate = await channelGate(channelId, session);
+  if (gate.error) return { error: gate.error };
+  const channel = gate.channel!;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: t.errors.invalidInput };
+  const event = await prisma.calendarEvent.findUnique({
+    where: { id: eventId },
+    select: { id: true, title: true },
+  });
+  if (!event) return { error: t.errors.eventNotFound };
+
+  const created = await prisma.channelMessage.create({
+    data: {
+      channelId,
+      authorId: session.user.id,
+      body: (note ?? "").trim().slice(0, MAX_BODY),
+      eventId,
+      eventDate: date,
+    },
+    include: messageInclude,
+  });
+  const [dto] = await enrichEventCounts([buildMessageDTO(created)]);
+  emitEvent({ type: "message", channelId, message: dto });
+
+  const recipients = await pushRecipients(
+    channel,
+    session.user.id,
+    onlineUserIds(),
+  );
+  await sendPushToUsers(recipients, {
+    title: channel.name,
+    body: `📅 ${event.title}`.slice(0, 160),
+    url: `/calendar/${eventId}?d=${date}`,
+    tag: `event-${eventId}-${date}`,
   });
 
   return { ok: true };

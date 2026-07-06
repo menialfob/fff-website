@@ -1,9 +1,40 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import Link from "next/link";
 import { useI18n } from "@/lib/i18n/client";
-import type { MessageDTO } from "@/lib/realtime";
+import type { EventCardDTO, MessageDTO } from "@/lib/realtime";
 import { PollCard } from "./poll-card";
+
+function EventCard({ event, locale }: { event: EventCardDTO; locale: string }) {
+  const { t } = useI18n();
+  const dateLabel = new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(`${event.date}T00:00:00`));
+
+  return (
+    <div className="mt-1 w-full max-w-sm rounded-xl border border-lime-400/25 bg-lime-400/[0.04] p-3">
+      <p className="flex items-center gap-1.5 text-sm font-semibold text-white">
+        <span aria-hidden>📅</span>
+        {event.title}
+      </p>
+      <p className="mt-0.5 text-sm capitalize text-zinc-300">{dateLabel}</p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="text-xs text-zinc-400">
+          {t.chat.eventGoing.replace("{count}", String(event.goingCount))}
+        </span>
+        <Link
+          href={`/calendar/${event.eventId}?d=${event.date}`}
+          className="rounded-full bg-lime-500 px-3 py-1 text-xs font-semibold text-black transition hover:bg-lime-400"
+        >
+          {t.chat.eventSignUp}
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🔥", "🙏"];
 
@@ -70,6 +101,10 @@ export function MessageItem({
           <p className="whitespace-pre-wrap break-words text-sm text-zinc-200">
             {renderBody(message.body)}
           </p>
+        )}
+
+        {message.event && (
+          <EventCard event={message.event} locale={locale} />
         )}
 
         {message.poll && (

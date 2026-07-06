@@ -608,6 +608,12 @@ export const da = {
     pollVotes: "{count} stemmer",
     pollMultiple: "flere valg",
     pollClosed: "lukket",
+    eventGoing: "{count} kommer",
+    eventSignUp: "Tilmeld",
+    shareToChat: "Del i chat",
+    shareNote: "Tilføj en besked (valgfrit)",
+    shareSend: "Del",
+    shared: "Delt i chatten ✓",
   },
   errors: {
     invalidInput: "Ugyldigt input.",
