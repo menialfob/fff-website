@@ -126,10 +126,11 @@ export default async function EventPage({
         {t.modules.calendar.label}
       </Link>
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageTitle>{event.title}</PageTitle>
-        {canManage && <EventControls eventId={event.id} />}
-      </div>
+      <PageTitle
+        actions={canManage && <EventControls eventId={event.id} />}
+      >
+        {event.title}
+      </PageTitle>
 
       <section className={`${cardPad} mb-6`}>
         <div className="flex flex-wrap items-center gap-2">

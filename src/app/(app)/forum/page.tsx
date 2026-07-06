@@ -38,12 +38,12 @@ export default async function ForumPage() {
   return (
     <div>
       <MarkSeen section="forum" />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageTitle sub={t.modules.forum.description}>
-          {t.modules.forum.label}
-        </PageTitle>
-        {isAdmin && <CreateCategoryForm />}
-      </div>
+      <PageTitle
+        sub={t.modules.forum.description}
+        actions={isAdmin && <CreateCategoryForm />}
+      >
+        {t.modules.forum.label}
+      </PageTitle>
 
       {categories.length === 0 ? (
         <p className={emptyBox}>{t.forum.noCategories}</p>

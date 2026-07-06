@@ -34,7 +34,7 @@ export function FileList({
           >
             <a
               href={`/api/files/${file.id}`}
-              className="font-medium text-zinc-100 hover:text-sky-300 hover:underline"
+              className="min-w-0 break-words font-medium text-zinc-100 hover:text-sky-300 hover:underline"
             >
               {file.name}
             </a>

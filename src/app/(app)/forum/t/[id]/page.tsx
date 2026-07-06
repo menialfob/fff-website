@@ -133,18 +133,21 @@ export default async function ThreadPage({
           : thread.category.name}
       </Link>
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageTitle>{thread.title}</PageTitle>
-        {(canModerate || canDelete) && (
-          <ThreadControls
-            threadId={thread.id}
-            pinned={thread.pinned}
-            locked={thread.locked}
-            canModerate={canModerate}
-            canDelete={canDelete}
-          />
-        )}
-      </div>
+      <PageTitle
+        actions={
+          (canModerate || canDelete) && (
+            <ThreadControls
+              threadId={thread.id}
+              pinned={thread.pinned}
+              locked={thread.locked}
+              canModerate={canModerate}
+              canDelete={canDelete}
+            />
+          )
+        }
+      >
+        {thread.title}
+      </PageTitle>
 
       {/* Live event/occurrence header for event-linked threads */}
       {header && (
