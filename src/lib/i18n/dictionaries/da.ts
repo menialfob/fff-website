@@ -71,6 +71,14 @@ export const da = {
   dashboard: {
     greeting: "Hej {name}",
     welcomeBack: "Velkommen tilbage i klubhuset. Hvad skal der ske?",
+    recentActivity: {
+      title: "Nyt siden sidst",
+      badge: "{count} nye",
+      newFile: "Ny fil: {name}",
+      newEvent: "Ny begivenhed: {title}",
+      newThread: "Ny tråd: {title}",
+      newReply: "Nyt svar i {title}",
+    },
   },
   files: {
     uploadTitle: "Upload en fil",
@@ -264,6 +272,13 @@ export const da = {
     statsCheers: "{count} skåle",
     staleSessionHint:
       "Ændringer i roller og deaktivering træder først i kraft, næste gang brugeren logger ind.",
+    sectionSeen: {
+      title: "Sidst set",
+      forum: "Forum",
+      calendar: "Begivenheder",
+      files: "Filer",
+      never: "aldrig",
+    },
     log: {
       title: "Aktivitetslog",
       empty: "Ingen hændelser endnu.",
@@ -299,6 +314,14 @@ export const da = {
         "calendar.delete": "Slettede begivenheden {title}",
         "calendar.occurrence.update": "Redigerede {title} den {date}",
         "calendar.token.regenerate": "Fornyede sit kalender-link",
+        "forum.category.create": "Oprettede forumkategorien {name}",
+        "forum.category.rename": "Omdøbte en forumkategori til {name}",
+        "forum.category.delete": "Slettede forumkategorien {name}",
+        "forum.thread.create": "Oprettede tråden {title}",
+        "forum.reply.create": "Svarede i {title}",
+        "forum.thread.delete": "Slettede tråden {title}",
+        "forum.post.update": "Redigerede et indlæg",
+        "forum.post.delete": "Slettede et indlæg",
       },
     },
   },

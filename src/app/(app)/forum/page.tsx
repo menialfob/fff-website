@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { fmt, formatDate } from "@/lib/i18n";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { cardPad, emptyBox, PageTitle } from "@/components/ui";
+import { MarkSeen } from "@/components/mark-seen";
 import { CalendarIcon, MessageIcon } from "@/components/icons";
 import {
   CategoryAdminControls,
@@ -36,6 +37,7 @@ export default async function ForumPage() {
 
   return (
     <div>
+      <MarkSeen section="forum" />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageTitle sub={t.modules.forum.description}>
           {t.modules.forum.label}

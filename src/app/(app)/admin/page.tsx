@@ -12,19 +12,23 @@ export default async function AdminPage() {
   if (session?.user?.role !== "ADMIN") redirect("/");
   const [t, locale] = await Promise.all([getDict(), getLocale()]);
 
-  const [users, fileStats, songStats, cheersStats] = await Promise.all([
-    prisma.user.findMany({
-      orderBy: { name: "asc" },
-      include: { extraRoles: true },
-    }),
-    prisma.fileItem.groupBy({
-      by: ["uploadedById"],
-      _count: true,
-      _sum: { size: true },
-    }),
-    prisma.klub100Song.groupBy({ by: ["suggestedById"], _count: true }),
-    prisma.klub100Cheers.groupBy({ by: ["recordedById"], _count: true }),
-  ]);
+  const [users, fileStats, songStats, cheersStats, sectionViews] =
+    await Promise.all([
+      prisma.user.findMany({
+        orderBy: { name: "asc" },
+        include: { extraRoles: true },
+      }),
+      prisma.fileItem.groupBy({
+        by: ["uploadedById"],
+        _count: true,
+        _sum: { size: true },
+      }),
+      prisma.klub100Song.groupBy({ by: ["suggestedById"], _count: true }),
+      prisma.klub100Cheers.groupBy({ by: ["recordedById"], _count: true }),
+      prisma.sectionView.findMany({
+        select: { userId: true, section: true, seenAt: true },
+      }),
+    ]);
 
   const files = new Map(
     fileStats.map((s) => [
@@ -34,6 +38,18 @@ export default async function AdminPage() {
   );
   const songs = new Map(songStats.map((s) => [s.suggestedById, s._count]));
   const cheers = new Map(cheersStats.map((s) => [s.recordedById, s._count]));
+
+  // userId → { section → last-seen date }
+  const seenByUser = new Map<string, Record<string, Date>>();
+  for (const v of sectionViews) {
+    const entry = seenByUser.get(v.userId) ?? {};
+    entry[v.section] = v.seenAt;
+    seenByUser.set(v.userId, entry);
+  }
+  const seenDate = (userId: string, section: string) => {
+    const at = seenByUser.get(userId)?.[section];
+    return at ? formatDateTime(at, locale) : null;
+  };
 
   return (
     <div>
@@ -76,6 +92,11 @@ export default async function AdminPage() {
                   ? formatDateTime(user.lastLoginAt, locale)
                   : null
               }
+              lastSeen={{
+                forum: seenDate(user.id, "forum"),
+                calendar: seenDate(user.id, "calendar"),
+                files: seenDate(user.id, "files"),
+              }}
             />
           ))}
         </ul>
