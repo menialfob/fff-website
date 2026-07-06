@@ -18,6 +18,13 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0c0a12",
+  // Required for env(safe-area-inset-*) to resolve to real values. Without it
+  // the insets are 0, so in the standalone Home Screen app (which renders
+  // edge-to-edge under the black-translucent status bar) the bottom tab bar's
+  // safe-area padding does nothing and the icons get clipped by the rounded
+  // corners / home indicator. In the browser Safari already avoids the unsafe
+  // regions, so the existing header/nav padding keeps it looking identical.
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({
