@@ -61,7 +61,7 @@ export const da = {
     },
   },
   login: {
-    tagline: "Vores eget klubhus — events, øl og gode venner.",
+    tagline: "Fælles Formiddags Fædre — vores eget klubhus.",
     email: "E-mail",
     password: "Adgangskode",
     signIn: "Log ind",
