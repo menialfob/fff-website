@@ -73,14 +73,14 @@ export function AttendanceControls({
               disabled={isPending}
               aria-pressed={selected}
               onClick={() => choose(status)}
-              className={`flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center text-sm font-medium transition active:scale-[0.98] disabled:opacity-50 ${
+              className={`flex items-center justify-center gap-1.5 rounded-xl border px-2 py-1.5 text-center text-xs font-medium transition active:scale-[0.98] disabled:opacity-50 ${
                 selected
                   ? SELECTED[status]
                   : "border-white/15 text-zinc-300 hover:bg-white/10"
               }`}
             >
-              <span>{labels[status]}</span>
-              <span className="text-xs tabular-nums text-zinc-400">
+              <span className="whitespace-nowrap">{labels[status]}</span>
+              <span className="text-[11px] tabular-nums text-zinc-400">
                 {count}
               </span>
             </button>
