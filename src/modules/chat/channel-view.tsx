@@ -64,6 +64,9 @@ export function ChannelView({
   // so the composer sits directly above the keyboard with no dead gap.
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  // On touch devices Enter/Return should insert a newline (send via the button,
+  // the usual mobile chat convention); only desktop uses Enter-to-send.
+  const [isTouch, setIsTouch] = useState(false);
 
   const nameById = useCallback(
     (id: string) => members.find((m) => m.id === id)?.name ?? "",
@@ -196,6 +199,10 @@ export function ChannelView({
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [channelId]);
 
+  useEffect(() => {
+    setIsTouch(window.matchMedia("(pointer: coarse)").matches);
+  }, []);
+
   function autosizeComposer() {
     const el = textareaRef.current;
     if (!el) return;
@@ -324,7 +331,9 @@ export function ChannelView({
             value={text}
             onChange={(e) => onType(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              // Desktop: Enter sends, Shift+Enter newlines. Touch: Enter always
+              // inserts a newline (send via the button).
+              if (e.key === "Enter" && !e.shiftKey && !isTouch) {
                 e.preventDefault();
                 send();
               }
