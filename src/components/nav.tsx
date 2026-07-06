@@ -6,6 +6,7 @@ import { useI18n } from "@/lib/i18n/client";
 import { moduleAccents } from "@/components/ui";
 import {
   CalendarIcon,
+  ChatBubblesIcon,
   FolderIcon,
   HomeIcon,
   MessageIcon,
@@ -19,6 +20,7 @@ export type NavItem = {
     | "dashboard"
     | "calendar"
     | "forum"
+    | "chat"
     | "files"
     | "klub100"
     | "members"
@@ -30,6 +32,7 @@ const navIcons: Record<NavItem["id"], (p: { className?: string }) => React.React
   dashboard: HomeIcon,
   calendar: CalendarIcon,
   forum: MessageIcon,
+  chat: ChatBubblesIcon,
   files: FolderIcon,
   klub100: MusicIcon,
   members: UsersIcon,

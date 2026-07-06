@@ -64,6 +64,13 @@ model User {
   // Web Push (browser notification) subscriptions — one per installed
   // browser/device the member enabled notifications on.
   pushSubscriptions PushSubscription[]
+  // Chat: messages authored, reactions given, polls created + voted on, and
+  // per-channel read cursors.
+  channelMessages  ChannelMessage[]
+  messageReactions MessageReaction[]
+  pollsCreated     Poll[]
+  pollVotes        PollVote[]
+  channelReads     ChannelRead[]
 }
 
 model UserRole {
@@ -126,6 +133,113 @@ model PushSubscription {
   lastSeenAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// ── Chat ───────────────────────────────────────────────────────────────────
+// A shared group channel (e.g. "general", "bestyrelse"). Not per-user DMs.
+// `requiredRole` gates a channel to holders of an extra role (plus admins),
+// mirroring the module registry's access model; null means everyone.
+model Channel {
+  id           String    @id @default(cuid())
+  key          String    @unique
+  name         String
+  description  String?
+  order        Int       @default(0)
+  requiredRole ExtraRole?
+  createdAt    DateTime  @default(now())
+
+  messages ChannelMessage[]
+  polls    Poll[]
+  reads    ChannelRead[]
+
+  @@index([order])
+}
+
+// A single chat message. `body` is plain text (chat-style, not rich Tiptap
+// like the forum). A message may instead/also carry a poll (see Poll.message)
+// or, from Phase C, reference a calendar occurrence as an event card. Author is
+// SetNull so messages survive account deletion.
+model ChannelMessage {
+  id        String   @id @default(cuid())
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId String
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId  String?
+  body      String
+  createdAt DateTime @default(now())
+
+  reactions MessageReaction[]
+  poll      Poll?
+
+  @@index([channelId, createdAt])
+}
+
+// One emoji reaction by one user on one message. Toggling adds/removes the row.
+model MessageReaction {
+  id        String         @id @default(cuid())
+  message   ChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String
+  createdAt DateTime       @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+// A quick poll, always attached to a carrier message (Poll.messageId). When
+// `multiple` is false the app enforces a single vote per user across options.
+model Poll {
+  id          String    @id @default(cuid())
+  channel     Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId   String
+  message     ChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId   String    @unique
+  question    String
+  multiple    Boolean   @default(false)
+  closesAt    DateTime?
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  options PollOption[]
+}
+
+model PollOption {
+  id     String @id @default(cuid())
+  poll   Poll   @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  pollId String
+  text   String
+  order  Int    @default(0)
+
+  votes PollVote[]
+
+  @@index([pollId])
+}
+
+model PollVote {
+  id       String     @id @default(cuid())
+  option   PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  optionId String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  createdAt DateTime  @default(now())
+
+  @@unique([optionId, userId])
+  @@index([optionId])
+}
+
+// Per-user, per-channel read cursor for unread badges. Same idea as
+// SectionView but scoped to a channel.
+model ChannelRead {
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId  String
+  lastReadAt DateTime @default(now())
+
+  @@id([userId, channelId])
 }
 
 // Per-user Spotify connection (Authorization Code + PKCE). Only needed to
