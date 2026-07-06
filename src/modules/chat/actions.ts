@@ -10,11 +10,13 @@ import {
   buildMessageDTO,
   buildPollDTO,
   canAccessChannel,
+  channelMessages,
   enrichEventCounts,
   messageInclude,
   pushRecipients,
   summarizeReactions,
 } from "./data";
+import type { MessageDTO } from "@/lib/realtime";
 
 type ActionResult = { ok?: true; error?: string };
 
@@ -306,6 +308,24 @@ export async function votePoll(
   });
 
   return { ok: true };
+}
+
+/**
+ * Re-fetch a channel's latest messages. Used by the client to backfill after
+ * the app returns to the foreground (the SSE stream is suspended while
+ * backgrounded, so messages that arrived — e.g. the one a push announced —
+ * were missed).
+ */
+export async function recentMessages(
+  channelId: string,
+): Promise<MessageDTO[]> {
+  const session = await requireSession();
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    select: { requiredRole: true },
+  });
+  if (!channel || !canAccessChannel(channel, viewerOf(session))) return [];
+  return channelMessages(channelId);
 }
 
 /** Ephemeral typing ping — broadcast only, never stored. */
