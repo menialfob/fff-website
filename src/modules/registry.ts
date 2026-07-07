@@ -18,6 +18,7 @@ import type { ExtraRole } from "@/lib/roles";
 export type ModuleId =
   | "calendar"
   | "forum"
+  | "chat"
   | "files"
   | "klub100"
   | "members"
@@ -37,6 +38,8 @@ export const modules: AppModule[] = [
   // Discussion forum. The seeded "Begivenheder" section mirrors calendar
   // events; ordinary sections are member-created content.
   { id: "forum", href: "/forum" },
+  // Real-time chat: group channels, reactions, polls, push notifications.
+  { id: "chat", href: "/chat" },
   { id: "files", href: "/files" },
   { id: "klub100", href: "/klub100" },
   { id: "members", href: "/members" },

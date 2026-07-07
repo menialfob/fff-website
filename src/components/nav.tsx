@@ -6,6 +6,7 @@ import { useI18n } from "@/lib/i18n/client";
 import { moduleAccents } from "@/components/ui";
 import {
   CalendarIcon,
+  ChatBubblesIcon,
   FolderIcon,
   HomeIcon,
   MessageIcon,
@@ -19,6 +20,7 @@ export type NavItem = {
     | "dashboard"
     | "calendar"
     | "forum"
+    | "chat"
     | "files"
     | "klub100"
     | "members"
@@ -30,6 +32,7 @@ const navIcons: Record<NavItem["id"], (p: { className?: string }) => React.React
   dashboard: HomeIcon,
   calendar: CalendarIcon,
   forum: MessageIcon,
+  chat: ChatBubblesIcon,
   files: FolderIcon,
   klub100: MusicIcon,
   members: UsersIcon,
@@ -75,7 +78,7 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
   const { t } = useI18n();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-canvas/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-canvas pb-[env(safe-area-inset-bottom)] md:hidden">
       <div className="mx-auto flex max-w-md">
         {items.map((item) => {
           const active = isActive(pathname, item.href);

@@ -25,6 +25,21 @@ body {
   background: rgb(251 191 36 / 0.3); /* amber-400/30 */
 }
 
+/* iOS Safari zooms into any focused form field (or contenteditable) whose text
+   is smaller than 16px, and never zooms back out afterwards. Enforce a 16px
+   minimum on touch devices so the zoom never triggers — this covers every text
+   input in the app, present and future (chat composer, login, poll builder,
+   the TipTap editor, …). !important is required to beat Tailwind's text-* on
+   the fields; desktop (fine pointer) keeps its smaller sizes. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable="false"]) {
+    font-size: 16px !important;
+  }
+}
+
 /* Rich text from the calendar event editor (TipTap) — rendered inside
    .event-content on detail pages and inside .ProseMirror in the editor. */
 .event-content,

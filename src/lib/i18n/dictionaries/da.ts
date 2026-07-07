@@ -39,6 +39,10 @@ export const da = {
       label: "Forum",
       description: "Snak, diskussioner og begivenheder.",
     },
+    chat: {
+      label: "Chat",
+      description: "Beskeder og afstemninger i realtid.",
+    },
     files: {
       label: "Filer",
       description: "Delte billeder, videoer og dokumenter.",
@@ -48,7 +52,7 @@ export const da = {
       description: "Byg 100-sanges festmixet sammen.",
     },
     members: {
-      label: "Medlemmer",
+      label: "Fædre",
       description: "Alle i gruppen.",
     },
     admin: {
@@ -383,6 +387,25 @@ export const da = {
       androidSteps:
         "1. Kopiér linket.\n2. Åbn calendar.google.com i en browser (fungerer bedst på computer).\n3. Ved “Andre kalendere” tryk + → Fra webadresse, og sæt linket ind.\n4. Tryk Tilføj kalender — den synkroniserer derefter til Google Kalender på din telefon.",
     },
+    notifications: {
+      title: "Notifikationer",
+      hint: "Få besked på din telefon når der sker noget vigtigt — nye beskeder og begivenheder. Virker bedst når du har lagt FFF på din hjemmeskærm.",
+      enable: "Slå notifikationer til",
+      enabledOn: "Notifikationer er slået til på denne enhed.",
+      disable: "Slå fra på denne enhed",
+      test: "Send en testnotifikation",
+      sending: "Sender…",
+      sent: "Sendt! Tjek din notifikationsbakke.",
+      blocked:
+        "Notifikationer er blokeret. Slå dem til for FFF i browserens indstillinger for at fortsætte.",
+      unsupported: "Denne browser understøtter ikke notifikationer.",
+      enableFailed: "Kunne ikke slå notifikationer til — prøv igen.",
+      iosTitle: "Læg FFF på din hjemmeskærm først",
+      iosSteps:
+        "1. Tryk på Del-knappen nederst i Safari.\n2. Vælg “Føj til hjemmeskærm”.\n3. Åbn FFF fra hjemmeskærmen og kom tilbage hertil for at slå notifikationer til.",
+      testTitle: "FFF",
+      testBody: "Det virker! Du får nu notifikationer. 🎉",
+    },
   },
   klub100: {
     intro:
@@ -564,6 +587,34 @@ export const da = {
     engineUnexpected:
       "Afspilningen ramte en uventet fejl — genindlæs for at fortsætte herfra.",
   },
+  chat: {
+    channelsTitle: "Kanaler",
+    online: "{count} online",
+    empty: "Ingen beskeder endnu — skriv den første!",
+    noMessagesYet: "Ingen beskeder endnu",
+    messagePlaceholder: "Skriv en besked…",
+    send: "Send",
+    you: "Dig",
+    unknownAuthor: "Ukendt",
+    addReaction: "Tilføj reaktion",
+    typingOne: "{name} skriver…",
+    typingMany: "{count} skriver…",
+    newPoll: "Ny afstemning",
+    pollQuestion: "Spørgsmål",
+    pollOption: "Svar {n}",
+    pollAddOption: "Tilføj svar",
+    pollAllowMultiple: "Tillad flere valg",
+    pollCreate: "Opret afstemning",
+    pollVotes: "{count} stemmer",
+    pollMultiple: "flere valg",
+    pollClosed: "lukket",
+    eventGoing: "{count} kommer",
+    eventSignUp: "Tilmeld",
+    shareToChat: "Del i chat",
+    shareNote: "Tilføj en besked (valgfrit)",
+    shareSend: "Del",
+    shared: "Delt i chatten ✓",
+  },
   errors: {
     invalidInput: "Ugyldigt input.",
     userExists: "Der findes allerede en bruger med den e-mail.",
@@ -620,5 +671,12 @@ export const da = {
     secondSegmentIncomplete: "Det andet udsnit er ufuldstændigt.",
     alreadySuggestedBy: "Allerede foreslået af {name}.",
     tracklistFull: "Tracklisten er fuld ({count} sange).",
+    channelNotFound: "Kanalen blev ikke fundet.",
+    messageEmpty: "Skriv en besked først.",
+    messageTooLong: "Beskeden er for lang.",
+    messageNotFound: "Beskeden blev ikke fundet.",
+    pollOptionsRequired: "En afstemning skal have mindst to svarmuligheder.",
+    pollNotFound: "Afstemningen blev ikke fundet.",
+    pollClosed: "Afstemningen er lukket.",
   },
 };

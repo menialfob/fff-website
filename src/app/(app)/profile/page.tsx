@@ -7,6 +7,7 @@ import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LogOutIcon } from "@/components/icons";
 import { PasswordForm, ProfileForm } from "@/modules/profile/profile-forms";
 import { CalendarFeed } from "@/modules/profile/calendar-feed";
+import { NotificationSettings } from "@/modules/notifications/notification-settings";
 
 export default async function ProfilePage() {
   const session = await requireSession();
@@ -40,6 +41,14 @@ export default async function ProfilePage() {
           {t.profile.calendarFeed.title}
         </h2>
         <CalendarFeed httpsUrl={httpsUrl} webcalUrl={webcalUrl} />
+      </section>
+      <section className={`${cardPad} mb-6`}>
+        <h2 className="mb-1 text-lg font-semibold text-white">
+          {t.profile.notifications.title}
+        </h2>
+        <NotificationSettings
+          vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
+        />
       </section>
       <section className={`${cardPad} mb-6`}>
         <h2 className="mb-1 text-lg font-semibold text-white">

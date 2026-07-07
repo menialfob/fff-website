@@ -7,6 +7,7 @@ import { cardHover, listCard, moduleAccents } from "@/components/ui";
 import { getActivitySummary, isSection } from "@/lib/activity";
 import {
   CalendarIcon,
+  ChatBubblesIcon,
   FolderIcon,
   MessageIcon,
   MusicIcon,
@@ -17,6 +18,7 @@ import {
 const moduleIcons: Record<ModuleId, (p: { className?: string }) => React.ReactNode> = {
   calendar: CalendarIcon,
   forum: MessageIcon,
+  chat: ChatBubblesIcon,
   files: FolderIcon,
   klub100: MusicIcon,
   members: UsersIcon,

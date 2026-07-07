@@ -355,3 +355,13 @@ export function LockIcon(p: IconProps) {
     </Svg>
   );
 }
+
+// Two overlapping speech bubbles — chat (distinct from forum's single bubble).
+export function ChatBubblesIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M14 9a2 2 0 0 1-2 2H7l-3 3V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2z" />
+      <path d="M10 13v1a2 2 0 0 0 2 2h5l3 3v-8a2 2 0 0 0-2-2h-1" />
+    </Svg>
+  );
+}
