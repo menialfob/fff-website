@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FFF — præsentation (A3)</title>
+<style>
+  /* Talking-points boards: five A3 sheets, one topic each. Notes only — the
+     rest is said out loud. Open in a browser and print (or “Gem som PDF”)
+     at A3, 100 %. Screenshots keep the app's dark UI. */
+  @font-face {
+    font-family: "Outfit";
+    src: url("demo/print/outfit-latin.woff2") format("woff2");
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  @page { size: A3; margin: 16mm 15mm 12mm; }
+
+  :root {
+    --ink: #14111b;
+    --ink-2: #342f3f;
+    --muted: #6f6880;
+    --rule: #d8d3e0;
+    --flame: #d4550a;
+    --tint: #fbf6f1;
+    /* A3 minus the @page margins. */
+    --page-h: 392mm;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { background: #eeebf2; }
+
+  body {
+    margin: 0;
+    background: #fff;
+    color: var(--ink-2);
+    font-family: "Outfit", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    font-size: 15pt;
+    line-height: 1.45;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .sheet { max-width: 297mm; margin: 0 auto; padding: 16mm 15mm; background: #fff; }
+  @media screen and (min-width: 900px) {
+    .sheet { margin: 8mm auto; box-shadow: 0 3mm 10mm rgba(0,0,0,.16); }
+  }
+
+  h1, h2 { color: var(--ink); margin: 0; line-height: 1.08; letter-spacing: -0.02em; }
+  p { margin: 0; }
+  strong { color: var(--ink); font-weight: 600; }
+
+  /* ── one sheet per topic ──────────────────────────────────────────── */
+  .page {
+    min-height: var(--page-h);
+    display: flex;
+    flex-direction: column;
+    break-after: page;
+  }
+  .page:last-child { break-after: auto; }
+  .page-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: 10mm;
+  }
+
+  .head { display: flex; align-items: baseline; gap: 6mm; border-bottom: 0.8mm solid var(--flame); padding-bottom: 4mm; }
+  .head .n { font-size: 14pt; font-weight: 700; color: var(--flame); font-variant-numeric: tabular-nums; }
+  .head h2 { font-size: 30pt; font-weight: 700; }
+  .head .tag { margin-left: auto; font-size: 13pt; color: var(--muted); }
+
+  /* Cover sheet */
+  .cover { text-align: left; }
+  .cover h1 { font-size: 58pt; font-weight: 700; }
+  .cover .sub { margin-top: 5mm; font-size: 19pt; color: var(--muted); max-width: 200mm; }
+  .cover .url { margin-top: 7mm; font-size: 24pt; font-weight: 700; color: var(--flame); }
+
+  /* ── notes ────────────────────────────────────────────────────────── */
+  ul.notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 3.5mm; }
+  ul.notes li { position: relative; padding-left: 8mm; }
+  ul.notes li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 3.1mm;
+    width: 2.6mm; height: 2.6mm;
+    border-radius: 50%;
+    background: var(--flame);
+  }
+  ul.notes.two { grid-template-columns: 1fr 1fr; gap: 3.5mm 12mm; }
+
+  .lead { font-size: 18pt; color: var(--ink); font-weight: 500; max-width: 230mm; }
+
+  .cols { display: flex; gap: 14mm; align-items: flex-start; }
+  .cols > * { flex: 1; }
+  .colhead {
+    font-size: 15pt;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 2.5mm;
+  }
+
+  /* ── phone figures ────────────────────────────────────────────────── */
+  .figs { display: flex; gap: 8mm; justify-content: center; align-items: flex-start; }
+  figure { margin: 0; }
+  figure img {
+    display: block;
+    width: 100%;
+    border: 0.3mm solid #cbc5d6;
+    border-radius: 3mm;
+  }
+  figcaption {
+    margin-top: 2.5mm;
+    font-size: 12pt;
+    line-height: 1.25;
+    color: var(--muted);
+    text-align: center;
+  }
+  .figs.three figure { width: 83mm; }
+  .figs.two figure { width: 116mm; }
+  .figs.one figure { width: 128mm; }
+
+  .note {
+    background: var(--tint);
+    border-left: 1.2mm solid var(--flame);
+    padding: 4mm 5mm;
+    font-size: 14pt;
+  }
+  .note .k {
+    display: block;
+    font-size: 11pt;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--flame);
+    margin-bottom: 1.2mm;
+  }
+
+  ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 3mm; }
+  ol.steps li { counter-increment: s; position: relative; padding-left: 10mm; }
+  ol.steps li::before {
+    content: counter(s);
+    position: absolute;
+    left: 0; top: 0.4mm;
+    width: 7mm; height: 7mm;
+    border: 0.3mm solid var(--rule);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 11pt; font-weight: 700;
+    color: var(--flame);
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: 15pt; }
+  td { padding: 2.6mm 3mm 2.6mm 0; border-bottom: 0.3mm solid var(--rule); vertical-align: top; }
+  td:last-child { color: var(--ink); font-weight: 600; width: 44%; }
+
+  .foot {
+    margin-top: 8mm;
+    padding-top: 3mm;
+    border-top: 0.3mm solid var(--rule);
+    font-size: 11pt;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  @media print {
+    html, .sheet { background: #fff; }
+    .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <!-- 1 ── forsiden ------------------------------------------------------- -->
+  <div class="page">
+    <div class="page-body">
+      <div class="cover">
+        <h1>FFF har fået<br>sit eget klubhus</h1>
+        <p class="sub">Kalender, forum, chat og filarkiv. Lukket for alle andre end os.</p>
+        <p class="url">fffloge.dk</p>
+      </div>
+      <ul class="notes">
+        <li>Du får en e-mail og en kode af Farmand — log ind én gang, telefonen husker dig</li>
+        <li>Ingen offentlige sider, ingen tilmelding: kun os</li>
+        <li>Tallet på et kort = det du ikke har set endnu</li>
+      </ul>
+      <div class="figs two">
+        <figure>
+          <img src="demo/print/p-login.png" alt="Login-siden">
+          <figcaption>Log ind</figcaption>
+        </figure>
+        <figure>
+          <img src="demo/print/p-dashboard.png" alt="Forsiden">
+          <figcaption>Forsiden</figcaption>
+        </figure>
+      </div>
+    </div>
+    <div class="foot"><span>FFF — Fælles Formiddags Fædre</span><span>1 / 5</span></div>
+  </div>
+
+  <!-- 2 ── kalender ------------------------------------------------------- -->
+  <div class="page">
+    <div class="page-body">
+      <div class="head">
+        <span class="n">01</span><h2>Kalender</h2>
+        <span class="tag">Se hvad der sker — og meld til</span>
+      </div>
+      <ul class="notes">
+        <li>Prikker = der sker noget. <strong>Grøn</strong>: fast tradition. <strong>Gul</strong>: ad hoc</li>
+        <li><strong>Deltager · Deltager måske · Deltager ikke</strong> — alle kan se hvem der kommer</li>
+        <li>Fredagsmøde, sommerfest, julefrokost: oprettes én gang, gentager sig selv</li>
+        <li>Hver dato har sin egen vært, tema, madansvarlig og dagsorden</li>
+      </ul>
+      <div class="figs three">
+        <figure>
+          <img src="demo/print/p-calendar.png" alt="Månedsvisning">
+          <figcaption>Måneden</figcaption>
+        </figure>
+        <figure>
+          <img src="demo/print/p-event.png" alt="Tilmelding">
+          <figcaption>Tilmelding</figcaption>
+        </figure>
+        <figure>
+          <img src="demo/print/p-occurrence.png" alt="Felter på en dato">
+          <figcaption>Én dato: felter og filer</figcaption>
+        </figure>
+      </div>
+    </div>
+    <div class="foot"><span>Kalender</span><span>2 / 5</span></div>
+  </div>
+
+  <!-- 3 ── forum, chat, filer --------------------------------------------- -->
+  <div class="page">
+    <div class="page-body">
+      <div class="head">
+        <span class="n">02</span><h2>Forum · Chat · Filer</h2>
+        <span class="tag">Snakken og papirerne</span>
+      </div>
+      <ul class="notes two">
+        <li><strong>Forum</strong> — det der skal kunne findes igen</li>
+        <li><strong>Chat</strong> — beskeder med det samme</li>
+        <li>Hver begivenhed har sin egen tråd</li>
+        <li>Reaktioner, afstemninger og begivenhedskort</li>
+        <li><strong>Filer</strong> — vedtægter, referater, billeder</li>
+        <li>Egen mappe til hver begivenhed</li>
+      </ul>
+      <div class="figs three">
+        <figure>
+          <img src="demo/print/p-forum.png" alt="Forumets sektioner">
+          <figcaption>Forum</figcaption>
+        </figure>
+        <figure>
+          <img src="demo/print/p-chat.png" alt="Chat med afstemning">
+          <figcaption>Chat med afstemning</figcaption>
+        </figure>
+        <figure>
+          <img src="demo/print/p-files.png" alt="Filarkivet">
+          <figcaption>Filer</figcaption>
+        </figure>
+      </div>
+    </div>
+    <div class="foot"><span>Forum · Chat · Filer</span><span>3 / 5</span></div>
+  </div>
+
+  <!-- 4 ── install + notifikationer --------------------------------------- -->
+  <div class="page">
+    <div class="page-body">
+      <div class="head">
+        <span class="n">03</span><h2>Læg FFF på din telefon</h2>
+        <span class="tag">Gør det først</span>
+      </div>
+      <div class="cols">
+        <div>
+          <p class="colhead">iPhone og iPad — i Safari</p>
+          <ol class="steps">
+            <li>Tryk på <strong>Del-knappen</strong></li>
+            <li>Vælg <strong>“Føj til hjemmeskærm”</strong></li>
+            <li>Åbn FFF fra hjemmeskærmen</li>
+          </ol>
+        </div>
+        <div>
+          <p class="colhead">Android — i Chrome</p>
+          <ol class="steps">
+            <li>Tryk på <strong>menuen ⋮</strong></li>
+            <li>Vælg <strong>“Installer app”</strong></li>
+            <li>Bekræft — ikonet lægger sig på startskærmen</li>
+          </ol>
+        </div>
+        <div>
+          <p class="colhead">Så: notifikationer</p>
+          <ol class="steps">
+            <li><strong>Din profil</strong> → Slå notifikationer til</li>
+            <li>Sig <strong>Tillad</strong></li>
+            <li>Send en testnotifikation</li>
+          </ol>
+        </div>
+      </div>
+      <div class="note">
+        <span class="k">Husk</span>
+        På iPhone <strong>skal</strong> appen ligge på hjemmeskærmen, før
+        notifikationer kan slås til. Du får besked om beskeder, afstemninger og
+        begivenheder i chatten — og det slås til pr. enhed.
+      </div>
+      <div class="figs two">
+        <figure>
+          <img src="demo/print/p-ios-install.png" alt="iOS beder dig installere først">
+          <figcaption>iPhone: siden siger selv til</figcaption>
+        </figure>
+        <figure>
+          <img src="demo/print/p-notifications.png" alt="Notifikationer under profilen">
+          <figcaption>Din profil → Notifikationer</figcaption>
+        </figure>
+      </div>
+    </div>
+    <div class="foot"><span>Telefon og notifikationer</span><span>4 / 5</span></div>
+  </div>
+
+  <!-- 5 ── kalender-feed + kom i gang -------------------------------------- -->
+  <div class="page">
+    <div class="page-body">
+      <div class="head">
+        <span class="n">04</span><h2>Kalenderen i din egen kalender</h2>
+      </div>
+      <div class="cols">
+        <div>
+          <ul class="notes">
+            <li><strong>Din profil → Kalender på din telefon → Aktivér</strong></li>
+            <li><strong>iPhone:</strong> tryk “Åbn i kalender-app”</li>
+            <li><strong>Android:</strong> kopiér linket ind på calendar.google.com</li>
+            <li>Begivenhederne opdaterer sig selv</li>
+            <li>Linket er personligt — del det ikke</li>
+          </ul>
+          <p class="colhead" style="margin-top:12mm">Kom i gang</p>
+          <ol class="steps">
+            <li>Log ind på <strong>fffloge.dk</strong></li>
+            <li>Skift adgangskode</li>
+            <li>Læg FFF på hjemmeskærmen</li>
+            <li>Slå notifikationer til</li>
+            <li>Meld til bowling 🎳</li>
+          </ol>
+        </div>
+        <div class="figs one" style="flex:0 0 auto">
+          <figure>
+            <img src="demo/print/p-calendar-feed.png" alt="Kalender-feed">
+            <figcaption>Vejledningen står også på siden selv</figcaption>
+          </figure>
+        </div>
+      </div>
+      <table>
+        <tr><td>se hvornår der sker noget</td><td>Kalender</td></tr>
+        <tr><td>melde til eller fra</td><td>Kalender → begivenheden</td></tr>
+        <tr><td>sige noget hurtigt</td><td>Chat</td></tr>
+        <tr><td>sige noget der skal kunne findes igen</td><td>Forum</td></tr>
+        <tr><td>få besked på telefonen</td><td>Din profil → Notifikationer</td></tr>
+      </table>
+    </div>
+    <div class="foot"><span>fffloge.dk</span><span>5 / 5</span></div>
+  </div>
+
+</div>
+</body>
+</html>

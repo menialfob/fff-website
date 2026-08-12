@@ -14,11 +14,11 @@ indhold bare bredere.
 > Billederne viser opdigtet demo-indhold — navne, begivenheder og beskeder er
 > fundet på til denne rundvisning.
 
-**Skal den printes?** Der ligger en kort udgave på fire A4-sider i
-[`FFF-kom-godt-i-gang.pdf`](FFF-kom-godt-i-gang.pdf) — kun det vigtigste, plus
-installation, notifikationer og kalender-feed. Kilden er
-[`DEMO-print.html`](DEMO-print.html), som kan åbnes i en browser og printes
-direkte.
+**Skal den printes?** Der ligger en oplægsudgave på fem A3-sider i
+[`FFF-praesentation-A3.pdf`](FFF-praesentation-A3.pdf) — ét emne pr. side, store
+billeder og kun stikord, tænkt til at blive vist frem mens man fortæller.
+Kilden er [`PRAESENTATION.html`](PRAESENTATION.html), som kan åbnes i en browser
+og printes direkte (A3, 100 %).
 
 ---
 
