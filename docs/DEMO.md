@@ -14,6 +14,12 @@ indhold bare bredere.
 > Billederne viser opdigtet demo-indhold — navne, begivenheder og beskeder er
 > fundet på til denne rundvisning.
 
+**Skal den printes?** Der ligger en kort udgave på fire A4-sider i
+[`FFF-kom-godt-i-gang.pdf`](FFF-kom-godt-i-gang.pdf) — kun det vigtigste, plus
+installation, notifikationer og kalender-feed. Kilden er
+[`DEMO-print.html`](DEMO-print.html), som kan åbnes i en browser og printes
+direkte.
+
 ---
 
 ## Indhold
