@@ -6,7 +6,7 @@ import { btnPrimary, btnSecondary, chip, errorText, input, linkDanger } from "@/
 import { PencilIcon } from "@/components/icons";
 import { attachCheers, editSong, removeCheers } from "./actions";
 import { getLyrics } from "./lyrics-actions";
-import type { LyricsPayload } from "./lyrics";
+import { chorusRegions, type LyricsPayload } from "./lyrics";
 import { CheersCapture } from "./cheers-recorder";
 import { LyricsAssist } from "./lyrics-assist";
 import { SegmentPicker, type Segment } from "./segment-picker";
@@ -148,7 +148,7 @@ function EditSongDialog({
             durationMs={song.durationMs}
             seg1={seg1}
             seg2={seg2}
-            chorusRegions={lyrics !== "loading" ? lyrics?.suggestions : undefined}
+            chorusRegions={chorusRegions(lyrics)}
             onChange={(s1, s2) => {
               setSeg1(s1);
               setSeg2(s2);

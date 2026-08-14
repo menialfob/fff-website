@@ -106,7 +106,9 @@ export function LyricsAssist({
                 title={s.firstLine}
                 className={chip(isSelected(s))}
               >
-                {fmt(t.klub100.chorusN, { n: s.rank })} · {formatMs(s.startMs)}
+                {s.fromStart
+                  ? `${t.klub100.fromStartThroughChorus} · ${formatMs(s.endMs)}`
+                  : `${fmt(t.klub100.chorusN, { n: s.rank })} · ${formatMs(s.startMs)}`}
               </button>
             ))}
           </div>

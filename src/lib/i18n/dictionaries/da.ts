@@ -478,6 +478,7 @@ export const da = {
     addSecondMinute: "Tilføj et minut mere (rigtig god sang)",
     // Lyrics assist
     chorusN: "Omkvæd {n}",
+    fromStartThroughChorus: "Start → omkvæd",
     chorusSuggestionsLabel: "Forslag fra sangteksten:",
     minuteChipN: "Minut {n}",
     applyToMinute: "Sæt tider for:",
