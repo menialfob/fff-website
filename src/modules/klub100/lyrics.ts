@@ -4,6 +4,10 @@
  * shared.ts). The chorus heuristic finds blocks of consecutive lines whose
  * text repeats elsewhere in the song — for pop/party songs that is almost
  * always the chorus — and turns each occurrence into a suggested segment.
+ *
+ * The default (first) suggestion is the Klub 100 classic: roll from 0:00 so
+ * everyone gets the intro and the build-up, and cut the moment the first
+ * chorus is over — whether that lands a bit under or a bit over the minute.
  */
 
 import { DEFAULT_SEGMENT_MS, MIN_SEGMENT_MS } from "./shared";
@@ -14,6 +18,11 @@ export type ChorusSuggestion = {
   /** Suggested segment, clamped to track bounds. */
   startMs: number;
   endMs: number;
+  /** The chorus occurrence itself — drawn as a band on the picker timeline. */
+  chorusStartMs: number;
+  chorusEndMs: number;
+  /** True for the default segment: 0:00 through the end of this chorus. */
+  fromStart: boolean;
   /** First lyric line of the chorus block (chip tooltips). */
   firstLine: string;
   /** 1-based, in timeline order. */
@@ -145,6 +154,16 @@ function sameChorus(a: Block, b: Block): boolean {
 
 const MAX_SUGGESTIONS = 4;
 const LEAD_IN_MS = 1500;
+/**
+ * Tolerance band for the from-0:00 default segment. The first chorus may
+ * finish a little under or a little over the classic minute and the segment
+ * simply ends there. Finish earlier than the band (songs that open on the
+ * hook) and the segment would be too short to be worth playing, so it runs
+ * the full minute instead; finish later (long intro, late first chorus) and
+ * we fall back to a plain minute-long window around the chorus.
+ */
+const FROM_START_MIN_MS = 45_000;
+const FROM_START_MAX_MS = 90_000;
 const MIN_BLOCK_LINES = 2;
 const MIN_BLOCK_CHARS = 20;
 /** Suggestions starting within this window of an earlier one are dropped. */
@@ -152,7 +171,8 @@ const DEDUPE_WINDOW_MS = 10_000;
 
 /**
  * Detect chorus occurrences from repeated lyric-line blocks and turn each
- * into a suggested ~1 minute segment. Deterministic; returns at most
+ * into a suggested segment: the first runs 0:00 → end of that chorus, the
+ * rest are ~1 minute windows around theirs. Deterministic; returns at most
  * MAX_SUGGESTIONS suggestions sorted by start time.
  */
 export function detectChoruses(
@@ -241,13 +261,33 @@ export function detectChoruses(
   const sorted = chosen
     .map(({ block }) => block)
     .sort((a, b) => lines[a.startIndex].timeMs - lines[b.startIndex].timeMs);
-  for (const block of sorted) {
-    const blockStartMs = lines[block.startIndex].timeMs;
-    // Always suggest the classic full minute: it starts just before the
-    // chorus and runs on, rather than a window as short as the chorus block.
-    let startMs = Math.max(0, blockStartMs - LEAD_IN_MS);
-    const endMs = Math.min(startMs + DEFAULT_SEGMENT_MS, trackDurationMs);
-    startMs = Math.min(startMs, Math.max(0, endMs - DEFAULT_SEGMENT_MS));
+  for (const [index, block] of sorted.entries()) {
+    const chorusStartMs = lines[block.startIndex].timeMs;
+    const chorusEndMs = Math.min(
+      blockEndMs(block, fallbackGapMs),
+      trackDurationMs,
+    );
+
+    // The default: play from the top and stop once the first chorus has
+    // landed. Its length is whatever the song makes it — the minute is a
+    // guideline, not a cut-off.
+    const fromStart = index === 0 && chorusEndMs <= FROM_START_MAX_MS;
+
+    let startMs: number;
+    let endMs: number;
+    if (fromStart) {
+      startMs = 0;
+      endMs =
+        chorusEndMs >= FROM_START_MIN_MS
+          ? chorusEndMs
+          : Math.min(DEFAULT_SEGMENT_MS, trackDurationMs);
+    } else {
+      // Later choruses get the classic full minute: it starts just before the
+      // chorus and runs on, rather than a window as short as the chorus block.
+      startMs = Math.max(0, chorusStartMs - LEAD_IN_MS);
+      endMs = Math.min(startMs + DEFAULT_SEGMENT_MS, trackDurationMs);
+      startMs = Math.min(startMs, Math.max(0, endMs - DEFAULT_SEGMENT_MS));
+    }
     if (endMs - startMs < MIN_SEGMENT_MS) continue;
     if (
       suggestions.some((s) => Math.abs(s.startMs - startMs) < DEDUPE_WINDOW_MS)
@@ -257,9 +297,27 @@ export function detectChoruses(
     suggestions.push({
       startMs: Math.round(startMs),
       endMs: Math.round(endMs),
+      chorusStartMs: Math.round(chorusStartMs),
+      chorusEndMs: Math.round(chorusEndMs),
+      fromStart,
       firstLine: lines[block.startIndex].text,
       rank: suggestions.length + 1,
     });
   }
   return suggestions;
+}
+
+/**
+ * Chorus bands for the picker timeline — the choruses themselves, not the
+ * suggested segments that surround them. `undefined` while lyrics load or
+ * when the track has none.
+ */
+export function chorusRegions(
+  lyrics: LyricsPayload | null | "loading",
+): { startMs: number; endMs: number }[] | undefined {
+  if (lyrics === "loading" || !lyrics) return undefined;
+  return lyrics.suggestions.map((s) => ({
+    startMs: s.chorusStartMs,
+    endMs: s.chorusEndMs,
+  }));
 }

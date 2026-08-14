@@ -476,6 +476,7 @@ export const en: typeof da = {
     addSecondMinute: "Add a second minute (really good song)",
     // Lyrics assist
     chorusN: "Chorus {n}",
+    fromStartThroughChorus: "Start → chorus",
     chorusSuggestionsLabel: "Suggestions from the lyrics:",
     minuteChipN: "Minute {n}",
     applyToMinute: "Set times for:",

@@ -15,7 +15,7 @@ import { ExternalLinkIcon, PlusIcon } from "@/components/icons";
 import { attachCheers, suggestSong } from "./actions";
 import { searchSongs, type SearchResult } from "./search-actions";
 import { getLyrics } from "./lyrics-actions";
-import type { LyricsPayload } from "./lyrics";
+import { chorusRegions, type LyricsPayload } from "./lyrics";
 import { CheersCapture } from "./cheers-recorder";
 import { LyricsAssist } from "./lyrics-assist";
 import { SegmentPicker, type Segment } from "./segment-picker";
@@ -112,15 +112,11 @@ function SuggestSongDialog({
   const selectTrack = (tr: SearchResult) => {
     setTrack(tr);
     setError(undefined);
-    // Default window: a minute starting a third in — usually near the chorus.
-    // Replaced by the top detected chorus if synced lyrics turn up below.
-    const start = Math.max(
-      0,
-      Math.min(Math.round(tr.durationMs / 3), tr.durationMs - DEFAULT_SEGMENT_MS),
-    );
+    // Default window: the first minute. Once synced lyrics turn up below, the
+    // end moves to wherever the first chorus finishes.
     setSeg1({
-      startMs: start,
-      endMs: Math.min(start + DEFAULT_SEGMENT_MS, tr.durationMs),
+      startMs: 0,
+      endMs: Math.min(DEFAULT_SEGMENT_MS, tr.durationMs),
     });
     setSeg2(null);
     segUntouched.current = true;
@@ -305,9 +301,7 @@ function SuggestSongDialog({
                 durationMs={track.durationMs}
                 seg1={seg1}
                 seg2={seg2}
-                chorusRegions={
-                  lyrics !== "loading" ? lyrics?.suggestions : undefined
-                }
+                chorusRegions={chorusRegions(lyrics)}
                 onChange={(s1, s2) => {
                   segUntouched.current = false;
                   setSeg1(s1);
