@@ -66,10 +66,12 @@ export function ChannelView({
     new Map(),
   );
   // When the on-screen keyboard is open we size the panel to the visual
-  // viewport instead of 100dvh (which iOS doesn't shrink for the keyboard),
+  // viewport instead of 100dvh (which no browser shrinks for the keyboard),
   // so the composer sits directly above the keyboard with no dead gap.
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  // Whether the fixed bottom tab bar still occupies space we must stay clear
+  // of — true unless the keyboard is covering it.
+  const [reserveTabBar, setReserveTabBar] = useState(true);
   // On touch devices Enter/Return should insert a newline (send via the button,
   // the usual mobile chat convention); only desktop uses Enter-to-send.
   const [isTouch, setIsTouch] = useState(false);
@@ -160,31 +162,71 @@ export function ChannelView({
   }, [messages, typing, panelHeight]);
 
   // Track the on-screen keyboard via the visual viewport so the composer isn't
-  // hidden behind it and there's no dead space below it (iOS doesn't shrink
-  // 100dvh for the keyboard). No-op where visualViewport is unavailable.
+  // hidden behind it and there's no dead space below it. Browsers disagree on
+  // what a keyboard does: iOS Safari only shrinks the visual viewport, while
+  // Android Chrome may also shrink the layout viewport (and window.innerHeight
+  // with it) — but neither shrinks 100dvh, so CSS alone can't do this. That is
+  // why the keyboard is detected by comparing against the tallest viewport seen
+  // at this width rather than against window.innerHeight: on Android that
+  // difference stays ~0 with the keyboard open, so the panel kept its full
+  // 100dvh height and pushed the composer down behind the keyboard.
+  // No-op on desktop and where visualViewport is unavailable.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+
+    let baseline = 0;
+    let baselineWidth = 0;
+    let timers: ReturnType<typeof setTimeout>[] = [];
+
     const apply = () => {
       const el = rootRef.current;
       if (!el) return;
-      const open = window.innerHeight - vv.height > 120;
-      setKeyboardOpen(open);
-      if (open) {
-        // Height from the panel's top to the bottom of the visible area.
-        const top = el.getBoundingClientRect().top;
-        const h = vv.height - top;
-        setPanelHeight(h > 160 ? h : null);
-      } else {
-        setPanelHeight(null);
+      // A width change is a rotation/resize, not a keyboard — re-baseline.
+      if (vv.width !== baselineWidth) {
+        baselineWidth = vv.width;
+        baseline = 0;
       }
+      baseline = Math.max(baseline, vv.height);
+      const open = baseline - vv.height > 120;
+      // The tab bar is fixed to the layout viewport. Where the keyboard shrank
+      // that viewport too, the bar sits right above the keyboard and we must
+      // keep clear of it; where only the visual viewport shrank, the bar is
+      // behind the keyboard and reserving its height is dead space.
+      setReserveTabBar(!open || window.innerHeight - vv.height < 120);
+      if (!open) {
+        setPanelHeight(null);
+        return;
+      }
+      // Height from the panel's top to the bottom of the visible area. The
+      // rect is in layout-viewport coordinates; vv.offsetTop is where the
+      // visible area starts in those same coordinates.
+      const top = el.getBoundingClientRect().top - vv.offsetTop;
+      const h = vv.height - top;
+      setPanelHeight(h > 160 ? h : null);
     };
+
+    // Keyboards animate in, and parts of them (Android's suggestion strip) can
+    // land a frame or two after the keys, so re-measure a few times instead of
+    // trusting a single event.
+    const remeasure = () => {
+      apply();
+      timers.forEach(clearTimeout);
+      timers = [setTimeout(apply, 150), setTimeout(apply, 400)];
+    };
+
     apply();
-    vv.addEventListener("resize", apply);
+    vv.addEventListener("resize", remeasure);
     vv.addEventListener("scroll", apply);
+    window.addEventListener("resize", remeasure);
+    document.addEventListener("focusin", remeasure);
     return () => {
-      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("resize", remeasure);
       vv.removeEventListener("scroll", apply);
+      window.removeEventListener("resize", remeasure);
+      document.removeEventListener("focusin", remeasure);
+      timers.forEach(clearTimeout);
     };
   }, []);
 
@@ -268,18 +310,22 @@ export function ChannelView({
   return (
     // Fill the space between the sticky app header (h-16 + safe-area) and the
     // fixed mobile tab bar. Cancel the shared <main> bottom padding (-mb-28) so
-    // the column reaches the tab bar without adding page scroll. When the
-    // keyboard is closed, reserve the tab bar's height as bottom padding so the
-    // composer stays above it; when it's open we size to the visual viewport
-    // (panelHeight) and drop that reserve since the keyboard covers the tab bar.
+    // the column reaches the tab bar without adding page scroll. With no
+    // keyboard the height comes from 100dvh and the tab bar's height is
+    // reserved as bottom padding; with the keyboard open we size to the visual
+    // viewport (panelHeight) and drop that reserve wherever the keyboard covers
+    // the tab bar. The bottom safe-area inset is always part of this padding,
+    // so the composer/poll form below don't add their own.
     // The message list (min-h-0 + overflow) is the only thing that scrolls.
     <div
       ref={rootRef}
       style={panelHeight ? { height: `${panelHeight}px` } : undefined}
       className={`-mb-28 flex flex-col md:-mb-12 md:h-[calc(100dvh-6rem)] md:pb-4 ${
-        keyboardOpen
-          ? "pb-[env(safe-area-inset-bottom)]"
-          : "h-[calc(100dvh-5.5rem-env(safe-area-inset-top))] pb-[calc(3.75rem+env(safe-area-inset-bottom))]"
+        panelHeight ? "" : "h-[calc(100dvh-5.5rem-env(safe-area-inset-top))]"
+      } ${
+        reserveTabBar
+          ? "pb-[calc(3.75rem+env(safe-area-inset-bottom))]"
+          : "pb-[env(safe-area-inset-bottom)]"
       }`}
     >
       <header className="flex items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
@@ -323,7 +369,7 @@ export function ChannelView({
           pending={pending}
         />
       ) : (
-        <div className="flex items-end gap-2 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-end gap-2">
           <button
             type="button"
             onClick={() => setShowPoll(true)}
