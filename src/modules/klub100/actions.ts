@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db";
 import { deleteUpload, saveUpload } from "@/lib/storage";
 import { fmt, type Dictionary } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n/server";
-import { computeIsCurator, TRACKLIST_SIZE } from "./shared";
+import { computeIsCurator, MAX_FADE_MS, TRACKLIST_SIZE } from "./shared";
 
 const MAX_CHEERS_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -88,13 +88,22 @@ export async function deleteProject(projectId: string) {
   const curator = await requireCurator(projectId);
   if ("error" in curator) return { error: curator.error };
 
-  // Collect cheers files before the cascade removes their rows.
+  // Collect cheers files before the cascade removes their rows — the songs'
+  // own clips and the project's default one.
   const cheers = await prisma.klub100Cheers.findMany({
     where: { song: { projectId } },
     select: { storedName: true },
   });
+  const defaultCheers = await prisma.klub100DefaultCheers.findUnique({
+    where: { projectId },
+    select: { storedName: true },
+  });
   await prisma.klub100Project.delete({ where: { id: projectId } });
-  await Promise.all(cheers.map((c) => deleteUpload(c.storedName)));
+  await Promise.all(
+    [...cheers, ...(defaultCheers ? [defaultCheers] : [])].map((c) =>
+      deleteUpload(c.storedName),
+    ),
+  );
   await logEvent({
     actorId: curator.session.user.id,
     action: "klub100.projectDelete",
@@ -471,6 +480,92 @@ export async function removeCheers(songId: string) {
   await prisma.klub100Cheers.delete({ where: { id: song.cheers.id } });
   await deleteUpload(song.cheers.storedName);
   revalidatePath(projectPath(song.projectId));
+  return { ok: true };
+}
+
+/**
+ * Curator: record the project's own default cheers — the clip that plays
+ * before every song with no cheers of its own. Replaces any previous one.
+ */
+export async function attachDefaultCheers(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  const file = formData.get("file");
+
+  const t = await getDict();
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: t.errors.chooseClip };
+  }
+  if (file.size > MAX_CHEERS_SIZE) {
+    return { error: t.errors.clipTooLarge };
+  }
+  if (file.type && !file.type.startsWith("audio/")) {
+    return { error: t.errors.cheersMustBeAudio };
+  }
+
+  const curator = await requireCurator(projectId);
+  if ("error" in curator) return { error: curator.error };
+
+  const existing = await prisma.klub100DefaultCheers.findUnique({
+    where: { projectId },
+  });
+  const storedName = await saveUpload(file);
+  await prisma.klub100DefaultCheers.upsert({
+    where: { projectId },
+    create: {
+      projectId,
+      storedName,
+      mimeType: file.type || "audio/webm",
+      size: file.size,
+      recordedById: curator.session.user.id,
+    },
+    update: {
+      storedName,
+      mimeType: file.type || "audio/webm",
+      size: file.size,
+      recordedById: curator.session.user.id,
+    },
+  });
+  if (existing) await deleteUpload(existing.storedName);
+  revalidatePath(projectPath(projectId));
+  return { ok: true };
+}
+
+/** Curator: drop the project's default cheers, falling back to the bundled clip. */
+export async function removeDefaultCheers(projectId: string) {
+  const curator = await requireCurator(projectId);
+  if ("error" in curator) return { error: curator.error };
+
+  const existing = await prisma.klub100DefaultCheers.findUnique({
+    where: { projectId },
+  });
+  if (!existing) return { ok: true };
+  await prisma.klub100DefaultCheers.delete({ where: { projectId } });
+  await deleteUpload(existing.storedName);
+  revalidatePath(projectPath(projectId));
+  return { ok: true };
+}
+
+const fadeSchema = z.object({
+  projectId: z.string().min(1),
+  fadeInMs: z.number().int().min(0).max(MAX_FADE_MS),
+  fadeOutMs: z.number().int().min(0).max(MAX_FADE_MS),
+});
+
+/** Curator: set how long each segment fades in and out during playback. */
+export async function updateFades(input: z.infer<typeof fadeSchema>) {
+  const t = await getDict();
+  const parsed = fadeSchema.safeParse(input);
+  if (!parsed.success) return { error: t.errors.invalidFade };
+  const { projectId, fadeInMs, fadeOutMs } = parsed.data;
+
+  const curator = await requireCurator(projectId);
+  if ("error" in curator) return { error: curator.error };
+
+  await prisma.klub100Project.update({
+    where: { id: projectId },
+    data: { fadeInMs, fadeOutMs },
+  });
+  revalidatePath(projectPath(projectId));
   return { ok: true };
 }
 

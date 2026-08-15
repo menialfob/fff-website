@@ -12,6 +12,7 @@ import {
 } from "@/components/icons";
 import { DeleteProjectButton } from "@/modules/klub100/project-controls";
 import { ProjectAdminManager } from "@/modules/klub100/project-admins";
+import { PlaybackSettings } from "@/modules/klub100/playback-settings";
 import { SuggestSongButton } from "@/modules/klub100/suggest-song";
 import { SuggestionPool } from "@/modules/klub100/suggestion-pool";
 import { Tracklist } from "@/modules/klub100/tracklist";
@@ -35,6 +36,9 @@ export default async function Klub100ProjectPage({
     include: {
       createdBy: { select: { id: true, name: true } },
       admins: { select: { userId: true } },
+      defaultCheers: {
+        select: { updatedAt: true, recordedBy: { select: { name: true } } },
+      },
       songs: {
         include: {
           suggestedBy: { select: { name: true } },
@@ -170,6 +174,20 @@ export default async function Klub100ProjectPage({
 
       {isCurator && (
         <div className="mt-12 space-y-8 border-t border-white/10 pt-6">
+          <PlaybackSettings
+            projectId={project.id}
+            defaultCheers={
+              project.defaultCheers
+                ? {
+                    // Version stamp so a replaced clip is not served from cache.
+                    url: `/api/klub100/default-cheers/${project.id}?v=${project.defaultCheers.updatedAt.getTime()}`,
+                    recordedByName: project.defaultCheers.recordedBy.name,
+                  }
+                : null
+            }
+            fadeInMs={project.fadeInMs}
+            fadeOutMs={project.fadeOutMs}
+          />
           <ProjectAdminManager
             projectId={project.id}
             creator={{ id: project.createdBy.id, name: project.createdBy.name }}

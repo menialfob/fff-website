@@ -505,6 +505,30 @@ export const da = {
     recordingUnsupported:
       "Optagelse understøttes ikke i denne browser — upload en fil i stedet.",
     micDenied: "Adgang til mikrofonen blev afvist — upload en fil i stedet.",
+    // Playback settings (curator only)
+    playbackSettings: "Afspilningsindstillinger",
+    playbackSettingsHint:
+      "Gælder hele mixet, når det afspilles — kun projektets admins kan ændre det.",
+    defaultCheersTitle: "Standard-skål",
+    defaultCheersNoneYet:
+      "Ingen standard-skål indspillet — sange uden deres egen skål bruger det indbyggede klip.",
+    defaultCheersRecordedBy: "Indspillet af {name}. Bruges til sange uden deres egen skål.",
+    saveDefaultCheers: "Gem standard-skål",
+    removeDefaultCheers: "Fjern standard-skål",
+    confirmRemoveDefaultCheers:
+      "Fjern standard-skålen? Så bruges det indbyggede klip igen.",
+    fadesTitle: "Ind- og udtoning",
+    fadesHint:
+      "Hvor blødt hver sang tones ind og ud omkring sit udsnit. 0 giver et hårdt klip. Meget korte udsnit toner tilsvarende hurtigere.",
+    fadeIn: "Indtoning",
+    fadeOut: "Udtoning",
+    fadeSeconds: "{seconds} s",
+    fadeOff: "Hårdt klip",
+    saveFades: "Gem toning",
+    resetFades: "Nulstil til 1,0 s",
+    ownDefaultCheersUsed: "Projektets egen standard-skål bliver brugt.",
+    bundledDefaultCheersUsed:
+      "Det indbyggede standardklip bliver brugt — indspil en standard-skål for jeres eget.",
     // Project admins
     projectAdmins: "Projekt-admins",
     projectAdminsHint:
@@ -539,9 +563,9 @@ export const da = {
       "Tracklisten har kun {count}/{total} sange — du kan stadig afspille den delvise liste",
     tracklistEmpty: "Tracklisten er tom — godkend nogle sange først",
     allSongsHaveCheers: "Alle sange har en skål-optagelse",
-    missingCheersOne: "1 sang mangler en skål — standardklippet bliver brugt",
+    missingCheersOne: "1 sang mangler en skål — standarden bliver brugt",
     missingCheersMany:
-      "{count} sange mangler en skål — standardklippet bliver brugt",
+      "{count} sange mangler en skål — standarden bliver brugt",
     spotifyNotConfigured:
       "Spotify er ikke sat op på serveren (SPOTIFY_CLIENT_ID)",
     spotifyNotConnectedCheck: "Spotify-kontoen er ikke forbundet",
@@ -661,6 +685,7 @@ export const da = {
     chooseClip: "Indspil eller vælg et lydklip først.",
     clipTooLarge: "Klippet er for stort (maks 5 MB).",
     cheersMustBeAudio: "Kun lydfiler kan bruges som skål.",
+    invalidFade: "Toningen skal være mellem 0 og 5 sekunder.",
     searchFailed: "Spotify-søgningen fejlede — prøv igen om lidt.",
     searchNotConfigured:
       "Spotify-søgning er ikke sat op — en admin skal sætte SPOTIFY_CLIENT_ID og SPOTIFY_CLIENT_SECRET.",

@@ -113,7 +113,6 @@ declare global {
 
 // --- Tuning -----------------------------------------------------------------
 
-const FADE_MS = 1000;
 const FADE_STEPS = 10;
 /** Position poll interval while a segment plays (bounds cut-point overshoot). */
 const TICK_MS = 200;
@@ -174,6 +173,8 @@ export class PlaybackEngine {
   private songs: PlaybackSong[];
   private cheersUrl: (songId: string) => string;
   private defaultCheersUrl: string;
+  private fadeInMs: number;
+  private fadeOutMs: number;
   private callbacks: EngineCallbacks;
   private messages: EngineMessages;
 
@@ -208,13 +209,19 @@ export class PlaybackEngine {
   constructor(options: {
     songs: PlaybackSong[];
     cheersUrl: (songId: string) => string;
+    /** The project's own default clip, or the bundled one. */
     defaultCheersUrl: string;
+    /** Curator-configured fades around every segment, in ms (0 = hard cut). */
+    fadeInMs: number;
+    fadeOutMs: number;
     callbacks: EngineCallbacks;
     messages: EngineMessages;
   }) {
     this.songs = options.songs;
     this.cheersUrl = options.cheersUrl;
     this.defaultCheersUrl = options.defaultCheersUrl;
+    this.fadeInMs = Math.max(0, options.fadeInMs);
+    this.fadeOutMs = Math.max(0, options.fadeOutMs);
     this.callbacks = options.callbacks;
     this.messages = options.messages;
   }
@@ -568,7 +575,13 @@ export class PlaybackEngine {
     const trackUri = `spotify:track:${song.spotifyTrackId}`;
     // Segments shorter than the fade window get proportionally shorter
     // fades instead of being eaten by them (PRD §9 default: clamp here).
-    const fade = Math.max(100, Math.min(FADE_MS, Math.floor(segLen / 3)));
+    // A configured 0 stays 0 — that is the curator asking for a hard cut.
+    const clampFade = (ms: number) =>
+      ms <= 0 ? 0 : Math.max(100, Math.min(ms, Math.floor(segLen / 3)));
+    const fadeIn = clampFade(this.fadeInMs);
+    const fadeOut = clampFade(this.fadeOutMs);
+    /** Courtesy duck when the host skips — never longer than the fade-out. */
+    const skipFade = Math.min(250, fadeOut);
 
     this.emit({
       phase: "segment",
@@ -602,7 +615,7 @@ export class PlaybackEngine {
     }
     if (!started) return "failed";
 
-    await this.fadeTo(1, fade);
+    await this.fadeTo(1, fadeIn);
 
     // Watch the position until the cut point (minus the fade-out window).
     // `progressed` gates the "ended early" fallback below: even after
@@ -624,7 +637,7 @@ export class PlaybackEngine {
       if (this.fatalError) return "failed";
       if (this.skipRequested) {
         this.skipRequested = false;
-        await this.fadeTo(0, 250);
+        await this.fadeTo(0, skipFade);
         await player.pause().catch(() => {});
         return "skipped";
       }
@@ -670,7 +683,7 @@ export class PlaybackEngine {
         // and cut the imposter. Before any progress it means the play
         // command misfired; give it a moment to settle, then re-send.
         if (progressed) {
-          await this.fadeTo(0, 250);
+          await this.fadeTo(0, skipFade);
           await player.pause().catch(() => {});
           return "completed";
         }
@@ -712,11 +725,11 @@ export class PlaybackEngine {
         return "failed";
       }
       if (state.position > seg.startMs) progressed = true;
-      if (state.position >= seg.endMs - fade) break;
+      if (state.position >= seg.endMs - fadeOut) break;
       await sleep(TICK_MS);
     }
 
-    await this.fadeTo(0, fade);
+    await this.fadeTo(0, fadeOut);
     await player.pause().catch(() => {});
     return "completed";
   }
@@ -740,11 +753,16 @@ export class PlaybackEngine {
 
   /**
    * Stepped setVolume fade with a squared curve (perceptually smoother than
-   * linear). ~10 steps over 1 s — the spike's zipper-noise criterion.
+   * linear). ~10 steps over the fade window — the spike's zipper-noise
+   * criterion. A zero-length fade is a straight jump to the target level.
    */
   private async fadeTo(target: number, durationMs: number) {
     const from = this.level;
     if (from === target) return;
+    if (durationMs <= 0) {
+      await this.setLevel(target);
+      return;
+    }
     for (let step = 1; step <= FADE_STEPS; step++) {
       if (this.stopped) return;
       const l = from + ((target - from) * step) / FADE_STEPS;

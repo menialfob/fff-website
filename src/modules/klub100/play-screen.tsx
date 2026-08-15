@@ -30,6 +30,13 @@ export type PlayScreenProps = {
   projectName: string;
   /** Accepted songs in tracklist order. */
   songs: PlaybackSong[];
+  /** The project's own default cheers clip, or the bundled fallback. */
+  defaultCheersUrl: string;
+  /** True when that URL is a clip the curators recorded themselves. */
+  hasOwnDefaultCheers: boolean;
+  /** Curator-configured fades around every segment, in ms. */
+  fadeInMs: number;
+  fadeOutMs: number;
   spotify: { configured: boolean; connected: boolean; premium: boolean };
   /** Saved progress, already validated against the current tracklist. */
   resumeSongId: string | null;
@@ -72,7 +79,9 @@ export function PlayScreen(props: PlayScreenProps) {
     const engine = new PlaybackEngine({
       songs,
       cheersUrl: (songId) => `/api/klub100/cheers/${songId}`,
-      defaultCheersUrl: "/default-cheers.wav",
+      defaultCheersUrl: props.defaultCheersUrl,
+      fadeInMs: props.fadeInMs,
+      fadeOutMs: props.fadeOutMs,
       messages: {
         sdkLoadFailed: t.klub100.engineSdkLoadFailed,
         closed: t.klub100.engineClosed,
@@ -174,6 +183,7 @@ function PreFlight({
   songs,
   spotify,
   tracklistTarget,
+  hasOwnDefaultCheers,
   ios,
   device,
   resumeIndex,
@@ -231,13 +241,20 @@ function PreFlight({
         }
       >
         {missingCheers.length > 0 && (
-          <ul className="mt-1 list-inside list-disc text-sm text-zinc-400">
-            {missingCheers.map((s) => (
-              <li key={s.id}>
-                #{s.position} {s.title} — {s.artist}
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="mt-1 list-inside list-disc text-sm text-zinc-400">
+              {missingCheers.map((s) => (
+                <li key={s.id}>
+                  #{s.position} {s.title} — {s.artist}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1.5 text-sm text-zinc-500">
+              {hasOwnDefaultCheers
+                ? t.klub100.ownDefaultCheersUsed
+                : t.klub100.bundledDefaultCheersUsed}
+            </p>
+          </>
         )}
       </Check>
 
