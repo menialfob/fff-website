@@ -196,6 +196,38 @@ export async function channelSummaries(viewer: Viewer, userId: string) {
 }
 
 /**
+ * Total unread messages across every channel the viewer can see. Same rule as
+ * the per-channel pills on the chat index (messages from others, newer than
+ * the read cursor), summed for the app-icon badge.
+ */
+export async function chatUnreadCount(
+  viewer: Viewer,
+  userId: string,
+): Promise<number> {
+  const channels = await channelsForViewer(viewer);
+  if (channels.length === 0) return 0;
+
+  const reads = await prisma.channelRead.findMany({
+    where: { userId, channelId: { in: channels.map((c) => c.id) } },
+    select: { channelId: true, lastReadAt: true },
+  });
+  const readAt = new Map(reads.map((r) => [r.channelId, r.lastReadAt]));
+
+  const counts = await Promise.all(
+    channels.map((channel) =>
+      prisma.channelMessage.count({
+        where: {
+          channelId: channel.id,
+          authorId: { not: userId },
+          createdAt: { gt: readAt.get(channel.id) ?? new Date(0) },
+        },
+      }),
+    ),
+  );
+  return counts.reduce((sum, n) => sum + n, 0);
+}
+
+/**
  * Active member ids that should receive a push for activity in a channel:
  * everyone with access, minus the actor, minus anyone currently connected
  * (they get the live update instead, so we don't double-notify).
