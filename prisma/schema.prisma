@@ -54,6 +54,7 @@ model User {
   klub100Projects Klub100Project[]
   klub100Songs    Klub100Song[]
   klub100Cheers   Klub100Cheers[]
+  klub100DefaultCheers Klub100DefaultCheers[]
   klub100Votes    Klub100Vote[]
   klub100ProjectAdminOf Klub100ProjectAdmin[]
   spotifyAccount  SpotifyAccount?
@@ -493,8 +494,32 @@ model Klub100Project {
   songs       Klub100Song[]
   admins      Klub100ProjectAdmin[]
   playbackState Klub100PlaybackState?
+  // Playback settings curators can tune (see src/modules/klub100/shared.ts for
+  // the allowed range). Fades are applied per segment: in when the song drops,
+  // out before the cut point.
+  fadeInMs    Int           @default(1000)
+  fadeOutMs   Int           @default(1000)
+  // Optional recorded clip used for songs that have no cheers of their own;
+  // when absent the bundled /default-cheers.wav plays instead.
+  defaultCheers Klub100DefaultCheers?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+}
+
+// The project's own "no cheers recorded" clip. One row per project, replacing
+// the bundled default in playback and in the export package.
+model Klub100DefaultCheers {
+  id           String         @id @default(cuid())
+  project      Klub100Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId    String         @unique
+  // Name of the file on disk inside UPLOAD_DIR (randomized, never user-controlled).
+  storedName   String         @unique
+  mimeType     String
+  size         Int
+  recordedBy   User           @relation(fields: [recordedById], references: [id], onDelete: Cascade)
+  recordedById String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 }
 
 // Extra members the project creator has granted curator rights to. The creator

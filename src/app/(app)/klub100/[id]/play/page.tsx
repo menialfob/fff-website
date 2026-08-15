@@ -23,6 +23,7 @@ export default async function Klub100PlayPage({
     where: { id },
     include: {
       playbackState: true,
+      defaultCheers: { select: { updatedAt: true } },
       admins: { select: { userId: true } },
       songs: {
         where: { status: "ACCEPTED" },
@@ -55,6 +56,12 @@ export default async function Klub100PlayPage({
     ],
   }));
 
+  // The project's own default cheers when the curators recorded one — the
+  // version stamp keeps a replaced clip from being served from cache.
+  const defaultCheersUrl = project.defaultCheers
+    ? `/api/klub100/default-cheers/${project.id}?v=${project.defaultCheers.updatedAt.getTime()}`
+    : "/default-cheers.wav";
+
   const account = await prisma.spotifyAccount.findUnique({
     where: { userId: session.user.id },
     select: { product: true },
@@ -85,6 +92,10 @@ export default async function Klub100PlayPage({
           projectId={project.id}
           projectName={project.name}
           songs={songs}
+          defaultCheersUrl={defaultCheersUrl}
+          hasOwnDefaultCheers={Boolean(project.defaultCheers)}
+          fadeInMs={project.fadeInMs}
+          fadeOutMs={project.fadeOutMs}
           spotify={{
             configured: spotifyConfigured(),
             connected: Boolean(account),

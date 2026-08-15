@@ -503,6 +503,31 @@ export const en: typeof da = {
     recordingUnsupported:
       "Recording is not supported in this browser — upload a file instead.",
     micDenied: "Microphone access was denied — upload a file instead.",
+    // Playback settings (curator only)
+    playbackSettings: "Playback settings",
+    playbackSettingsHint:
+      "These apply to the whole mix when it plays — only project admins can change them.",
+    defaultCheersTitle: "Default cheers",
+    defaultCheersNoneYet:
+      "No default cheers recorded — songs without their own cheers use the built-in clip.",
+    defaultCheersRecordedBy:
+      "Recorded by {name}. Used for songs without their own cheers.",
+    saveDefaultCheers: "Save default cheers",
+    removeDefaultCheers: "Remove default cheers",
+    confirmRemoveDefaultCheers:
+      "Remove the default cheers? The built-in clip will be used again.",
+    fadesTitle: "Fade in and out",
+    fadesHint:
+      "How softly each song fades in and out around its segment. 0 is a hard cut. Very short segments fade proportionally faster.",
+    fadeIn: "Fade-in",
+    fadeOut: "Fade-out",
+    fadeSeconds: "{seconds} s",
+    fadeOff: "Hard cut",
+    saveFades: "Save fades",
+    resetFades: "Reset to 1.0 s",
+    ownDefaultCheersUsed: "The project's own default cheers will be used.",
+    bundledDefaultCheersUsed:
+      "The built-in default clip will be used — record a default cheers for your own.",
     // Project admins
     projectAdmins: "Project admins",
     projectAdminsHint:
@@ -537,9 +562,9 @@ export const en: typeof da = {
       "Tracklist has only {count}/{total} songs — you can still play the partial list",
     tracklistEmpty: "The tracklist is empty — accept some songs first",
     allSongsHaveCheers: "Every song has a cheers recording",
-    missingCheersOne: "1 song missing cheers — the default clip will play",
+    missingCheersOne: "1 song is missing cheers — the default will play",
     missingCheersMany:
-      "{count} songs missing cheers — the default clip will play",
+      "{count} songs are missing cheers — the default will play",
     spotifyNotConfigured:
       "Spotify isn't configured on the server (SPOTIFY_CLIENT_ID)",
     spotifyNotConnectedCheck: "Spotify account not connected",
@@ -655,6 +680,7 @@ export const en: typeof da = {
     chooseClip: "Record or choose an audio clip first.",
     clipTooLarge: "Clip is too large (max 5 MB).",
     cheersMustBeAudio: "Only audio files can be a cheers.",
+    invalidFade: "The fade must be between 0 and 5 seconds.",
     searchFailed: "Spotify search failed — try again in a moment.",
     searchNotConfigured:
       "Spotify search is not configured — an admin needs to set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.",

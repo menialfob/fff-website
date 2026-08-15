@@ -25,6 +25,7 @@ export async function GET(
     include: {
       createdBy: { select: { name: true } },
       admins: { select: { userId: true } },
+      defaultCheers: { include: { recordedBy: { select: { name: true } } } },
       songs: {
         include: {
           suggestedBy: { select: { name: true } },
@@ -100,6 +101,18 @@ export async function GET(
     poolEntries.push(songJson(song, name && `cheers/pool/${name}`));
   }
 
+  // The project's own "no cheers recorded" clip, so an offline assembly uses
+  // the same fallback the live playback would.
+  let defaultCheersFile: string | null = null;
+  if (project.defaultCheers) {
+    const ext = path.extname(project.defaultCheers.storedName) || ".audio";
+    defaultCheersFile = `cheers/default${ext}`;
+    cheersDir.file(
+      `default${ext}`,
+      await readUpload(project.defaultCheers.storedName),
+    );
+  }
+
   zip.file(
     "manifest.json",
     JSON.stringify(
@@ -108,6 +121,10 @@ export async function GET(
           name: project.name,
           createdBy: project.createdBy.name,
           exportedAt: new Date().toISOString(),
+          fadeInMs: project.fadeInMs,
+          fadeOutMs: project.fadeOutMs,
+          defaultCheersFile,
+          defaultCheersBy: project.defaultCheers?.recordedBy.name ?? null,
         },
         tracklist: tracklistEntries,
         pool: poolEntries,

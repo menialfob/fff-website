@@ -14,6 +14,22 @@ export const DEFAULT_SEGMENT_MS = 60_000;
 /** Spotify's dev-mode allowlist cap (Feb 2026 rules) — surfaced in the UI. */
 export const SPOTIFY_ALLOWLIST_SLOTS = 5;
 
+/**
+ * Volume fades around each song segment, tunable per project by its curators.
+ * 0 means "cut straight in/out"; the ceiling keeps a fade from eating a whole
+ * one-minute segment (the engine clamps it further on short segments).
+ */
+export const DEFAULT_FADE_MS = 1000;
+export const MAX_FADE_MS = 5000;
+/** Slider granularity — a tenth of a second is as fine as anyone can hear. */
+export const FADE_STEP_MS = 100;
+
+/** Playback settings a curator controls, as sent to the play screen. */
+export type PlaybackSettings = {
+  fadeInMs: number;
+  fadeOutMs: number;
+};
+
 export type Placement = "EARLY" | "MIDDLE" | "LATE";
 
 export const placements: Placement[] = ["EARLY", "MIDDLE", "LATE"];
