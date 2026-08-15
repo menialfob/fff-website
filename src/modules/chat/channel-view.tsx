@@ -15,11 +15,17 @@ import {
   toggleReaction,
   votePoll,
 } from "./actions";
+import { refreshAppBadge } from "@/modules/notifications/app-badge";
 
 const TYPING_THROTTLE_MS = 3000;
 const TYPING_CLEAR_MS = 4000;
 // Grow the composer up to this height (px), then it scrolls internally.
 const COMPOSER_MAX_PX = 128;
+
+/** Move the read cursor, then refresh the app-icon badge it feeds. */
+function markRead(channelId: string) {
+  markChannelRead(channelId).then(refreshAppBadge).catch(() => {});
+}
 
 /** Union two message lists by id, ordered oldest-first. */
 function mergeMessages(a: MessageDTO[], b: MessageDTO[]): MessageDTO[] {
@@ -92,7 +98,7 @@ export function ChannelView({
               ? prev
               : [...prev, ev.message],
           );
-          void markChannelRead(channelId);
+          markRead(channelId);
           break;
         case "reaction":
           if (ev.channelId !== channelId) return;
@@ -139,7 +145,7 @@ export function ChannelView({
 
   // Mark read on open and stop typing timers on unmount.
   useEffect(() => {
-    void markChannelRead(channelId);
+    markRead(channelId);
     const timers = typingTimers.current;
     return () => {
       timers.forEach((t2) => clearTimeout(t2));
@@ -191,7 +197,7 @@ export function ChannelView({
       recentMessages(channelId)
         .then((fresh) => {
           if (fresh.length) setMessages((prev) => mergeMessages(prev, fresh));
-          void markChannelRead(channelId);
+          markRead(channelId);
         })
         .catch(() => {});
     };

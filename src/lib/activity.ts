@@ -32,14 +32,11 @@ const RECENT_PER_SECTION = 5;
 const RECENT_TOTAL = 5;
 
 /**
- * Compute per-section unread counts and a merged recent-activity list for a
- * user. "Unread" = created after the user last opened that section (falling
- * back to the user's join date, so the whole history isn't dumped on first
- * login), excluding the user's own contributions.
+ * Resolve each section's "unread since" cutoff for a user: when they last
+ * opened it, falling back to their join date so the whole history isn't
+ * dumped on first login.
  */
-export async function getActivitySummary(
-  userId: string,
-): Promise<ActivitySummary> {
+async function sectionCutoffs(userId: string): Promise<(s: Section) => Date> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -50,7 +47,47 @@ export async function getActivitySummary(
   const fallback = user?.createdAt ?? new Date(0);
   const seen = new Map<string, Date>();
   for (const v of user?.sectionViews ?? []) seen.set(v.section, v.seenAt);
-  const since = (s: Section) => seen.get(s) ?? fallback;
+  return (s: Section) => seen.get(s) ?? fallback;
+}
+
+/**
+ * Per-section unread counts only — the cheap half of `getActivitySummary`,
+ * used by the app-icon badge where the recent-item lists aren't needed.
+ */
+export async function getSectionCounts(
+  userId: string,
+): Promise<Record<Section, number>> {
+  const since = await sectionCutoffs(userId);
+  const [forum, calendar, files] = await Promise.all([
+    prisma.forumPost.count({
+      where: { createdAt: { gt: since("forum") }, createdById: { not: userId } },
+    }),
+    prisma.calendarEvent.count({
+      where: {
+        createdAt: { gt: since("calendar") },
+        createdById: { not: userId },
+      },
+    }),
+    prisma.fileItem.count({
+      where: {
+        createdAt: { gt: since("files") },
+        uploadedById: { not: userId },
+      },
+    }),
+  ]);
+  return { forum, calendar, files };
+}
+
+/**
+ * Compute per-section unread counts and a merged recent-activity list for a
+ * user. "Unread" = created after the user last opened that section (falling
+ * back to the user's join date, so the whole history isn't dumped on first
+ * login), excluding the user's own contributions.
+ */
+export async function getActivitySummary(
+  userId: string,
+): Promise<ActivitySummary> {
+  const since = await sectionCutoffs(userId);
 
   const [forumCount, calendarCount, filesCount, forumPosts, events, files] =
     await Promise.all([

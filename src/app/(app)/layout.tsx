@@ -6,6 +6,7 @@ import { DesktopNav, MobileTabBar, type NavItem } from "@/components/nav";
 import { Brand } from "@/components/ui";
 import { LogOutIcon } from "@/components/icons";
 import { ServiceWorkerRegister } from "@/modules/notifications/service-worker-register";
+import { AppBadge } from "@/modules/notifications/app-badge";
 
 export default async function AppLayout({
   children,
@@ -26,6 +27,7 @@ export default async function AppLayout({
   return (
     <div className="min-h-screen">
       <ServiceWorkerRegister />
+      <AppBadge />
       <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-canvas pt-[env(safe-area-inset-top)]">
         <nav className="mx-auto flex h-16 max-w-5xl items-center gap-4 px-4">
           <Link href="/" className="shrink-0">

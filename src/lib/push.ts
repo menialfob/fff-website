@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { prisma } from "@/lib/db";
+import { getBadgeCount } from "@/lib/badge";
 
 // Web Push (VAPID) sender. Keys come from env — the public key is also exposed
 // to the client as NEXT_PUBLIC_VAPID_PUBLIC_KEY so the browser can subscribe.
@@ -27,6 +28,13 @@ export type PushPayload = {
   url?: string;
   /** Collapse key so repeat notifications about the same thing replace. */
   tag?: string;
+  /**
+   * Number for the installed app's icon badge. Filled in per recipient by
+   * `sendPushToUsers` — callers don't set it, since every member has a
+   * different unread count. (Not to be confused with a notification's
+   * `badge` option, which is the small monochrome status-bar icon.)
+   */
+  badgeCount?: number;
 };
 
 /**
@@ -45,7 +53,19 @@ export async function sendPushToUsers(
   });
   if (subs.length === 0) return;
 
-  const body = JSON.stringify(payload);
+  // The badge is per member, so the body differs per recipient — compute one
+  // count per user that actually has a subscription (a user may have several).
+  // A failed count must not block the notification, so it falls back to
+  // undefined — JSON drops the key and the service worker leaves the badge
+  // as it is rather than clearing it.
+  const bodyByUser = new Map<string, string>();
+  await Promise.all(
+    [...new Set(subs.map((s) => s.userId))].map(async (id) => {
+      const badgeCount = await getBadgeCount(id).catch(() => undefined);
+      bodyByUser.set(id, JSON.stringify({ ...payload, badgeCount }));
+    }),
+  );
+
   const stale: string[] = [];
 
   await Promise.all(
@@ -56,7 +76,7 @@ export async function sendPushToUsers(
             endpoint: sub.endpoint,
             keys: { p256dh: sub.p256dh, auth: sub.auth },
           },
-          body,
+          bodyByUser.get(sub.userId) ?? JSON.stringify(payload),
         );
       } catch (err) {
         const statusCode = (err as { statusCode?: number }).statusCode;
