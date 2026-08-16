@@ -25,6 +25,14 @@ export const viewport: Viewport = {
   // corners / home indicator. In the browser Safari already avoids the unsafe
   // regions, so the existing header/nav padding keeps it looking identical.
   viewportFit: "cover",
+  // Let the on-screen keyboard shrink the layout viewport (Chrome's legacy
+  // Android behaviour, and no longer its default). Without it Android leaves
+  // the layout viewport — and with it 100dvh and every position:fixed element —
+  // at full height and simply draws the keyboard on top, which hid the chat
+  // composer and the bottom tab bar behind it. Safari ignores the property, so
+  // iOS keeps overlaying the keyboard and the visual-viewport sizing in
+  // ChannelView keeps handling that case.
+  interactiveWidget: "resizes-content",
 };
 
 export default async function RootLayout({
