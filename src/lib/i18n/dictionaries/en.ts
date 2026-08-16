@@ -17,6 +17,8 @@ export const en: typeof da = {
     saved: "Saved.",
     signOut: "Sign out",
     dismiss: "Dismiss",
+    today: "Today",
+    yesterday: "Yesterday",
     bestyrelse: "Board",
     bestyrelseTitles: {
       FARMAND: "Farmand",

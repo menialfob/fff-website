@@ -3,12 +3,18 @@
 import { Fragment, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/client";
+import {
+  formatDateTime,
+  formatTime,
+  intlLocale,
+  type Locale,
+} from "@/lib/i18n";
 import type { EventCardDTO, MessageDTO } from "@/lib/realtime";
 import { PollCard } from "./poll-card";
 
-function EventCard({ event, locale }: { event: EventCardDTO; locale: string }) {
+function EventCard({ event, locale }: { event: EventCardDTO; locale: Locale }) {
   const { t } = useI18n();
-  const dateLabel = new Intl.DateTimeFormat(locale, {
+  const dateLabel = new Intl.DateTimeFormat(intlLocale(locale), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -68,7 +74,7 @@ export function MessageItem({
 }: {
   message: MessageDTO;
   viewerId: string;
-  locale: string;
+  locale: Locale;
   onToggleReaction: (messageId: string, emoji: string) => void;
   onVote: (pollId: string, optionId: string) => void;
 }) {
@@ -76,10 +82,7 @@ export function MessageItem({
   const [pickerOpen, setPickerOpen] = useState(false);
   const mine = message.author?.id === viewerId;
   const name = message.author?.name ?? t.chat.unknownAuthor;
-  const time = new Intl.DateTimeFormat(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(message.createdAt));
+  const createdAt = new Date(message.createdAt);
 
   return (
     <div className="group flex gap-2.5">
@@ -94,7 +97,15 @@ export function MessageItem({
           <span className="text-sm font-semibold text-white">
             {mine ? t.chat.you : name}
           </span>
-          <span className="text-xs text-zinc-500">{time}</span>
+          {/* The day comes from the divider above; the full stamp is a
+              hover/long-press affordance for older messages. */}
+          <time
+            dateTime={message.createdAt}
+            title={formatDateTime(createdAt, locale)}
+            className="text-xs text-zinc-500"
+          >
+            {formatTime(createdAt, locale)}
+          </time>
         </div>
 
         {message.body && (
@@ -144,7 +155,7 @@ export function MessageItem({
               <span aria-hidden>🙂+</span>
             </button>
             {pickerOpen && (
-              <div className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-full border border-white/10 bg-panel p-1 shadow-lg">
+              <div className="absolute bottom-full left-0 z-20 mb-1 flex gap-1 rounded-full border border-white/10 bg-panel p-1 shadow-lg">
                 {QUICK_EMOJIS.map((e) => (
                   <button
                     key={e}

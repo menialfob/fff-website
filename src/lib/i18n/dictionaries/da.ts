@@ -19,6 +19,8 @@ export const da = {
     saved: "Gemt.",
     signOut: "Log ud",
     dismiss: "Luk besked",
+    today: "I dag",
+    yesterday: "I går",
     bestyrelse: "Bestyrelse",
     bestyrelseTitles: {
       FARMAND: "Farmand",
