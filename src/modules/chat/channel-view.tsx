@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useI18n } from "@/lib/i18n/client";
+import { dayKey, formatDayLabel, msUntilNextDay } from "@/lib/i18n";
 import type { MessageDTO, RealtimeEvent } from "@/lib/realtime";
 import { btnPrimary } from "@/components/ui";
 import { MessageItem } from "./message-item";
@@ -37,6 +38,51 @@ function mergeMessages(a: MessageDTO[], b: MessageDTO[]): MessageDTO[] {
   );
 }
 
+/** Split a thread into calendar days, oldest first. */
+function groupByDay(messages: MessageDTO[]) {
+  const days: { key: string; at: Date; messages: MessageDTO[] }[] = [];
+  for (const m of messages) {
+    const at = new Date(m.createdAt);
+    const key = dayKey(at);
+    const current = days[days.length - 1];
+    if (current && current.key === key) current.messages.push(m);
+    else days.push({ key, at, messages: [m] });
+  }
+  return days;
+}
+
+/** Date heading above the first message of each day, pinned while you scroll. */
+function DayDivider({ label }: { label: string }) {
+  return (
+    <div className="sticky top-0 z-10 flex justify-center">
+      <span className="rounded-full border border-white/[0.06] bg-panel/90 px-3 py-1 text-xs font-medium text-zinc-400 backdrop-blur">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A "now" that ticks over at midnight, so a chat left open overnight stops
+ * calling yesterday's messages "I dag". Reschedules after every tick, which
+ * also covers a timer that fired early across a DST change.
+ */
+function useNow(): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        setNow(new Date());
+        schedule();
+      }, msUntilNextDay() + 1000);
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, []);
+  return now;
+}
+
 export function ChannelView({
   channelId,
   channelName,
@@ -51,6 +97,7 @@ export function ChannelView({
   initialMessages: MessageDTO[];
 }) {
   const { t, locale } = useI18n();
+  const now = useNow();
   const [messages, setMessages] = useState<MessageDTO[]>(initialMessages);
   const [online, setOnline] = useState<string[]>([]);
   const [typing, setTyping] = useState<{ id: string; name: string }[]>([]);
@@ -299,15 +346,22 @@ export function ChannelView({
             {t.chat.empty}
           </p>
         ) : (
-          messages.map((m) => (
-            <MessageItem
-              key={m.id}
-              message={m}
-              viewerId={viewerId}
-              locale={locale}
-              onToggleReaction={onReact}
-              onVote={onVote}
-            />
+          // One section per day: scoping the heading to its own group is what
+          // makes it stick to the top only while that day is on screen.
+          groupByDay(messages).map((day) => (
+            <section key={day.key} className="space-y-4">
+              <DayDivider label={formatDayLabel(day.at, locale, t, now)} />
+              {day.messages.map((m) => (
+                <MessageItem
+                  key={m.id}
+                  message={m}
+                  viewerId={viewerId}
+                  locale={locale}
+                  onToggleReaction={onReact}
+                  onVote={onVote}
+                />
+              ))}
+            </section>
           ))
         )}
       </div>
