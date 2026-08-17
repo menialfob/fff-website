@@ -18,7 +18,10 @@ import { MessageItem } from "./message-item";
 import { PollComposer } from "./poll-composer";
 import { ConversationInfo } from "./conversation-info";
 import {
+  aroundMessages,
   createPoll,
+  deleteMessage,
+  editMessage,
   markConversationRead,
   newerMessages,
   olderMessages,
@@ -163,6 +166,8 @@ export function ConversationView({
   const [newBelow, setNewBelow] = useState(0);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<MessageDTO | null>(null);
+  const [editTarget, setEditTarget] = useState<MessageDTO | null>(null);
   const [pending, startTransition] = useTransition();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -224,6 +229,34 @@ export function ConversationView({
     highlightTimer.current = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS);
   }, []);
 
+  /** Scroll to a message, fetching a window around it if it isn't loaded. */
+  const jumpToMessage = useCallback(
+    (messageId: string) => {
+      const el = document.getElementById(`msg-${messageId}`);
+      if (el) {
+        el.scrollIntoView({ block: "center" });
+        flashMessage(messageId);
+        return;
+      }
+      aroundMessages(conversationId, messageId)
+        .then((res) => {
+          if (!res) return;
+          setMessages(res.messages);
+          setHasOlder(res.hasOlder);
+          setHasNewer(res.hasNewer);
+          setNewBelow(0);
+          requestAnimationFrame(() => {
+            document
+              .getElementById(`msg-${messageId}`)
+              ?.scrollIntoView({ block: "center" });
+            flashMessage(messageId);
+          });
+        })
+        .catch(() => {});
+    },
+    [conversationId, flashMessage],
+  );
+
   /** Back to the live tail: newest page, scrolled to the bottom. */
   const jumpToLatest = useCallback(() => {
     recentMessages(conversationId)
@@ -271,6 +304,12 @@ export function ConversationView({
           else if (incoming.author?.id !== viewerId) setNewBelow((n) => n + 1);
           break;
         }
+        case "message-updated":
+          if (ev.conversationId !== conversationId) return;
+          setMessages((prev) =>
+            prev.map((m) => (m.id === ev.message.id ? ev.message : m)),
+          );
+          break;
         case "reaction":
           if (ev.conversationId !== conversationId) return;
           setMessages((prev) =>
@@ -519,8 +558,8 @@ export function ConversationView({
   }
 
   const deliverSend = useCallback(
-    (clientId: string, body: string) => {
-      sendMessage(conversationId, body, clientId)
+    (clientId: string, body: string, replyToId?: string) => {
+      sendMessage(conversationId, body, clientId, replyToId)
         .then((res) => {
           if (res.error || !res.message) {
             setOutbox((prev) =>
@@ -557,6 +596,19 @@ export function ConversationView({
     // Reset the grown composer back to a single row.
     const el = textareaRef.current;
     if (el) el.style.height = "auto";
+
+    if (editTarget) {
+      // Edits update in place via the message-updated event — no bubble.
+      const target = editTarget;
+      setEditTarget(null);
+      startTransition(async () => {
+        await editMessage(target.id, body);
+      });
+      return;
+    }
+
+    const replyToId = replyTarget?.id;
+    setReplyTarget(null);
     const clientId = crypto.randomUUID();
     setOutbox((prev) => [
       ...prev,
@@ -565,7 +617,35 @@ export function ConversationView({
     // Sending always returns you to the live tail.
     if (hasNewerRef.current) jumpToLatest();
     requestAnimationFrame(scrollToBottom);
-    deliverSend(clientId, body);
+    deliverSend(clientId, body, replyToId);
+  }
+
+  function startReply(message: MessageDTO) {
+    setEditTarget(null);
+    setReplyTarget(message);
+    textareaRef.current?.focus();
+  }
+
+  function startEdit(message: MessageDTO) {
+    setReplyTarget(null);
+    setEditTarget(message);
+    setText(message.body);
+    requestAnimationFrame(() => {
+      autosizeComposer();
+      textareaRef.current?.focus();
+    });
+  }
+
+  function cancelComposerContext() {
+    if (editTarget) setText("");
+    setReplyTarget(null);
+    setEditTarget(null);
+  }
+
+  function onDeleteMessage(messageId: string) {
+    startTransition(async () => {
+      await deleteMessage(messageId);
+    });
   }
 
   function retrySend(item: OutboxItem) {
@@ -701,6 +781,10 @@ export function ConversationView({
                         locale={locale}
                         onToggleReaction={onReact}
                         onVote={onVote}
+                        onReply={startReply}
+                        onEdit={startEdit}
+                        onDelete={onDeleteMessage}
+                        onJumpTo={jumpToMessage}
                       />
                     </div>
                   </div>
@@ -772,6 +856,32 @@ export function ConversationView({
       <div className="min-h-[1.25rem] px-1 text-xs text-zinc-500">
         {typingLabel}
       </div>
+
+      {(replyTarget || editTarget) && (
+        <div className="mb-1 flex items-center gap-2 rounded-lg border-l-2 border-violet-400/60 bg-white/[0.04] px-2.5 py-1.5">
+          <div className="min-w-0 flex-1">
+            <span className="block text-xs font-semibold text-violet-300">
+              {editTarget
+                ? t.chat.editing
+                : t.chat.replyingTo.replace(
+                    "{name}",
+                    replyTarget?.author?.name ?? t.chat.unknownAuthor,
+                  )}
+            </span>
+            <span className="block truncate text-xs text-zinc-400">
+              {(editTarget ?? replyTarget)?.body}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={cancelComposerContext}
+            aria-label={t.common.cancel}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/10 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {showPoll ? (
         <PollComposer

@@ -20,6 +20,16 @@ export const messageInclude = {
     },
   },
   reactions: { select: { emoji: true, userId: true } },
+  replyTo: {
+    select: {
+      id: true,
+      body: true,
+      deletedAt: true,
+      author: { select: { name: true } },
+      poll: { select: { question: true } },
+      event: { select: { title: true } },
+    },
+  },
   event: { select: { id: true, title: true } },
   poll: {
     include: {
@@ -77,18 +87,40 @@ type RawAuthor = {
   avatarUpdatedAt: Date | null;
 };
 
+type RawReply = {
+  id: string;
+  body: string;
+  deletedAt: Date | null;
+  author: { name: string } | null;
+  poll: { question: string } | null;
+  event: { title: string } | null;
+};
+
 type RawMessage = {
   id: string;
   conversationId: string;
   body: string;
   createdAt: Date;
   clientId: string | null;
+  editedAt: Date | null;
+  deletedAt: Date | null;
+  replyTo: RawReply | null;
   author: RawAuthor | null;
   reactions: RawReaction[];
   poll: RawPoll | null;
   event: { id: string; title: string } | null;
   eventDate: string | null;
 };
+
+const REPLY_PREVIEW_MAX = 120;
+
+/** Short text summary of a quoted message for the reply block. */
+function replyPreview(reply: RawReply): string {
+  if (reply.deletedAt) return "";
+  if (reply.poll) return `\u{1F4CA} ${reply.poll.question}`;
+  if (reply.event) return `\u{1F4C5} ${reply.event.title}`;
+  return reply.body.slice(0, REPLY_PREVIEW_MAX);
+}
 
 export function buildMessageDTO(msg: RawMessage): MessageDTO {
   return {
@@ -97,6 +129,16 @@ export function buildMessageDTO(msg: RawMessage): MessageDTO {
     body: msg.body,
     createdAt: msg.createdAt.toISOString(),
     clientId: msg.clientId,
+    editedAt: msg.editedAt ? msg.editedAt.toISOString() : null,
+    deleted: msg.deletedAt !== null,
+    replyTo: msg.replyTo
+      ? {
+          id: msg.replyTo.id,
+          authorName: msg.replyTo.author?.name ?? null,
+          preview: replyPreview(msg.replyTo),
+          deleted: msg.replyTo.deletedAt !== null,
+        }
+      : null,
     author: msg.author
       ? {
           id: msg.author.id,

@@ -69,6 +69,7 @@ export async function sendMessage(
   conversationId: string,
   body: string,
   clientId?: string,
+  replyToId?: string,
 ): Promise<ActionResult & { message?: MessageDTO }> {
   const t = await getDict();
   const session = await requireSession();
@@ -80,6 +81,15 @@ export async function sendMessage(
   if (!text) return { error: t.errors.messageEmpty };
   if (text.length > MAX_BODY) return { error: t.errors.messageTooLong };
 
+  // A quote must point at a message in the same conversation.
+  if (replyToId) {
+    const target = await prisma.message.findFirst({
+      where: { id: replyToId, conversationId },
+      select: { id: true },
+    });
+    if (!target) return { error: t.errors.messageNotFound };
+  }
+
   const now = new Date();
   const created = await prisma.message.create({
     data: {
@@ -88,6 +98,7 @@ export async function sendMessage(
       body: text,
       searchText: toSearchText(text),
       clientId: clientId?.slice(0, 64) || null,
+      replyToId: replyToId || null,
       createdAt: now,
     },
     include: messageInclude,
@@ -114,6 +125,102 @@ export async function sendMessage(
   });
 
   return { ok: true, message: dto };
+}
+
+/** Edit your own message's text; broadcasts the updated message. */
+export async function editMessage(
+  messageId: string,
+  body: string,
+): Promise<ActionResult> {
+  const t = await getDict();
+  const session = await requireSession();
+
+  const text = body.trim();
+  if (!text) return { error: t.errors.messageEmpty };
+  if (text.length > MAX_BODY) return { error: t.errors.messageTooLong };
+
+  const message = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: {
+      id: true,
+      conversationId: true,
+      authorId: true,
+      deletedAt: true,
+      poll: { select: { id: true } },
+    },
+  });
+  if (!message) return { error: t.errors.messageNotFound };
+  const gate = await conversationGate(message.conversationId, session);
+  if (gate.error) return { error: gate.error };
+  // Author-only; tombstones and poll carrier messages are not editable.
+  if (message.authorId !== session.user.id || message.deletedAt || message.poll) {
+    return { error: t.errors.messageNotEditable };
+  }
+
+  const updated = await prisma.message.update({
+    where: { id: messageId },
+    data: { body: text, searchText: toSearchText(text), editedAt: new Date() },
+    include: messageInclude,
+  });
+  const [dto] = await enrichEventCounts([buildMessageDTO(updated)]);
+  emitEvent({
+    type: "message-updated",
+    conversationId: message.conversationId,
+    message: dto,
+  });
+  return { ok: true };
+}
+
+/**
+ * Delete your own message. WhatsApp-style tombstone: the row stays (so reply
+ * quotes keep an anchor) but its content, reactions and poll are removed.
+ */
+export async function deleteMessage(messageId: string): Promise<ActionResult> {
+  const t = await getDict();
+  const session = await requireSession();
+
+  const message = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: {
+      id: true,
+      conversationId: true,
+      authorId: true,
+      deletedAt: true,
+    },
+  });
+  if (!message) return { error: t.errors.messageNotFound };
+  const gate = await conversationGate(message.conversationId, session);
+  if (gate.error) return { error: gate.error };
+  const isSiteAdmin = session.user.role === "ADMIN";
+  if (message.authorId !== session.user.id && !isSiteAdmin) {
+    return { error: t.errors.notAuthorized };
+  }
+  if (message.deletedAt) return { ok: true };
+
+  await prisma.$transaction([
+    prisma.messageReaction.deleteMany({ where: { messageId } }),
+    prisma.poll.deleteMany({ where: { messageId } }),
+    prisma.message.update({
+      where: { id: messageId },
+      data: {
+        body: "",
+        searchText: null,
+        deletedAt: new Date(),
+        eventId: null,
+        eventDate: null,
+      },
+    }),
+  ]);
+  const fresh = await prisma.message.findUniqueOrThrow({
+    where: { id: messageId },
+    include: messageInclude,
+  });
+  emitEvent({
+    type: "message-updated",
+    conversationId: message.conversationId,
+    message: buildMessageDTO(fresh),
+  });
+  return { ok: true };
 }
 
 /** Page of messages older than `beforeId` (scroll-up history). */

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/client";
 import {
@@ -12,6 +12,7 @@ import {
 import type { EventCardDTO, MessageDTO } from "@/lib/realtime";
 import { Avatar } from "@/components/avatar";
 import { PollCard } from "./poll-card";
+import { MessageMenu } from "./message-menu";
 
 function EventCard({ event, locale }: { event: EventCardDTO; locale: Locale }) {
   const { t } = useI18n();
@@ -45,6 +46,12 @@ function EventCard({ event, locale }: { event: EventCardDTO; locale: Locale }) {
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🔥", "🙏"];
 
+// Long-press before the message menu opens (touch).
+const LONG_PRESS_MS = 450;
+// Horizontal drag distance that triggers swipe-to-reply.
+const SWIPE_TRIGGER_PX = 56;
+const SWIPE_MAX_PX = 72;
+
 const urlRegex = /(https?:\/\/[^\s]+)/g;
 
 /** Render plain text with clickable links (nodes, never dangerouslySetInnerHTML). */
@@ -72,21 +79,144 @@ export function MessageItem({
   locale,
   onToggleReaction,
   onVote,
+  onReply,
+  onEdit,
+  onDelete,
+  onJumpTo,
 }: {
   message: MessageDTO;
   viewerId: string;
   locale: Locale;
   onToggleReaction: (messageId: string, emoji: string) => void;
   onVote: (pollId: string, optionId: string) => void;
+  onReply: (message: MessageDTO) => void;
+  onEdit: (message: MessageDTO) => void;
+  onDelete: (messageId: string) => void;
+  onJumpTo: (messageId: string) => void;
 }) {
   const { t } = useI18n();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dragX, setDragX] = useState(0);
   const mine = message.author?.id === viewerId;
   const name = message.author?.name ?? t.chat.unknownAuthor;
   const createdAt = new Date(message.createdAt);
 
+  // Touch gesture state: long-press opens the menu, a horizontal right-drag
+  // replies. Any scroll (vertical move) cancels both.
+  const touch = useRef<{
+    x: number;
+    y: number;
+    timer: ReturnType<typeof setTimeout> | null;
+    swiped: boolean;
+  } | null>(null);
+
+  function cancelLongPress() {
+    if (touch.current?.timer) {
+      clearTimeout(touch.current.timer);
+      touch.current.timer = null;
+    }
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    if (message.deleted) return;
+    const t0 = e.touches[0];
+    touch.current = {
+      x: t0.clientX,
+      y: t0.clientY,
+      timer: setTimeout(() => {
+        setMenuOpen(true);
+        touch.current = null;
+      }, LONG_PRESS_MS),
+      swiped: false,
+    };
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    const state = touch.current;
+    if (!state) return;
+    const t0 = e.touches[0];
+    const dx = t0.clientX - state.x;
+    const dy = t0.clientY - state.y;
+    if (Math.abs(dy) > 24) {
+      // Scrolling — abandon both gestures.
+      cancelLongPress();
+      touch.current = null;
+      setDragX(0);
+      return;
+    }
+    if (Math.abs(dx) > 8) cancelLongPress();
+    if (dx > 0) {
+      setDragX(Math.min(dx, SWIPE_MAX_PX));
+      if (dx > SWIPE_TRIGGER_PX && !state.swiped) {
+        state.swiped = true;
+        onReply(message);
+      }
+    }
+  }
+
+  function onTouchEnd() {
+    cancelLongPress();
+    touch.current = null;
+    setDragX(0);
+  }
+
+  function copyBody() {
+    navigator.clipboard?.writeText(message.body).catch(() => {});
+  }
+
+  if (message.deleted) {
+    return (
+      <div className="flex gap-2.5 opacity-70">
+        <Avatar
+          id={message.author?.id ?? "deleted"}
+          name={name}
+          avatarUrl={message.author?.avatarUrl ?? null}
+          size="sm"
+          className="mt-0.5"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-semibold text-zinc-400">
+              {mine ? t.chat.you : name}
+            </span>
+            <time
+              dateTime={message.createdAt}
+              className="text-xs text-zinc-600"
+            >
+              {formatTime(createdAt, locale)}
+            </time>
+          </div>
+          <p className="text-sm italic text-zinc-500">{t.chat.messageDeleted}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="group flex gap-2.5">
+    <div
+      className="group relative flex gap-2.5 [@media(pointer:coarse)]:select-none"
+      style={
+        dragX
+          ? { transform: `translateX(${dragX}px)`, transition: "none" }
+          : { transition: "transform 150ms ease" }
+      }
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+    >
+      {/* Reply hint revealed while dragging. */}
+      {dragX > 8 && (
+        <span
+          aria-hidden
+          className="absolute -left-7 top-1/2 -translate-y-1/2 text-lg"
+          style={{ opacity: Math.min(dragX / SWIPE_TRIGGER_PX, 1) }}
+        >
+          ↩️
+        </span>
+      )}
+
       <Avatar
         id={message.author?.id ?? "deleted"}
         name={name}
@@ -108,7 +238,41 @@ export function MessageItem({
           >
             {formatTime(createdAt, locale)}
           </time>
+          {message.editedAt && (
+            <span
+              className="text-xs text-zinc-600"
+              title={formatDateTime(new Date(message.editedAt), locale)}
+            >
+              {t.chat.edited}
+            </span>
+          )}
+          {/* Desktop affordance: kebab on hover. */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label={t.chat.messageActions}
+            className="ml-auto hidden h-6 w-6 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/10 hover:text-zinc-200 md:flex md:opacity-0 md:group-hover:opacity-100"
+          >
+            ⋯
+          </button>
         </div>
+
+        {message.replyTo && (
+          <button
+            type="button"
+            onClick={() => onJumpTo(message.replyTo!.id)}
+            className="mt-0.5 block w-full max-w-sm rounded-lg border-l-2 border-violet-400/60 bg-white/[0.04] px-2.5 py-1.5 text-left transition hover:bg-white/[0.07]"
+          >
+            <span className="block text-xs font-semibold text-violet-300">
+              {message.replyTo.authorName ?? t.chat.unknownAuthor}
+            </span>
+            <span className="block truncate text-xs text-zinc-400">
+              {message.replyTo.deleted
+                ? t.chat.messageDeleted
+                : message.replyTo.preview}
+            </span>
+          </button>
+        )}
 
         {message.body && (
           <p className="whitespace-pre-wrap break-words text-sm text-zinc-200">
@@ -176,6 +340,18 @@ export function MessageItem({
           </div>
         </div>
       </div>
+
+      {menuOpen && (
+        <MessageMenu
+          canEdit={mine && !message.poll}
+          canDelete={mine}
+          onReply={() => onReply(message)}
+          onEdit={() => onEdit(message)}
+          onDelete={() => onDelete(message.id)}
+          onCopy={copyBody}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
     </div>
   );
 }

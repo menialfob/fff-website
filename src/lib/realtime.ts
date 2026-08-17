@@ -47,6 +47,14 @@ export type MessageAuthorDTO = {
   avatarUrl: string | null;
 };
 
+export type ReplyPreviewDTO = {
+  id: string;
+  authorName: string | null;
+  // Short text summary of the quoted message ("" when it was deleted).
+  preview: string;
+  deleted: boolean;
+};
+
 export type MessageDTO = {
   id: string;
   conversationId: string;
@@ -55,6 +63,10 @@ export type MessageDTO = {
   // Echo of the sender's optimistic id so their client can reconcile the
   // pending bubble with the stored message.
   clientId: string | null;
+  editedAt: string | null;
+  // Tombstoned: body is blanked, render a "message deleted" placeholder.
+  deleted: boolean;
+  replyTo: ReplyPreviewDTO | null;
   author: MessageAuthorDTO | null;
   reactions: ReactionSummary[];
   poll: PollDTO | null;
@@ -63,6 +75,8 @@ export type MessageDTO = {
 
 export type RealtimeEvent =
   | { type: "message"; conversationId: string; message: MessageDTO }
+  // An existing message changed in place (edit or delete-tombstone).
+  | { type: "message-updated"; conversationId: string; message: MessageDTO }
   | {
       type: "reaction";
       conversationId: string;
