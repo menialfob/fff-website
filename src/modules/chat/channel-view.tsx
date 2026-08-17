@@ -19,6 +19,7 @@ import { PollComposer } from "./poll-composer";
 import { ConversationInfo } from "./conversation-info";
 import { SeenBy } from "./seen-by";
 import { compressImage, uploadAttachment } from "./attachment-upload";
+import { GifPicker } from "./gif-picker";
 import type { AttachmentDTO } from "@/lib/realtime";
 import {
   aroundMessages,
@@ -29,6 +30,7 @@ import {
   newerMessages,
   olderMessages,
   recentMessages,
+  sendGif,
   sendMessage,
   sendTyping,
   toggleReaction,
@@ -153,6 +155,7 @@ export function ConversationView({
   initialLastReadAt,
   initialReads,
   focusMessageId,
+  gifEnabled,
 }: {
   conversationId: string;
   conversationName: string;
@@ -168,6 +171,7 @@ export function ConversationView({
   initialLastReadAt: string | null;
   initialReads: { userId: string; lastReadAt: string }[];
   focusMessageId: string | null;
+  gifEnabled: boolean;
 }) {
   const { t, locale } = useI18n();
   const router = useRouter();
@@ -192,6 +196,7 @@ export function ConversationView({
   );
   const [editTarget, setEditTarget] = useState<MessageDTO | null>(null);
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
+  const [showGif, setShowGif] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -741,6 +746,44 @@ export function ConversationView({
     setEditTarget(null);
   }
 
+  function pickGif(tenorId: string) {
+    setShowGif(false);
+    const clientId = crypto.randomUUID();
+    setOutbox((prev) => [
+      ...prev,
+      {
+        clientId,
+        body: "",
+        createdAt: new Date().toISOString(),
+        failed: false,
+        attachmentIds: [],
+        attachmentCount: 1,
+      },
+    ]);
+    if (hasNewerRef.current) jumpToLatest();
+    requestAnimationFrame(scrollToBottom);
+    sendGif(conversationId, tenorId, clientId)
+      .then((res) => {
+        if (res.error || !res.message) {
+          // GIF sends have nothing local to retry against — just drop the
+          // bubble; the picker can be reopened.
+          setOutbox((prev) => prev.filter((o) => o.clientId !== clientId));
+          return;
+        }
+        const message = res.message;
+        setOutbox((prev) => prev.filter((o) => o.clientId !== clientId));
+        if (!hasNewerRef.current) {
+          setMessages((prev) =>
+            prev.some((m) => m.id === message.id) ? prev : [...prev, message],
+          );
+          requestAnimationFrame(scrollToBottom);
+        }
+      })
+      .catch(() => {
+        setOutbox((prev) => prev.filter((o) => o.clientId !== clientId));
+      });
+  }
+
   function onDeleteMessage(messageId: string) {
     startTransition(async () => {
       await deleteMessage(messageId);
@@ -1004,6 +1047,8 @@ export function ConversationView({
         {typingLabel}
       </div>
 
+      {showGif && <GifPicker onPick={pickGif} onClose={() => setShowGif(false)} />}
+
       {(replyTarget || editTarget) && (
         <div className="mb-1 flex items-center gap-2 rounded-lg border-l-2 border-violet-400/60 bg-white/[0.04] px-2.5 py-1.5">
           <div className="min-w-0 flex-1">
@@ -1098,6 +1143,16 @@ export function ConversationView({
           >
             📎
           </button>
+          {gifEnabled && (
+            <button
+              type="button"
+              onClick={() => setShowGif((v) => !v)}
+              aria-label={t.chat.gif}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-[0.65rem] font-bold text-zinc-300 transition hover:border-white/20"
+            >
+              GIF
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowPoll(true)}

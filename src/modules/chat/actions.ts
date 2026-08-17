@@ -24,7 +24,8 @@ import {
   type ConversationSummaryDTO,
 } from "./data";
 import { avatarUrlFor } from "@/components/avatar";
-import { deleteUpload } from "@/lib/storage";
+import { deleteUpload, saveProcessedUpload } from "@/lib/storage";
+import { processImageAttachment } from "@/lib/images";
 import type { MessageDTO } from "@/lib/realtime";
 
 type ActionResult = { ok?: true; error?: string };
@@ -188,6 +189,116 @@ function attachmentPreviewLabel(
 
 function fmtCount(template: string, count: number): string {
   return template.replace("{count}", String(count));
+}
+
+// Selected GIFs are stored locally so recipients never hotlink Tenor.
+const MAX_GIF_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Send a Tenor GIF: re-resolve the id server-side, download the full GIF,
+ * store it like any attachment (thumb from the first frame), and post an
+ * attachment-only message carrying it.
+ */
+export async function sendGif(
+  conversationId: string,
+  tenorId: string,
+  clientId?: string,
+): Promise<ActionResult & { message?: MessageDTO }> {
+  const t = await getDict();
+  const session = await requireSession();
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error) return { error: gate.error };
+  const conversation = gate.conversation!;
+
+  const key = process.env.TENOR_API_KEY;
+  const cleanId = tenorId.trim().slice(0, 50);
+  if (!key || !cleanId) return { error: t.errors.gifUnavailable };
+
+  let gifBytes: Buffer;
+  let gifName: string;
+  try {
+    const postsUrl = new URL("https://tenor.googleapis.com/v2/posts");
+    postsUrl.searchParams.set("key", key);
+    postsUrl.searchParams.set("client_key", "fff-website");
+    postsUrl.searchParams.set("ids", cleanId);
+    postsUrl.searchParams.set("media_filter", "gif");
+    const meta = await fetch(postsUrl, { signal: AbortSignal.timeout(8000) });
+    if (!meta.ok) throw new Error(String(meta.status));
+    const data = (await meta.json()) as {
+      results?: {
+        media_formats?: { gif?: { url: string } };
+        content_description?: string;
+      }[];
+    };
+    const gifUrl = data.results?.[0]?.media_formats?.gif?.url;
+    if (!gifUrl) throw new Error("no-media");
+    const media = await fetch(gifUrl, { signal: AbortSignal.timeout(15000) });
+    if (!media.ok) throw new Error(String(media.status));
+    const bytes = Buffer.from(await media.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_GIF_BYTES) {
+      throw new Error("size");
+    }
+    gifBytes = bytes;
+    gifName = `${(data.results?.[0]?.content_description ?? "gif").slice(0, 80)}.gif`;
+  } catch {
+    return { error: t.errors.gifUnavailable };
+  }
+
+  const processed = await processImageAttachment(gifBytes);
+  const storedName = await saveProcessedUpload(gifBytes, ".gif");
+  const thumbName = processed
+    ? await saveProcessedUpload(processed.thumb, ".webp")
+    : null;
+
+  const now = new Date();
+  const created = await prisma.message.create({
+    data: {
+      conversationId,
+      authorId: session.user.id,
+      body: "",
+      clientId: clientId?.slice(0, 64) || null,
+      createdAt: now,
+      attachments: {
+        create: {
+          uploadedById: session.user.id,
+          kind: "GIF",
+          name: gifName,
+          storedName,
+          thumbName,
+          mimeType: "image/gif",
+          size: gifBytes.byteLength,
+          width: processed?.width ?? null,
+          height: processed?.height ?? null,
+          blurData: processed?.blurData ?? null,
+        },
+      },
+    },
+  });
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { lastMessageAt: now },
+  });
+  const full = await prisma.message.findUniqueOrThrow({
+    where: { id: created.id },
+    include: messageInclude,
+  });
+  const dto = buildMessageDTO(full);
+  emitEvent({ type: "message", conversationId, message: dto });
+
+  const recipients = await pushRecipients(
+    conversation,
+    session.user.id,
+    onlineUserIds(),
+  );
+  const slug = conversationSlug(conversation);
+  await sendPushToUsers(recipients, {
+    title: pushTitle(conversation, session.user.name ?? ""),
+    body: `${session.user.name}: GIF`.slice(0, 160),
+    url: `/chat/${slug}`,
+    tag: `chat-${slug}`,
+  });
+
+  return { ok: true, message: dto };
 }
 
 /** Edit your own message's text; broadcasts the updated message. */
