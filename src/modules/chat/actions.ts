@@ -21,6 +21,7 @@ import {
   messagesAround,
   messagesBefore,
   pushRecipients,
+  searchMessages,
   summarizeReactions,
   toSearchText,
   type ConversationSummaryDTO,
@@ -167,7 +168,15 @@ export async function sendMessage(
   const slug = conversationSlug(conversation);
   const mentionedIds = new Set(mentions.map((m) => m.userId));
   const plainRecipients = recipients.filter((id) => !mentionedIds.has(id));
-  const mentionRecipients = recipients.filter((id) => mentionedIds.has(id));
+  // Mentions bypass mute (recipients above are mute-filtered): anyone
+  // mentioned who is offline gets the targeted push regardless.
+  const online = new Set(onlineUserIds());
+  const mentionRecipients = members
+    .filter(
+      (m) =>
+        mentionedIds.has(m.id) && m.id !== session.user.id && !online.has(m.id),
+    )
+    .map((m) => m.id);
   const pushBody = text
     ? `${session.user.name}: ${text}`
     : `${session.user.name}: ${attachmentPreviewLabel(dto.attachments, t)}`;
@@ -783,6 +792,44 @@ export async function addableMembers(
   return users
     .filter((u) => !memberIds.has(u.id))
     .map((u) => ({ id: u.id, name: u.name, avatarUrl: avatarUrlFor(u) }));
+}
+
+/** Search messages across the viewer's conversations (min 2 characters). */
+export async function searchChatMessages(query: string) {
+  const session = await requireSession();
+  return searchMessages(viewerOf(session), session.user.id, query);
+}
+
+/**
+ * Mute/unmute a conversation for the viewer: normal pushes stop, mention
+ * pushes and unread counts are unaffected (Messenger behavior).
+ */
+export async function toggleMute(conversationId: string): Promise<ActionResult> {
+  const session = await requireSession();
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error) return { error: gate.error };
+  const where = {
+    userId_conversationId: { userId: session.user.id, conversationId },
+  };
+  const existing = await prisma.conversationRead.findUnique({ where });
+  if (existing) {
+    await prisma.conversationRead.update({
+      where,
+      data: { muted: !existing.muted },
+    });
+  } else {
+    // First interaction: create the cursor muted, but at epoch so unread
+    // counting is unaffected.
+    await prisma.conversationRead.create({
+      data: {
+        userId: session.user.id,
+        conversationId,
+        muted: true,
+        lastReadAt: new Date(0),
+      },
+    });
+  }
+  return { ok: true };
 }
 
 /** Move the viewer's read cursor for a conversation to now (clears unread). */

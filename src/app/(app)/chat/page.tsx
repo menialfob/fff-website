@@ -17,9 +17,18 @@ export default async function ChatPage() {
     <div className="max-w-2xl">
       <PageTitle
         actions={
-          <Link href="/chat/new" className={btnPrimary}>
-            {t.chat.newConversation}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/chat/search"
+              aria-label={t.chat.search}
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] text-lg text-zinc-300 transition hover:border-white/20"
+            >
+              🔍
+            </Link>
+            <Link href="/chat/new" className={btnPrimary}>
+              {t.chat.newConversation}
+            </Link>
+          </div>
         }
       >
         {t.modules.chat.label}

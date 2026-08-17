@@ -579,10 +579,89 @@ export async function pushRecipients(
   onlineIds: string[],
 ): Promise<string[]> {
   const online = new Set(onlineIds);
-  const members = await conversationMembers(conversation);
+  const [members, mutedRows] = await Promise.all([
+    conversationMembers(conversation),
+    prisma.conversationRead.findMany({
+      where: { conversationId: conversation.id, muted: true },
+      select: { userId: true },
+    }),
+  ]);
+  const muted = new Set(mutedRows.map((r) => r.userId));
   return members
-    .filter((m) => m.id !== actorId && !online.has(m.id))
+    .filter((m) => m.id !== actorId && !online.has(m.id) && !muted.has(m.id))
     .map((m) => m.id);
+}
+
+export type SearchHitDTO = {
+  messageId: string;
+  conversationId: string;
+  slug: string;
+  conversationTitle: string;
+  authorName: string | null;
+  body: string;
+  createdAt: string;
+};
+
+const SEARCH_LIMIT = 30;
+
+/**
+ * LIKE search over the maintained `searchText` column (JS locale-lowercased
+ * at write time, so Æ/Ø/Å match — SQLite's own lower() is ASCII-only),
+ * scoped to the viewer's conversations. Plain LIKE beats FTS5 here: no
+ * unmanaged virtual tables for Prisma migrations to trip over, and the scan
+ * is milliseconds at this community's volume.
+ */
+export async function searchMessages(
+  viewer: Viewer,
+  userId: string,
+  query: string,
+): Promise<SearchHitDTO[]> {
+  const term = toSearchText(query.trim()).slice(0, 100);
+  if (term.length < 2) return [];
+  const conversations = await conversationsForViewer(viewer, userId);
+  if (conversations.length === 0) return [];
+  const ids = conversations.map((c) => c.id);
+  const escaped = term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT id FROM "Message"
+     WHERE "conversationId" IN (${placeholders})
+       AND "deletedAt" IS NULL
+       AND "searchText" LIKE ? ESCAPE '\\'
+     ORDER BY "createdAt" DESC
+     LIMIT ${SEARCH_LIMIT}`,
+    ...ids,
+    `%${escaped}%`,
+  );
+  if (rows.length === 0) return [];
+
+  const titleById = new Map(
+    conversations.map((c) => [c.id, conversationDisplayName(c, userId)]),
+  );
+  const slugById = new Map(ids.map((id) => [id, id]));
+  for (const c of conversations) slugById.set(c.id, conversationSlug(c));
+
+  const messages = await prisma.message.findMany({
+    where: { id: { in: rows.map((r) => r.id) } },
+    select: {
+      id: true,
+      conversationId: true,
+      body: true,
+      createdAt: true,
+      author: { select: { name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return messages.map((m) => ({
+    messageId: m.id,
+    conversationId: m.conversationId,
+    slug: slugById.get(m.conversationId) ?? m.conversationId,
+    conversationTitle: titleById.get(m.conversationId) ?? "",
+    authorName: m.author?.name ?? null,
+    body: m.body,
+    createdAt: m.createdAt.toISOString(),
+  }));
 }
 
 /** The URL path segment addressing a conversation (seeded key, else id). */

@@ -134,6 +134,11 @@ export function ConversationList({
               <span className="truncate font-semibold text-white">
                 {s.title}
               </span>
+              {s.muted && (
+                <span aria-label={t.chat.muted} title={t.chat.muted} className="shrink-0 text-xs">
+                  🔕
+                </span>
+              )}
               {s.unread > 0 && (
                 <span className="ml-auto shrink-0 rounded-full bg-violet-500 px-2 py-0.5 text-xs font-semibold text-white">
                   {s.unread}

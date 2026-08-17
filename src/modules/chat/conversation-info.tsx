@@ -11,7 +11,7 @@ import {
   removeMember,
   renameGroup,
 } from "./conversation-actions";
-import { addableMembers } from "./actions";
+import { addableMembers, toggleMute } from "./actions";
 
 type Member = { id: string; name: string; avatarUrl: string | null };
 
@@ -28,6 +28,7 @@ export function ConversationInfo({
   online,
   viewerId,
   isAdmin,
+  muted,
   onClose,
 }: {
   conversationId: string;
@@ -37,6 +38,7 @@ export function ConversationInfo({
   online: string[];
   viewerId: string;
   isAdmin: boolean;
+  muted: boolean;
   onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -46,6 +48,7 @@ export function ConversationInfo({
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState(conversationName);
   const [adding, setAdding] = useState(false);
+  const [isMuted, setIsMuted] = useState(muted);
   const [candidates, setCandidates] = useState<Member[] | null>(null);
   const [toAdd, setToAdd] = useState<Set<string>>(new Set());
 
@@ -245,6 +248,20 @@ export function ConversationInfo({
             )}
           </div>
         )}
+
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            run(
+              () => toggleMute(conversationId),
+              () => setIsMuted((v) => !v),
+            )
+          }
+          className={`${btnSecondary} mb-4 w-full`}
+        >
+          {isMuted ? `🔔 ${t.chat.unmute}` : `🔕 ${t.chat.mute}`}
+        </button>
 
         {error && (
           <p className={errorText} role="alert">

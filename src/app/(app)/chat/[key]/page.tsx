@@ -53,7 +53,7 @@ export default async function ConversationPage({
     conversationMembers(conversation),
     prisma.conversationRead.findMany({
       where: { conversationId: conversation.id },
-      select: { userId: true, lastReadAt: true },
+      select: { userId: true, lastReadAt: true, muted: true },
     }),
     prisma.user.findUniqueOrThrow({
       where: { id: session.user.id },
@@ -104,6 +104,7 @@ export default async function ConversationPage({
       }))}
       focusMessageId={around ? (focusMessageId ?? null) : null}
       gifEnabled={Boolean(process.env.TENOR_API_KEY)}
+      initialMuted={read?.muted ?? false}
     />
   );
 }

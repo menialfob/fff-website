@@ -163,6 +163,7 @@ export function ConversationView({
   initialReads,
   focusMessageId,
   gifEnabled,
+  initialMuted,
 }: {
   conversationId: string;
   conversationName: string;
@@ -179,6 +180,7 @@ export function ConversationView({
   initialReads: { userId: string; lastReadAt: string }[];
   focusMessageId: string | null;
   gifEnabled: boolean;
+  initialMuted: boolean;
 }) {
   const { t, locale } = useI18n();
   const router = useRouter();
@@ -978,6 +980,7 @@ export function ConversationView({
           online={online}
           viewerId={viewerId}
           isAdmin={isAdmin}
+          muted={initialMuted}
           onClose={() => setShowInfo(false)}
         />
       )}
