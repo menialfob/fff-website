@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { avatarUrlFor } from "@/components/avatar";
 import type { ExtraRole } from "@/lib/roles";
+import { emitEvent } from "@/lib/realtime";
 import type {
   MessageDTO,
   PollDTO,
@@ -222,6 +223,56 @@ export async function enrichEventCounts(dtos: MessageDTO[]): Promise<MessageDTO[
  * site-admin flag is deliberately absent — see `canAccessConversation`.
  */
 export type Viewer = { extraRoles?: ExtraRole[] };
+
+/**
+ * The viewer's current roles, read from the database — never from the session
+ * token. A role-gated channel has no member rows: holding the role *is* the
+ * membership, and roles are granted and revoked ad hoc, while a JWT is only
+ * re-minted at login and lives up to a week (see src/lib/auth.config.ts). So
+ * trusting `session.user.extraRoles` here would leave a former bestyrelse
+ * member reading the channel for days after losing the role, and make a new
+ * one wait for a re-login to get in. Every chat access check resolves the
+ * viewer through this instead, so a role change takes effect on the next
+ * request.
+ */
+export async function viewerFor(userId: string): Promise<Viewer> {
+  const roles = await prisma.userRole.findMany({
+    where: { userId },
+    select: { role: true },
+  });
+  return { extraRoles: roles.map((r) => r.role) };
+}
+
+/**
+ * Announce the current holders of every channel gated on `role` after a grant
+ * or revoke, so open clients follow the change without a reload: each SSE
+ * connection recomputes its allow-set from `memberIds` (exactly as it does for
+ * group membership) and the conversation list refetches, making the channel
+ * appear for a new holder and disappear for a former one.
+ */
+export async function broadcastRoleChannelMembership(
+  role: ExtraRole,
+  granted: boolean,
+): Promise<void> {
+  const channels = await prisma.conversation.findMany({
+    where: { type: "CHANNEL", requiredRole: role },
+    select: { id: true },
+  });
+  if (channels.length === 0) return;
+  const holders = await prisma.userRole.findMany({
+    where: { role },
+    select: { userId: true },
+  });
+  const memberIds = holders.map((h) => h.userId);
+  for (const channel of channels) {
+    emitEvent({
+      type: "conversation",
+      conversationId: channel.id,
+      kind: granted ? "member-added" : "member-removed",
+      memberIds,
+    });
+  }
+}
 
 type ConversationGate = {
   type: ConversationType;

@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { accessibleConversationIds } from "@/modules/chat/data";
+import { accessibleConversationIds, viewerFor } from "@/modules/chat/data";
 import {
   addPresence,
   onlineUserIds,
@@ -28,10 +28,12 @@ export async function GET(request: Request) {
   const userId = session.user.id;
   const encoder = new TextEncoder();
 
-  // Authorization snapshot for this connection. A role or membership change
-  // mid-connection applies on reconnect (EventSource reconnects often).
+  // Authorization snapshot for this connection, from the viewer's current
+  // roles (not the session token). Membership changes mid-connection — group
+  // member rows and role grants/revokes alike — arrive as `conversation`
+  // events and update the allow-set below without waiting for a reconnect.
   const accessible = await accessibleConversationIds(
-    { extraRoles: session.user.extraRoles },
+    await viewerFor(userId),
     userId,
   );
   const allowed = new Set(accessible);
@@ -71,7 +73,9 @@ export async function GET(request: Request) {
         // Membership changes keep this connection's allow-set current:
         // added members start receiving events immediately, removed members
         // stop — and both get the conversation event itself so the UI can
-        // update the list.
+        // update the list. For a role-gated channel `memberIds` is the set of
+        // users currently holding the role, so a grant or revoke lands here
+        // the same way a group's member rows do.
         if (event.type === "conversation") {
           const couldSee = allowed.has(event.conversationId);
           const nowMember = event.memberIds.includes(userId);

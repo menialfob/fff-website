@@ -13,6 +13,7 @@ import {
   type BestyrelseTitle,
   type ExtraRole,
 } from "@/lib/roles";
+import { broadcastRoleChannelMembership } from "@/modules/chat/data";
 
 const createUserSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -205,6 +206,10 @@ export async function setExtraRole(
   } else {
     await prisma.userRole.deleteMany({ where: { userId, role } });
   }
+  // A role-gated chat channel has no member rows — the role is the
+  // membership — so granting or revoking one changes who is in it. Tell open
+  // clients, or the channel would only appear/disappear on their next reload.
+  await broadcastRoleChannelMembership(role, granted);
   await logEvent({
     actorId: session.user.id,
     action: granted ? "user.grantRole" : "user.revokeRole",
