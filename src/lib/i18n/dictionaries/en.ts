@@ -83,7 +83,15 @@ export const en: typeof da = {
       newEvent: "New event: {title}",
       newThread: "New thread: {title}",
       newReply: "New reply in {title}",
+      newMember: "New in the clubhouse: {name}",
     },
+  },
+  push: {
+    newThread: "{name} started the thread “{title}”",
+    newReply: "{name} replied in “{title}”",
+    newEvent: "{name} put “{title}” on the calendar",
+    newFile: "{name} uploaded “{file}”",
+    newMember: "{name} has joined the clubhouse",
   },
   files: {
     uploadTitle: "Upload a file",

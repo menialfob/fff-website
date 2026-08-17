@@ -1,11 +1,17 @@
 import { prisma } from "@/lib/db";
 
 /**
- * The dashboard sections that track unread activity. These strings are the
- * `SectionView.section` values and must stay in sync with the module ids they
- * mirror (`forum`, `calendar`, `files`).
+ * The dashboard sections that track unread activity with a "last opened"
+ * cursor. These strings are the `SectionView.section` values and must stay in
+ * sync with the module ids they mirror (`forum`, `calendar`, `files`,
+ * `members`).
+ *
+ * Chat is deliberately absent: it counts unread messages per conversation from
+ * its own read cursors (see `chatUnreadCount`), so it needs no section view.
+ * Klub 100 has no unread concept at all, and admin is a tool rather than a feed
+ * — neither is badged.
  */
-export const SECTIONS = ["forum", "calendar", "files"] as const;
+export const SECTIONS = ["forum", "calendar", "files", "members"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export function isSection(value: string): value is Section {
@@ -15,17 +21,12 @@ export function isSection(value: string): value is Section {
 /** A single "new since you last visited" item shown in the recent-activity list. */
 export type ActivityItem = {
   // Matches an i18n key under `dashboard.recentActivity`.
-  kind: "newFile" | "newEvent" | "newThread" | "newReply";
+  kind: "newFile" | "newEvent" | "newThread" | "newReply" | "newMember";
   // Which section this belongs to (drives the icon).
   section: Section;
   name: string;
   href: string;
   at: Date;
-};
-
-export type ActivitySummary = {
-  counts: Record<Section, number>;
-  recent: ActivityItem[];
 };
 
 const RECENT_PER_SECTION = 5;
@@ -51,95 +52,97 @@ async function sectionCutoffs(userId: string): Promise<(s: Section) => Date> {
 }
 
 /**
- * Per-section unread counts only — the cheap half of `getActivitySummary`,
- * used by the app-icon badge where the recent-item lists aren't needed.
+ * The "new for you" filter behind both the counts and the recent list: created
+ * after the section's cutoff, and never the member's own contribution. Shared
+ * so a badge can never disagree with the items it stands for.
+ */
+function sectionFilters(userId: string, since: (s: Section) => Date) {
+  return {
+    forum: {
+      createdAt: { gt: since("forum") },
+      createdById: { not: userId },
+    },
+    calendar: {
+      createdAt: { gt: since("calendar") },
+      createdById: { not: userId },
+    },
+    files: {
+      createdAt: { gt: since("files") },
+      uploadedById: { not: userId },
+    },
+    // Deactivated accounts are not news; neither is your own arrival.
+    members: {
+      createdAt: { gt: since("members") },
+      id: { not: userId },
+      isActive: true,
+    },
+  };
+}
+
+async function countSections(
+  where: ReturnType<typeof sectionFilters>,
+): Promise<Record<Section, number>> {
+  const [forum, calendar, files, members] = await Promise.all([
+    prisma.forumPost.count({ where: where.forum }),
+    prisma.calendarEvent.count({ where: where.calendar }),
+    prisma.fileItem.count({ where: where.files }),
+    prisma.user.count({ where: where.members }),
+  ]);
+  return { forum, calendar, files, members };
+}
+
+/**
+ * Per-section unread counts — the numbers behind the home screen card badges
+ * and (summed with chat) the app-icon badge. "Unread" = created after the user
+ * last opened that section, falling back to their join date so the whole
+ * history isn't dumped on first login, and never their own contributions.
  */
 export async function getSectionCounts(
   userId: string,
 ): Promise<Record<Section, number>> {
   const since = await sectionCutoffs(userId);
-  const [forum, calendar, files] = await Promise.all([
-    prisma.forumPost.count({
-      where: { createdAt: { gt: since("forum") }, createdById: { not: userId } },
-    }),
-    prisma.calendarEvent.count({
-      where: {
-        createdAt: { gt: since("calendar") },
-        createdById: { not: userId },
-      },
-    }),
-    prisma.fileItem.count({
-      where: {
-        createdAt: { gt: since("files") },
-        uploadedById: { not: userId },
-      },
-    }),
-  ]);
-  return { forum, calendar, files };
+  return countSections(sectionFilters(userId, since));
 }
 
 /**
- * Compute per-section unread counts and a merged recent-activity list for a
- * user. "Unread" = created after the user last opened that section (falling
- * back to the user's join date, so the whole history isn't dumped on first
- * login), excluding the user's own contributions.
+ * The merged "new since last visit" list under the home screen cards — the
+ * same items the badges count, newest first.
  */
-export async function getActivitySummary(
+export async function getRecentActivity(
   userId: string,
-): Promise<ActivitySummary> {
+): Promise<ActivityItem[]> {
   const since = await sectionCutoffs(userId);
+  const where = sectionFilters(userId, since);
 
-  const [forumCount, calendarCount, filesCount, forumPosts, events, files] =
-    await Promise.all([
-      prisma.forumPost.count({
-        where: {
-          createdAt: { gt: since("forum") },
-          createdById: { not: userId },
-        },
-      }),
-      prisma.calendarEvent.count({
-        where: {
-          createdAt: { gt: since("calendar") },
-          createdById: { not: userId },
-        },
-      }),
-      prisma.fileItem.count({
-        where: {
-          createdAt: { gt: since("files") },
-          uploadedById: { not: userId },
-        },
-      }),
-      prisma.forumPost.findMany({
-        where: {
-          createdAt: { gt: since("forum") },
-          createdById: { not: userId },
-        },
-        orderBy: { createdAt: "desc" },
-        take: RECENT_PER_SECTION,
-        select: {
-          createdAt: true,
-          thread: { select: { id: true, title: true, createdAt: true } },
-        },
-      }),
-      prisma.calendarEvent.findMany({
-        where: {
-          createdAt: { gt: since("calendar") },
-          createdById: { not: userId },
-        },
-        orderBy: { createdAt: "desc" },
-        take: RECENT_PER_SECTION,
-        select: { id: true, title: true, createdAt: true },
-      }),
-      prisma.fileItem.findMany({
-        where: {
-          createdAt: { gt: since("files") },
-          uploadedById: { not: userId },
-        },
-        orderBy: { createdAt: "desc" },
-        take: RECENT_PER_SECTION,
-        select: { name: true, createdAt: true },
-      }),
-    ]);
+  const [forumPosts, events, files, members] = await Promise.all([
+    prisma.forumPost.findMany({
+      where: where.forum,
+      orderBy: { createdAt: "desc" },
+      take: RECENT_PER_SECTION,
+      select: {
+        createdAt: true,
+        thread: { select: { id: true, title: true, createdAt: true } },
+      },
+    }),
+    prisma.calendarEvent.findMany({
+      where: where.calendar,
+      orderBy: { createdAt: "desc" },
+      take: RECENT_PER_SECTION,
+      select: { id: true, title: true, createdAt: true },
+    }),
+    prisma.fileItem.findMany({
+      where: where.files,
+      orderBy: { createdAt: "desc" },
+      take: RECENT_PER_SECTION,
+      select: { name: true, createdAt: true },
+    }),
+    prisma.user.findMany({
+      where: where.members,
+      orderBy: { createdAt: "desc" },
+      take: RECENT_PER_SECTION,
+      select: { name: true, createdAt: true },
+    }),
+  ]);
 
   const recent: ActivityItem[] = [];
   for (const p of forumPosts) {
@@ -173,10 +176,16 @@ export async function getActivitySummary(
       at: f.createdAt,
     });
   }
+  for (const m of members) {
+    recent.push({
+      kind: "newMember",
+      section: "members",
+      name: m.name,
+      href: "/members",
+      at: m.createdAt,
+    });
+  }
   recent.sort((a, b) => b.at.getTime() - a.at.getTime());
 
-  return {
-    counts: { forum: forumCount, calendar: calendarCount, files: filesCount },
-    recent: recent.slice(0, RECENT_TOTAL),
-  };
+  return recent.slice(0, RECENT_TOTAL);
 }

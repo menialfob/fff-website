@@ -6,6 +6,8 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { deleteUpload, saveUpload } from "@/lib/storage";
 import { getDict } from "@/lib/i18n/server";
+import { fmt } from "@/lib/i18n";
+import { notifyMembers } from "@/lib/notify";
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // matches serverActions.bodySizeLimit
 const MAX_FOLDER_NAME = 100;
@@ -50,6 +52,16 @@ export async function uploadFile(formData: FormData) {
     targetType: "file",
     targetId: item.id,
     meta: { name: file.name, size: file.size },
+  });
+  await notifyMembers({
+    actorId: session.user.id,
+    section: "files",
+    title: t.modules.files.label,
+    body: fmt(t.push.newFile, {
+      name: session.user.name ?? "",
+      file: file.name,
+    }),
+    url: folderId ? `/files/${folderId}` : "/files",
   });
   revalidatePath("/files");
   if (folderId) revalidatePath(`/files/${folderId}`);

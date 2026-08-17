@@ -7,6 +7,8 @@ import { logEvent } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
+import { fmt } from "@/lib/i18n";
+import { notifyMembers } from "@/lib/notify";
 import {
   isBestyrelseTitle,
   isExtraRole,
@@ -54,6 +56,16 @@ export async function createUser(formData: FormData) {
     targetType: "user",
     targetId: user.id,
     meta: { targetName: user.name },
+  });
+  // Everyone but the admin who created the account gets the news — including
+  // the new member, who has no device subscribed yet, so it reaches nobody's
+  // phone twice.
+  await notifyMembers({
+    actorId: session.user.id,
+    section: "members",
+    title: t.modules.members.label,
+    body: fmt(t.push.newMember, { name: user.name }),
+    url: "/members",
   });
   revalidatePath("/admin");
   return { ok: true };

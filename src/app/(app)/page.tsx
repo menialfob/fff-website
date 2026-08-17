@@ -4,7 +4,12 @@ import { modulesForUser, type ModuleId } from "@/modules/registry";
 import { fmt, formatDate } from "@/lib/i18n";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { cardHover, listCard, moduleAccents } from "@/components/ui";
-import { getActivitySummary, isSection } from "@/lib/activity";
+import {
+  getRecentActivity,
+  type ActivityItem,
+  type Section,
+} from "@/lib/activity";
+import { getModuleBadgeCounts, type ModuleBadgeCounts } from "@/lib/badge";
 import {
   CalendarIcon,
   ChatBubblesIcon,
@@ -26,20 +31,27 @@ const moduleIcons: Record<ModuleId, (p: { className?: string }) => React.ReactNo
 };
 
 // Which icon to show for each recent-activity item.
-const sectionIcons = {
+const sectionIcons: Record<Section, (p: { className?: string }) => React.ReactNode> = {
   forum: MessageIcon,
   calendar: CalendarIcon,
   files: FolderIcon,
-} as const;
+  members: UsersIcon,
+};
+
+/** Two digits max, so a long-absent member's badge can't stretch the card. */
+const BADGE_MAX = 99;
 
 export default async function DashboardPage() {
   const session = await auth();
   const role = session?.user?.role ?? "MEMBER";
   const [t, locale] = await Promise.all([getDict(), getLocale()]);
   const firstName = session?.user?.name?.split(" ")[0] ?? "";
-  const activity = session?.user?.id
-    ? await getActivitySummary(session.user.id)
-    : null;
+  const userId = session?.user?.id;
+  // The card badges and the list below them are two views of the same "new for
+  // you" set, so they are always fetched together.
+  const [badges, recent]: [ModuleBadgeCounts, ActivityItem[]] = userId
+    ? await Promise.all([getModuleBadgeCounts(userId), getRecentActivity(userId)])
+    : [{}, []];
 
   return (
     <div>
@@ -52,8 +64,7 @@ export default async function DashboardPage() {
         {modulesForUser({ role, extraRoles: session?.user?.extraRoles }).map((m) => {
           const Icon = moduleIcons[m.id];
           const accent = moduleAccents[m.id];
-          const count =
-            activity && isSection(m.id) ? activity.counts[m.id] : 0;
+          const count = badges[m.id] ?? 0;
           return (
             <Link key={m.id} href={m.href} className={`${cardHover} group relative p-5`}>
               {count > 0 && (
@@ -61,7 +72,7 @@ export default async function DashboardPage() {
                   className={`absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-gradient-to-r ${accent.gradient} px-1.5 text-xs font-bold text-zinc-950 shadow-lg`}
                   aria-label={fmt(t.dashboard.recentActivity.badge, { count })}
                 >
-                  {count}
+                  {count > BADGE_MAX ? `${BADGE_MAX}+` : count}
                 </span>
               )}
               <span
@@ -80,18 +91,22 @@ export default async function DashboardPage() {
         })}
       </div>
 
-      {activity && activity.recent.length > 0 && (
+      {recent.length > 0 && (
         <section className="mt-10">
           <h2 className="mb-3 text-lg font-semibold text-white">
             {t.dashboard.recentActivity.title}
           </h2>
           <ul className={listCard}>
-            {activity.recent.map((item, i) => {
+            {recent.map((item, i) => {
               const Icon = sectionIcons[item.section];
               const accent = moduleAccents[item.section];
+              // Files and members are named things; threads and events are
+              // titled ones — the two templates take different placeholders.
               const label =
-                item.kind === "newFile"
-                  ? fmt(t.dashboard.recentActivity.newFile, { name: item.name })
+                item.kind === "newFile" || item.kind === "newMember"
+                  ? fmt(t.dashboard.recentActivity[item.kind], {
+                      name: item.name,
+                    })
                   : fmt(t.dashboard.recentActivity[item.kind], {
                       title: item.name,
                     });

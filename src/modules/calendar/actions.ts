@@ -7,7 +7,8 @@ import { logEvent } from "@/lib/audit";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
-import type { Dictionary } from "@/lib/i18n";
+import { fmt, type Dictionary } from "@/lib/i18n";
+import { notifyMembers } from "@/lib/notify";
 import { claimAssets, parseContentFields } from "@/modules/content/assets";
 import {
   createEventThread,
@@ -464,6 +465,18 @@ export async function createEvent(formData: FormData) {
     targetType: "calendarEvent",
     targetId: event.id,
     meta: { title: parsed.title, kind },
+  });
+  // Only the event itself is announced: an ad hoc event's Begivenheder thread
+  // has no post yet, so it raises no forum badge and needs no second push.
+  await notifyMembers({
+    actorId: session.user.id,
+    section: "calendar",
+    title: t.modules.calendar.label,
+    body: fmt(t.push.newEvent, {
+      name: session.user.name ?? "",
+      title: parsed.title,
+    }),
+    url: `/calendar/${event.id}`,
   });
   revalidateCalendar(event.id);
   return { ok: true, id: event.id };
