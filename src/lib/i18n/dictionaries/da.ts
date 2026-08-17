@@ -671,6 +671,7 @@ export const da = {
     emojiPicker: "Vælg emoji",
     emojiSearch: "Søg efter emoji…",
     emojiNoResults: "Ingen emoji fundet",
+    mentionedYou: "{name} nævnte dig",
     imageViewerPrev: "Forrige billede",
     imageViewerNext: "Næste billede",
     online: "{count} online",

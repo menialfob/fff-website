@@ -79,6 +79,7 @@ model User {
   conversationMemberships ConversationMember[]
   conversationsCreated    Conversation[]
   messageAttachments      MessageAttachment[]
+  messageMentions         MessageMention[]
 }
 
 model UserRole {
@@ -235,6 +236,7 @@ model Message {
   reactions   MessageReaction[]
   poll        Poll?
   attachments MessageAttachment[]
+  mentions    MessageMention[]
 
   @@index([conversationId, createdAt])
 }
@@ -273,6 +275,22 @@ model MessageAttachment {
 
   @@index([messageId])
   @@index([uploadedById, messageId])
+}
+
+// An @mention of a member inside a message body. Offsets into the stored
+// body (computed server-side by scanning for "@Name" at write time), so
+// highlighting survives later renames. Recomputed on edit.
+model MessageMention {
+  id        String  @id @default(cuid())
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  offset    Int
+  length    Int
+
+  @@index([messageId])
+  @@index([userId])
 }
 
 // One emoji reaction by one user on one message. Toggling adds/removes the row.

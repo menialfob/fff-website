@@ -668,6 +668,7 @@ export const en: typeof da = {
     emojiPicker: "Pick emoji",
     emojiSearch: "Search emoji…",
     emojiNoResults: "No emoji found",
+    mentionedYou: "{name} mentioned you",
     imageViewerPrev: "Previous image",
     imageViewerNext: "Next image",
     online: "{count} online",

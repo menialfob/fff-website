@@ -10,10 +10,12 @@ import {
   buildMessageDTO,
   buildPollDTO,
   canAccessConversation,
+  conversationMembers,
   conversationMessages,
   conversationSlug,
   conversationSummaries,
   enrichEventCounts,
+  extractMentions,
   messageInclude,
   messagesAfter,
   messagesAround,
@@ -23,6 +25,7 @@ import {
   toSearchText,
   type ConversationSummaryDTO,
 } from "./data";
+import { fmt } from "@/lib/i18n";
 import { avatarUrlFor } from "@/components/avatar";
 import { deleteUpload, saveProcessedUpload } from "@/lib/storage";
 import { processImageAttachment } from "@/lib/images";
@@ -115,6 +118,10 @@ export async function sendMessage(
     }
   }
 
+  // Mentions are derived server-side by scanning for members' "@Name".
+  const members = await conversationMembers(conversation);
+  const mentions = text ? extractMentions(text, members) : [];
+
   const now = new Date();
   const created = await prisma.message.create({
     data: {
@@ -125,6 +132,7 @@ export async function sendMessage(
       clientId: clientId?.slice(0, 64) || null,
       replyToId: replyToId || null,
       createdAt: now,
+      mentions: { create: mentions },
     },
   });
   if (wantedAttachments.length > 0) {
@@ -150,21 +158,33 @@ export async function sendMessage(
   emitEvent({ type: "message", conversationId, message: dto });
 
   // Notify members who aren't currently connected (online users got it live).
+  // Mentioned members get a targeted notification instead of the generic one.
   const recipients = await pushRecipients(
     conversation,
     session.user.id,
     onlineUserIds(),
   );
   const slug = conversationSlug(conversation);
+  const mentionedIds = new Set(mentions.map((m) => m.userId));
+  const plainRecipients = recipients.filter((id) => !mentionedIds.has(id));
+  const mentionRecipients = recipients.filter((id) => mentionedIds.has(id));
   const pushBody = text
     ? `${session.user.name}: ${text}`
     : `${session.user.name}: ${attachmentPreviewLabel(dto.attachments, t)}`;
-  await sendPushToUsers(recipients, {
+  await sendPushToUsers(plainRecipients, {
     title: pushTitle(conversation, session.user.name ?? ""),
     body: pushBody.slice(0, 160),
     url: `/chat/${slug}`,
     tag: `chat-${slug}`,
   });
+  if (mentionRecipients.length > 0) {
+    await sendPushToUsers(mentionRecipients, {
+      title: fmt(t.chat.mentionedYou, { name: session.user.name ?? "" }),
+      body: text.slice(0, 160),
+      url: `/chat/${slug}?m=${created.id}`,
+      tag: `chat-${slug}`,
+    });
+  }
 
   return { ok: true, message: dto };
 }
@@ -331,9 +351,17 @@ export async function editMessage(
     return { error: t.errors.messageNotEditable };
   }
 
+  // Recompute mentions against the new body (no push — edits are quiet).
+  const members = await conversationMembers(gate.conversation!);
+  const mentions = extractMentions(text, members);
   const updated = await prisma.message.update({
     where: { id: messageId },
-    data: { body: text, searchText: toSearchText(text), editedAt: new Date() },
+    data: {
+      body: text,
+      searchText: toSearchText(text),
+      editedAt: new Date(),
+      mentions: { deleteMany: {}, create: mentions },
+    },
     include: messageInclude,
   });
   const [dto] = await enrichEventCounts([buildMessageDTO(updated)]);

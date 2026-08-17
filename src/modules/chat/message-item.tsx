@@ -9,7 +9,7 @@ import {
   intlLocale,
   type Locale,
 } from "@/lib/i18n";
-import type { EventCardDTO, MessageDTO } from "@/lib/realtime";
+import type { EventCardDTO, MentionDTO, MessageDTO } from "@/lib/realtime";
 import { Avatar } from "@/components/avatar";
 import { PollCard } from "./poll-card";
 import { MessageMenu } from "./message-menu";
@@ -61,6 +61,46 @@ const SWIPE_TRIGGER_PX = 56;
 const SWIPE_MAX_PX = 72;
 
 const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+/**
+ * Render a body with mention highlights (offset-sliced, so renames don't
+ * break old messages) around the linkified text segments.
+ */
+function renderBodyWithMentions(
+  text: string,
+  mentions: MentionDTO[],
+  viewerId: string,
+) {
+  if (mentions.length === 0) return renderBody(text);
+  const parts: React.ReactNode[] = [];
+  let pos = 0;
+  for (const m of mentions) {
+    if (m.offset < pos || m.offset + m.length > text.length) continue;
+    if (m.offset > pos) {
+      parts.push(
+        <Fragment key={`t-${pos}`}>{renderBody(text.slice(pos, m.offset))}</Fragment>,
+      );
+    }
+    const isSelf = m.userId === viewerId;
+    parts.push(
+      <span
+        key={`m-${m.offset}`}
+        className={`rounded px-0.5 font-medium ${
+          isSelf
+            ? "bg-amber-400/25 text-amber-200"
+            : "bg-violet-500/20 text-violet-200"
+        }`}
+      >
+        {text.slice(m.offset, m.offset + m.length)}
+      </span>,
+    );
+    pos = m.offset + m.length;
+  }
+  if (pos < text.length) {
+    parts.push(<Fragment key={`t-${pos}`}>{renderBody(text.slice(pos))}</Fragment>);
+  }
+  return parts;
+}
 
 /** Render plain text with clickable links (nodes, never dangerouslySetInnerHTML). */
 function renderBody(text: string) {
@@ -290,7 +330,7 @@ export function MessageItem({
             </p>
           ) : (
             <p className="whitespace-pre-wrap break-words text-sm text-zinc-200">
-              {renderBody(message.body)}
+              {renderBodyWithMentions(message.body, message.mentions, viewerId)}
             </p>
           ))}
 

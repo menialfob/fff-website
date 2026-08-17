@@ -61,6 +61,12 @@ export type AttachmentDTO = {
   thumbUrl: string | null;
 };
 
+export type MentionDTO = {
+  userId: string;
+  offset: number;
+  length: number;
+};
+
 export type ReplyPreviewDTO = {
   id: string;
   authorName: string | null;
@@ -82,6 +88,7 @@ export type MessageDTO = {
   deleted: boolean;
   replyTo: ReplyPreviewDTO | null;
   attachments: AttachmentDTO[];
+  mentions: MentionDTO[];
   author: MessageAuthorDTO | null;
   reactions: ReactionSummary[];
   poll: PollDTO | null;

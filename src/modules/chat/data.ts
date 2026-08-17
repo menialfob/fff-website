@@ -20,6 +20,7 @@ export const messageInclude = {
     },
   },
   reactions: { select: { emoji: true, userId: true } },
+  mentions: { select: { userId: true, offset: true, length: true } },
   attachments: {
     orderBy: { order: "asc" as const },
     select: {
@@ -132,6 +133,7 @@ type RawMessage = {
   deletedAt: Date | null;
   replyTo: RawReply | null;
   attachments: RawAttachment[];
+  mentions: { userId: string; offset: number; length: number }[];
   author: RawAuthor | null;
   reactions: RawReaction[];
   poll: RawPoll | null;
@@ -166,6 +168,7 @@ export function buildMessageDTO(msg: RawMessage): MessageDTO {
           deleted: msg.replyTo.deletedAt !== null,
         }
       : null,
+    mentions: msg.mentions,
     attachments: msg.attachments.map((a) => ({
       id: a.id,
       kind: a.kind,
@@ -483,6 +486,40 @@ export async function conversationSummaries(
       };
     }),
   );
+}
+
+const MAX_MENTIONS = 20;
+
+/**
+ * Scan a message body for "@Name" occurrences of conversation members and
+ * return their offsets. Longest names match first so "@Anna Berg" wins over
+ * "@Anna"; matches never overlap. Case-sensitive on purpose — the
+ * autocomplete inserts the exact name.
+ */
+export function extractMentions(
+  body: string,
+  members: { id: string; name: string }[],
+): { userId: string; offset: number; length: number }[] {
+  if (!body.includes("@")) return [];
+  const sorted = [...members]
+    .filter((m) => m.name.trim().length > 0)
+    .sort((a, b) => b.name.length - a.name.length);
+  const taken: [number, number][] = [];
+  const mentions: { userId: string; offset: number; length: number }[] = [];
+  for (const member of sorted) {
+    const needle = `@${member.name}`;
+    let from = 0;
+    while (mentions.length < MAX_MENTIONS) {
+      const idx = body.indexOf(needle, from);
+      if (idx === -1) break;
+      from = idx + 1;
+      const end = idx + needle.length;
+      if (taken.some(([s2, e2]) => idx < e2 && end > s2)) continue;
+      taken.push([idx, end]);
+      mentions.push({ userId: member.id, offset: idx, length: needle.length });
+    }
+  }
+  return mentions.sort((a, b) => a.offset - b.offset);
 }
 
 /** Locale-free preview marker for an attachment-only last message. */

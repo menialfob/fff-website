@@ -205,6 +205,9 @@ export function ConversationView({
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const [showGif, setShowGif] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  // Active "@query" token at the caret, if any (drives the mention popover).
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const [pending, startTransition] = useTransition();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -593,14 +596,51 @@ export function ConversationView({
     el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_PX)}px`;
   }
 
+  function updateMentionQuery(value: string) {
+    const el = textareaRef.current;
+    const caret = el?.selectionStart ?? value.length;
+    const match = /@([^\s@]{0,30})$/.exec(value.slice(0, caret));
+    setMentionQuery(match ? match[1] : null);
+    setMentionIndex(0);
+  }
+
   function onType(value: string) {
     setText(value);
     autosizeComposer();
+    updateMentionQuery(value);
     const now = Date.now();
     if (now - lastTypingSent.current > TYPING_THROTTLE_MS) {
       lastTypingSent.current = now;
       void sendTyping(conversationId);
     }
+  }
+
+  const mentionCandidates =
+    mentionQuery === null
+      ? []
+      : members
+          .filter((m) => m.id !== viewerId)
+          .filter((m) =>
+            m.name.toLocaleLowerCase().includes(mentionQuery.toLocaleLowerCase()),
+          )
+          .slice(0, 6);
+
+  function pickMention(member: { id: string; name: string }) {
+    const el = textareaRef.current;
+    const caret = el?.selectionStart ?? text.length;
+    const upToCaret = text.slice(0, caret);
+    const at = upToCaret.lastIndexOf("@");
+    if (at === -1) return;
+    const next = `${text.slice(0, at)}@${member.name} ${text.slice(caret)}`;
+    setText(next);
+    setMentionQuery(null);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const pos = at + member.name.length + 2;
+      el.setSelectionRange(pos, pos);
+      autosizeComposer();
+    });
   }
 
   function addFiles(list: FileList | null) {
@@ -1081,6 +1121,24 @@ export function ConversationView({
         />
       )}
 
+      {mentionCandidates.length > 0 && (
+        <div className="mb-1 overflow-hidden rounded-xl border border-white/10 bg-panel shadow-lg">
+          {mentionCandidates.map((m, i) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => pickMention(m)}
+              className={`flex w-full items-center gap-2.5 px-3 py-2 text-left transition ${
+                i === mentionIndex ? "bg-white/[0.08]" : "hover:bg-white/[0.05]"
+              }`}
+            >
+              <Avatar id={m.id} name={m.name} avatarUrl={m.avatarUrl} size="sm" />
+              <span className="truncate text-sm text-zinc-100">{m.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {(replyTarget || editTarget) && (
         <div className="mb-1 flex items-center gap-2 rounded-lg border-l-2 border-violet-400/60 bg-white/[0.04] px-2.5 py-1.5">
           <div className="min-w-0 flex-1">
@@ -1209,6 +1267,32 @@ export function ConversationView({
             value={text}
             onChange={(e) => onType(e.target.value)}
             onKeyDown={(e) => {
+              // Mention popover captures navigation keys while open.
+              if (mentionCandidates.length > 0) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setMentionIndex((i) => (i + 1) % mentionCandidates.length);
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setMentionIndex(
+                    (i) =>
+                      (i - 1 + mentionCandidates.length) %
+                      mentionCandidates.length,
+                  );
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  pickMention(mentionCandidates[mentionIndex]);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  setMentionQuery(null);
+                  return;
+                }
+              }
               // Desktop: Enter sends, Shift+Enter newlines. Touch: Enter always
               // inserts a newline (send via the button).
               if (e.key === "Enter" && !e.shiftKey && !isTouch) {
@@ -1216,6 +1300,7 @@ export function ConversationView({
                 send();
               }
             }}
+            onClick={() => updateMentionQuery(text)}
             rows={1}
             placeholder={t.chat.messagePlaceholder}
             className="max-h-32 min-h-[2.75rem] flex-1 resize-none overflow-y-auto rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-500 focus:border-violet-400/50"
