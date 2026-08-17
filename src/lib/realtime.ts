@@ -124,11 +124,17 @@ export type RealtimeEvent =
       lastReadAt: string;
     }
   | {
-      // Membership/metadata change on a DM or group. `memberIds` is the
-      // authoritative post-change member list: the SSE route forwards the
+      // Membership/metadata change on a DM, group, or role-gated channel (for
+      // which `memberIds` is the current set of role holders). `memberIds` is
+      // the authoritative post-change member list: the SSE route forwards the
       // event to current members plus anyone who could previously see the
       // conversation (so removed/leaving members learn about it too), and
       // each connection updates its own allow-set from it.
+      //
+      // Only emit this for a conversation whose access *is* that member list.
+      // An open channel (requiredRole null, everyone in) must never be the
+      // subject: every connection whose user is absent from `memberIds` would
+      // drop it from its allow-set and stop receiving the channel live.
       type: "conversation";
       conversationId: string;
       kind: "created" | "updated" | "member-added" | "member-removed" | "deleted";

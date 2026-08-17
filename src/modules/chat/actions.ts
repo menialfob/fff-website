@@ -728,11 +728,18 @@ export async function toggleMute(conversationId: string): Promise<ActionResult> 
   return { ok: true };
 }
 
-/** Move the viewer's read cursor for a conversation to now (clears unread). */
+/**
+ * Move the viewer's read cursor for a conversation to now (clears unread).
+ * Gated like every other conversation action: without the check any logged-in
+ * member could write a read cursor for — and broadcast a read receipt into —
+ * a conversation they are not in, such as the bestyrelse channel.
+ */
 export async function markConversationRead(
   conversationId: string,
 ): Promise<void> {
   const session = await requireSession();
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error) return;
   const now = new Date();
   try {
     await prisma.conversationRead.upsert({
