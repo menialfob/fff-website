@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { channelsForViewer } from "@/modules/chat/data";
+import { accessibleConversationIds } from "@/modules/chat/data";
 import {
   addPresence,
   onlineUserIds,
@@ -28,15 +28,15 @@ export async function GET(request: Request) {
   const userId = session.user.id;
   const encoder = new TextEncoder();
 
-  // Authorization snapshot for this connection. A role change mid-connection
-  // applies on reconnect (EventSource reconnects often; good enough).
-  const accessible = await channelsForViewer({
-    role: session.user.role,
-    extraRoles: session.user.extraRoles,
-  });
-  const allowed = new Set(accessible.map((c) => c.id));
+  // Authorization snapshot for this connection. A role or membership change
+  // mid-connection applies on reconnect (EventSource reconnects often).
+  const accessible = await accessibleConversationIds(
+    { role: session.user.role, extraRoles: session.user.extraRoles },
+    userId,
+  );
+  const allowed = new Set(accessible);
   const mayForward = (event: RealtimeEvent) =>
-    event.type === "presence" || allowed.has(event.channelId);
+    event.type === "presence" || allowed.has(event.conversationId);
 
   let cleanedUp = false;
   let unsubscribe: (() => void) | null = null;

@@ -5,6 +5,7 @@ import type {
   PollDTO,
   ReactionSummary,
 } from "@/lib/realtime";
+import type { ConversationType } from "@prisma/client";
 
 // Include shape used everywhere a message is turned into a DTO, so the live
 // (SSE) payload and the server-rendered page always agree.
@@ -63,7 +64,7 @@ export function buildPollDTO(poll: RawPoll): PollDTO {
 
 type RawMessage = {
   id: string;
-  channelId: string;
+  conversationId: string;
   body: string;
   createdAt: Date;
   author: { id: string; name: string } | null;
@@ -76,7 +77,7 @@ type RawMessage = {
 export function buildMessageDTO(msg: RawMessage): MessageDTO {
   return {
     id: msg.id,
-    channelId: msg.channelId,
+    conversationId: msg.conversationId,
     body: msg.body,
     createdAt: msg.createdAt.toISOString(),
     author: msg.author ? { id: msg.author.id, name: msg.author.name } : null,
@@ -109,28 +110,63 @@ export async function enrichEventCounts(dtos: MessageDTO[]): Promise<MessageDTO[
   return dtos;
 }
 
-type Viewer = { role: "ADMIN" | "MEMBER"; extraRoles?: ExtraRole[] };
+export type Viewer = { role: "ADMIN" | "MEMBER"; extraRoles?: ExtraRole[] };
 
-/** Whether a viewer may see/post in a channel (role gate + admin superuser). */
-export function canAccessChannel(
-  channel: { requiredRole: ExtraRole | null },
+type ConversationGate = {
+  type: ConversationType;
+  requiredRole: ExtraRole | null;
+};
+
+/**
+ * Whether a viewer may see/post in a conversation. Channels are gated by role
+ * (null = everyone, admins always pass); DMs and groups by membership, which
+ * the caller resolves (`isMember`) since it comes from different places — a
+ * joined member list, a per-user membership query, or a members include.
+ */
+export function canAccessConversation(
+  conversation: ConversationGate,
   viewer: Viewer,
+  isMember: boolean,
 ): boolean {
-  if (!channel.requiredRole) return true;
+  if (conversation.type !== "CHANNEL") return isMember;
+  if (!conversation.requiredRole) return true;
   if (viewer.role === "ADMIN") return true;
-  return viewer.extraRoles?.includes(channel.requiredRole) ?? false;
+  return viewer.extraRoles?.includes(conversation.requiredRole) ?? false;
 }
 
-/** Channels the viewer can see, in display order. */
-export async function channelsForViewer(viewer: Viewer) {
-  const channels = await prisma.channel.findMany({ orderBy: { order: "asc" } });
-  return channels.filter((c) => canAccessChannel(c, viewer));
+/**
+ * Conversations the viewer can see: role-passing channels plus DMs/groups
+ * they are a member of. Channels first (display order), then the rest by
+ * latest activity.
+ */
+export async function conversationsForViewer(viewer: Viewer, userId: string) {
+  const conversations = await prisma.conversation.findMany({
+    where: { OR: [{ type: "CHANNEL" }, { members: { some: { userId } } }] },
+    include: {
+      members: {
+        select: { userId: true, isAdmin: true, user: { select: { name: true } } },
+      },
+    },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  });
+  return conversations.filter((c) =>
+    canAccessConversation(c, viewer, c.members.some((m) => m.userId === userId)),
+  );
 }
 
-/** Most recent messages in a channel (oldest-first for rendering). */
-export async function channelMessages(channelId: string, take = 50) {
-  const rows = await prisma.channelMessage.findMany({
-    where: { channelId },
+/** Ids of every conversation the viewer may receive events for (SSE filter). */
+export async function accessibleConversationIds(
+  viewer: Viewer,
+  userId: string,
+): Promise<string[]> {
+  const conversations = await conversationsForViewer(viewer, userId);
+  return conversations.map((c) => c.id);
+}
+
+/** Most recent messages in a conversation (oldest-first for rendering). */
+export async function conversationMessages(conversationId: string, take = 50) {
+  const rows = await prisma.message.findMany({
+    where: { conversationId },
     orderBy: { createdAt: "desc" },
     take,
     include: messageInclude,
@@ -138,10 +174,24 @@ export async function channelMessages(channelId: string, take = 50) {
   return enrichEventCounts(rows.reverse().map(buildMessageDTO));
 }
 
-/** Active members who can access a channel (for presence name lookup). */
-export async function channelMembers(channel: {
+/**
+ * Active members of a conversation (for presence name lookup and pushes).
+ * Channels: every active user passing the role gate. DMs/groups: the stored
+ * member rows.
+ */
+export async function conversationMembers(conversation: {
+  id: string;
+  type: ConversationType;
   requiredRole: ExtraRole | null;
 }): Promise<{ id: string; name: string }[]> {
+  if (conversation.type !== "CHANNEL") {
+    const members = await prisma.conversationMember.findMany({
+      where: { conversationId: conversation.id, user: { isActive: true } },
+      select: { user: { select: { id: true, name: true } } },
+      orderBy: { user: { name: "asc" } },
+    });
+    return members.map((m) => m.user);
+  }
   const users = await prisma.user.findMany({
     where: { isActive: true },
     select: { id: true, name: true, role: true, extraRoles: { select: { role: true } } },
@@ -149,39 +199,75 @@ export async function channelMembers(channel: {
   });
   return users
     .filter((u) =>
-      canAccessChannel(channel, {
-        role: u.role,
-        extraRoles: u.extraRoles.map((r) => r.role),
-      }),
+      canAccessConversation(
+        conversation,
+        { role: u.role, extraRoles: u.extraRoles.map((r) => r.role) },
+        false,
+      ),
     )
     .map((u) => ({ id: u.id, name: u.name }));
 }
 
-/** Channel list with unread counts + last-message preview for the index page. */
-export async function channelSummaries(viewer: Viewer, userId: string) {
-  const channels = await channelsForViewer(viewer);
+/**
+ * The name a conversation shows a given viewer: channels and groups have
+ * their own name; a DM shows the other member.
+ */
+export function conversationDisplayName(
+  conversation: {
+    type: ConversationType;
+    name: string | null;
+    members?: { userId: string; user?: { name: string } }[];
+  },
+  viewerUserId: string,
+): string {
+  if (conversation.type === "DM") {
+    const other = conversation.members?.find((m) => m.userId !== viewerUserId);
+    return other?.user?.name ?? "";
+  }
+  return conversation.name ?? "";
+}
+
+/**
+ * Conversation list with unread counts + last-message preview for the index
+ * page.
+ */
+export async function conversationSummaries(viewer: Viewer, userId: string) {
+  const conversations = await prisma.conversation.findMany({
+    where: { OR: [{ type: "CHANNEL" }, { members: { some: { userId } } }] },
+    include: {
+      members: {
+        select: { userId: true, isAdmin: true, user: { select: { name: true } } },
+      },
+    },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  });
+  const visible = conversations.filter((c) =>
+    canAccessConversation(c, viewer, c.members.some((m) => m.userId === userId)),
+  );
   return Promise.all(
-    channels.map(async (channel) => {
+    visible.map(async (conversation) => {
       const [last, read] = await Promise.all([
-        prisma.channelMessage.findFirst({
-          where: { channelId: channel.id },
+        prisma.message.findFirst({
+          where: { conversationId: conversation.id },
           orderBy: { createdAt: "desc" },
           include: { author: { select: { name: true } }, poll: { select: { question: true } } },
         }),
-        prisma.channelRead.findUnique({
-          where: { userId_channelId: { userId, channelId: channel.id } },
+        prisma.conversationRead.findUnique({
+          where: { userId_conversationId: { userId, conversationId: conversation.id } },
         }),
       ]);
-      const unread = await prisma.channelMessage.count({
+      const unread = await prisma.message.count({
         where: {
-          channelId: channel.id,
+          conversationId: conversation.id,
           authorId: { not: userId },
           createdAt: { gt: read?.lastReadAt ?? new Date(0) },
         },
       });
       return {
-        channel,
+        conversation,
+        title: conversationDisplayName(conversation, userId),
         unread,
+        muted: read?.muted ?? false,
         last: last
           ? {
               authorName: last.author?.name ?? null,
@@ -196,30 +282,30 @@ export async function channelSummaries(viewer: Viewer, userId: string) {
 }
 
 /**
- * Total unread messages across every channel the viewer can see. Same rule as
- * the per-channel pills on the chat index (messages from others, newer than
- * the read cursor), summed for the app-icon badge.
+ * Total unread messages across every conversation the viewer can see. Same
+ * rule as the per-conversation pills on the chat index (messages from others,
+ * newer than the read cursor), summed for the app-icon badge.
  */
 export async function chatUnreadCount(
   viewer: Viewer,
   userId: string,
 ): Promise<number> {
-  const channels = await channelsForViewer(viewer);
-  if (channels.length === 0) return 0;
+  const conversations = await conversationsForViewer(viewer, userId);
+  if (conversations.length === 0) return 0;
 
-  const reads = await prisma.channelRead.findMany({
-    where: { userId, channelId: { in: channels.map((c) => c.id) } },
-    select: { channelId: true, lastReadAt: true },
+  const reads = await prisma.conversationRead.findMany({
+    where: { userId, conversationId: { in: conversations.map((c) => c.id) } },
+    select: { conversationId: true, lastReadAt: true },
   });
-  const readAt = new Map(reads.map((r) => [r.channelId, r.lastReadAt]));
+  const readAt = new Map(reads.map((r) => [r.conversationId, r.lastReadAt]));
 
   const counts = await Promise.all(
-    channels.map((channel) =>
-      prisma.channelMessage.count({
+    conversations.map((conversation) =>
+      prisma.message.count({
         where: {
-          channelId: channel.id,
+          conversationId: conversation.id,
           authorId: { not: userId },
-          createdAt: { gt: readAt.get(channel.id) ?? new Date(0) },
+          createdAt: { gt: readAt.get(conversation.id) ?? new Date(0) },
         },
       }),
     ),
@@ -228,27 +314,38 @@ export async function chatUnreadCount(
 }
 
 /**
- * Active member ids that should receive a push for activity in a channel:
- * everyone with access, minus the actor, minus anyone currently connected
- * (they get the live update instead, so we don't double-notify).
+ * Active member ids that should receive a push for activity in a
+ * conversation: everyone with access, minus the actor, minus anyone currently
+ * connected (they get the live update instead, so we don't double-notify).
  */
 export async function pushRecipients(
-  channel: { requiredRole: ExtraRole | null },
+  conversation: {
+    id: string;
+    type: ConversationType;
+    requiredRole: ExtraRole | null;
+  },
   actorId: string,
   onlineIds: string[],
 ): Promise<string[]> {
-  const users = await prisma.user.findMany({
-    where: { isActive: true },
-    select: { id: true, role: true, extraRoles: { select: { role: true } } },
-  });
   const online = new Set(onlineIds);
-  return users
-    .filter((u) => u.id !== actorId && !online.has(u.id))
-    .filter((u) =>
-      canAccessChannel(channel, {
-        role: u.role,
-        extraRoles: u.extraRoles.map((r) => r.role),
-      }),
-    )
-    .map((u) => u.id);
+  const members = await conversationMembers(conversation);
+  return members
+    .filter((m) => m.id !== actorId && !online.has(m.id))
+    .map((m) => m.id);
+}
+
+/** The URL path segment addressing a conversation (seeded key, else id). */
+export function conversationSlug(conversation: {
+  id: string;
+  key: string | null;
+}): string {
+  return conversation.key ?? conversation.id;
+}
+
+/**
+ * Lowercase for search storage/matching. JS locale lowercasing handles
+ * Æ/Ø/Å correctly where SQLite's ASCII-only lower()/LIKE would not.
+ */
+export function toSearchText(body: string): string {
+  return body.toLocaleLowerCase("da");
 }

@@ -2,13 +2,14 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
-  canAccessChannel,
-  channelMembers,
-  channelMessages,
+  canAccessConversation,
+  conversationDisplayName,
+  conversationMembers,
+  conversationMessages,
 } from "@/modules/chat/data";
-import { ChannelView } from "@/modules/chat/channel-view";
+import { ConversationView } from "@/modules/chat/channel-view";
 
-export default async function ChannelPage({
+export default async function ConversationPage({
   params,
 }: {
   params: Promise<{ key: string }>;
@@ -16,22 +17,37 @@ export default async function ChannelPage({
   const session = await requireSession();
   const { key } = await params;
 
-  const channel = await prisma.channel.findUnique({ where: { key } });
+  // Seeded channels are addressed by their stable key (old push URLs like
+  // /chat/general keep working); DMs and groups by id.
+  const conversation =
+    (await prisma.conversation.findUnique({
+      where: { key },
+      include: { members: { include: { user: { select: { name: true } } } } },
+    })) ??
+    (await prisma.conversation.findUnique({
+      where: { id: key },
+      include: { members: { include: { user: { select: { name: true } } } } },
+    }));
+
   const viewer = {
     role: session.user.role,
     extraRoles: session.user.extraRoles,
   };
-  if (!channel || !canAccessChannel(channel, viewer)) notFound();
+  const isMember =
+    conversation?.members.some((m) => m.userId === session.user.id) ?? false;
+  if (!conversation || !canAccessConversation(conversation, viewer, isMember)) {
+    notFound();
+  }
 
   const [messages, members] = await Promise.all([
-    channelMessages(channel.id),
-    channelMembers(channel),
+    conversationMessages(conversation.id),
+    conversationMembers(conversation),
   ]);
 
   return (
-    <ChannelView
-      channelId={channel.id}
-      channelName={channel.name}
+    <ConversationView
+      conversationId={conversation.id}
+      conversationName={conversationDisplayName(conversation, session.user.id)}
       viewerId={session.user.id}
       members={members}
       initialMessages={messages}

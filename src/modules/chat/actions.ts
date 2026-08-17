@@ -9,12 +9,14 @@ import type { Session } from "next-auth";
 import {
   buildMessageDTO,
   buildPollDTO,
-  canAccessChannel,
-  channelMessages,
+  canAccessConversation,
+  conversationMessages,
+  conversationSlug,
   enrichEventCounts,
   messageInclude,
   pushRecipients,
   summarizeReactions,
+  toSearchText,
 } from "./data";
 import type { MessageDTO } from "@/lib/realtime";
 
@@ -29,49 +31,78 @@ function viewerOf(session: Session) {
   return { role: session.user.role, extraRoles: session.user.extraRoles };
 }
 
-/** Load a channel and confirm the session may use it, or return an error. */
-async function channelGate(channelId: string, session: Session) {
+/**
+ * Load a conversation and confirm the session may use it, or return an error.
+ * Membership is checked via a scoped include so one query covers both channel
+ * role gates and DM/group membership.
+ */
+async function conversationGate(conversationId: string, session: Session) {
   const t = await getDict();
-  const channel = await prisma.channel.findUnique({ where: { id: channelId } });
-  if (!channel) return { error: t.errors.channelNotFound as string };
-  if (!canAccessChannel(channel, viewerOf(session))) {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: { members: { where: { userId: session.user.id } } },
+  });
+  if (!conversation) return { error: t.errors.conversationNotFound as string };
+  const isMember = conversation.members.length > 0;
+  if (!canAccessConversation(conversation, viewerOf(session), isMember)) {
     return { error: t.errors.notAuthorized as string };
   }
-  return { channel };
+  return { conversation };
+}
+
+/** The push title for activity in a conversation (DMs use the author name). */
+function pushTitle(
+  conversation: { type: string; name: string | null },
+  authorName: string,
+): string {
+  if (conversation.type === "DM" || !conversation.name) return authorName;
+  return conversation.name;
 }
 
 export async function sendMessage(
-  channelId: string,
+  conversationId: string,
   body: string,
 ): Promise<ActionResult> {
   const t = await getDict();
   const session = await requireSession();
-  const gate = await channelGate(channelId, session);
+  const gate = await conversationGate(conversationId, session);
   if (gate.error) return { error: gate.error };
-  const channel = gate.channel!;
+  const conversation = gate.conversation!;
 
   const text = body.trim();
   if (!text) return { error: t.errors.messageEmpty };
   if (text.length > MAX_BODY) return { error: t.errors.messageTooLong };
 
-  const created = await prisma.channelMessage.create({
-    data: { channelId, authorId: session.user.id, body: text },
+  const now = new Date();
+  const created = await prisma.message.create({
+    data: {
+      conversationId,
+      authorId: session.user.id,
+      body: text,
+      searchText: toSearchText(text),
+      createdAt: now,
+    },
     include: messageInclude,
   });
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { lastMessageAt: now },
+  });
   const dto = buildMessageDTO(created);
-  emitEvent({ type: "message", channelId, message: dto });
+  emitEvent({ type: "message", conversationId, message: dto });
 
   // Notify members who aren't currently connected (online users got it live).
   const recipients = await pushRecipients(
-    channel,
+    conversation,
     session.user.id,
     onlineUserIds(),
   );
+  const slug = conversationSlug(conversation);
   await sendPushToUsers(recipients, {
-    title: channel.name,
+    title: pushTitle(conversation, session.user.name ?? ""),
     body: `${session.user.name}: ${text}`.slice(0, 160),
-    url: `/chat/${channel.key}`,
-    tag: `chat-${channel.key}`,
+    url: `/chat/${slug}`,
+    tag: `chat-${slug}`,
   });
 
   return { ok: true };
@@ -87,14 +118,13 @@ export async function toggleReaction(
   const clean = emoji.trim();
   if (!clean || clean.length > MAX_EMOJI) return { error: t.errors.invalidInput };
 
-  const message = await prisma.channelMessage.findUnique({
+  const message = await prisma.message.findUnique({
     where: { id: messageId },
-    select: { id: true, channelId: true, channel: { select: { requiredRole: true } } },
+    select: { id: true, conversationId: true },
   });
   if (!message) return { error: t.errors.messageNotFound };
-  if (!canAccessChannel(message.channel, viewerOf(session))) {
-    return { error: t.errors.notAuthorized };
-  }
+  const gate = await conversationGate(message.conversationId, session);
+  if (gate.error) return { error: gate.error };
 
   const existing = await prisma.messageReaction.findUnique({
     where: {
@@ -119,7 +149,7 @@ export async function toggleReaction(
   });
   emitEvent({
     type: "reaction",
-    channelId: message.channelId,
+    conversationId: message.conversationId,
     messageId,
     reactions: summarizeReactions(reactions),
   });
@@ -128,16 +158,16 @@ export async function toggleReaction(
 }
 
 export async function createPoll(
-  channelId: string,
+  conversationId: string,
   question: string,
   options: string[],
   multiple: boolean,
 ): Promise<ActionResult> {
   const t = await getDict();
   const session = await requireSession();
-  const gate = await channelGate(channelId, session);
+  const gate = await conversationGate(conversationId, session);
   if (gate.error) return { error: gate.error };
-  const channel = gate.channel!;
+  const conversation = gate.conversation!;
 
   const q = question.trim();
   const opts = options
@@ -148,14 +178,16 @@ export async function createPoll(
   if (!q || q.length > MAX_QUESTION) return { error: t.errors.invalidInput };
   if (opts.length < 2) return { error: t.errors.pollOptionsRequired };
 
-  const message = await prisma.channelMessage.create({
+  const now = new Date();
+  const message = await prisma.message.create({
     data: {
-      channelId,
+      conversationId,
       authorId: session.user.id,
       body: "",
+      createdAt: now,
       poll: {
         create: {
-          channelId,
+          conversationId,
           question: q,
           multiple,
           createdById: session.user.id,
@@ -165,42 +197,47 @@ export async function createPoll(
     },
     include: messageInclude,
   });
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { lastMessageAt: now },
+  });
   const dto = buildMessageDTO(message);
-  emitEvent({ type: "message", channelId, message: dto });
+  emitEvent({ type: "message", conversationId, message: dto });
 
   const recipients = await pushRecipients(
-    channel,
+    conversation,
     session.user.id,
     onlineUserIds(),
   );
+  const slug = conversationSlug(conversation);
   await sendPushToUsers(recipients, {
-    title: channel.name,
+    title: pushTitle(conversation, session.user.name ?? ""),
     body: `📊 ${q}`.slice(0, 160),
-    url: `/chat/${channel.key}`,
-    tag: `chat-${channel.key}`,
+    url: `/chat/${slug}`,
+    tag: `chat-${slug}`,
   });
 
   return { ok: true };
 }
 
 /**
- * Share a calendar event (a specific instance date) into a channel as an event
- * card, and push everyone who isn't currently connected a notification that
- * deep-links straight to the event's signup page. This is the flow that beats
- * Messenger: recipients are already authenticated in the PWA, so the tap lands
- * on signup with full context instead of a dead private link.
+ * Share a calendar event (a specific instance date) into a conversation as an
+ * event card, and push everyone who isn't currently connected a notification
+ * that deep-links straight to the event's signup page. This is the flow that
+ * beats Messenger: recipients are already authenticated in the PWA, so the
+ * tap lands on signup with full context instead of a dead private link.
  */
 export async function shareEventToChat(
   eventId: string,
   date: string,
-  channelId: string,
+  conversationId: string,
   note?: string,
 ): Promise<ActionResult> {
   const t = await getDict();
   const session = await requireSession();
-  const gate = await channelGate(channelId, session);
+  const gate = await conversationGate(conversationId, session);
   if (gate.error) return { error: gate.error };
-  const channel = gate.channel!;
+  const conversation = gate.conversation!;
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: t.errors.invalidInput };
   const event = await prisma.calendarEvent.findUnique({
@@ -209,26 +246,34 @@ export async function shareEventToChat(
   });
   if (!event) return { error: t.errors.eventNotFound };
 
-  const created = await prisma.channelMessage.create({
+  const now = new Date();
+  const noteText = (note ?? "").trim().slice(0, MAX_BODY);
+  const created = await prisma.message.create({
     data: {
-      channelId,
+      conversationId,
       authorId: session.user.id,
-      body: (note ?? "").trim().slice(0, MAX_BODY),
+      body: noteText,
+      searchText: noteText ? toSearchText(noteText) : null,
+      createdAt: now,
       eventId,
       eventDate: date,
     },
     include: messageInclude,
   });
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { lastMessageAt: now },
+  });
   const [dto] = await enrichEventCounts([buildMessageDTO(created)]);
-  emitEvent({ type: "message", channelId, message: dto });
+  emitEvent({ type: "message", conversationId, message: dto });
 
   const recipients = await pushRecipients(
-    channel,
+    conversation,
     session.user.id,
     onlineUserIds(),
   );
   await sendPushToUsers(recipients, {
-    title: channel.name,
+    title: pushTitle(conversation, session.user.name ?? ""),
     body: `📅 ${event.title}`.slice(0, 160),
     url: `/calendar/${eventId}?d=${date}`,
     tag: `event-${eventId}-${date}`,
@@ -246,15 +291,11 @@ export async function votePoll(
 
   const poll = await prisma.poll.findUnique({
     where: { id: pollId },
-    include: {
-      channel: { select: { requiredRole: true } },
-      options: { select: { id: true } },
-    },
+    include: { options: { select: { id: true } } },
   });
   if (!poll) return { error: t.errors.pollNotFound };
-  if (!canAccessChannel(poll.channel, viewerOf(session))) {
-    return { error: t.errors.notAuthorized };
-  }
+  const gate = await conversationGate(poll.conversationId, session);
+  if (gate.error) return { error: gate.error };
   if (poll.closesAt && poll.closesAt.getTime() < Date.now()) {
     return { error: t.errors.pollClosed };
   }
@@ -302,7 +343,7 @@ export async function votePoll(
   });
   emitEvent({
     type: "poll",
-    channelId: poll.channelId,
+    conversationId: poll.conversationId,
     pollId,
     tallies: buildPollDTO(fresh).tallies,
   });
@@ -311,45 +352,43 @@ export async function votePoll(
 }
 
 /**
- * Re-fetch a channel's latest messages. Used by the client to backfill after
- * the app returns to the foreground (the SSE stream is suspended while
+ * Re-fetch a conversation's latest messages. Used by the client to backfill
+ * after the app returns to the foreground (the SSE stream is suspended while
  * backgrounded, so messages that arrived — e.g. the one a push announced —
  * were missed).
  */
 export async function recentMessages(
-  channelId: string,
+  conversationId: string,
 ): Promise<MessageDTO[]> {
   const session = await requireSession();
-  const channel = await prisma.channel.findUnique({
-    where: { id: channelId },
-    select: { requiredRole: true },
-  });
-  if (!channel || !canAccessChannel(channel, viewerOf(session))) return [];
-  return channelMessages(channelId);
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error) return [];
+  return conversationMessages(conversationId);
 }
 
 /** Ephemeral typing ping — broadcast only, never stored. */
-export async function sendTyping(channelId: string): Promise<void> {
+export async function sendTyping(conversationId: string): Promise<void> {
   const session = await requireSession();
-  const channel = await prisma.channel.findUnique({
-    where: { id: channelId },
-    select: { requiredRole: true },
-  });
-  if (!channel || !canAccessChannel(channel, viewerOf(session))) return;
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error) return;
   emitEvent({
     type: "typing",
-    channelId,
+    conversationId,
     user: { id: session.user.id, name: session.user.name ?? "" },
   });
 }
 
-/** Move the viewer's read cursor for a channel to now (clears unread). */
-export async function markChannelRead(channelId: string): Promise<void> {
+/** Move the viewer's read cursor for a conversation to now (clears unread). */
+export async function markConversationRead(
+  conversationId: string,
+): Promise<void> {
   const session = await requireSession();
-  await prisma.channelRead
+  await prisma.conversationRead
     .upsert({
-      where: { userId_channelId: { userId: session.user.id, channelId } },
-      create: { userId: session.user.id, channelId },
+      where: {
+        userId_conversationId: { userId: session.user.id, conversationId },
+      },
+      create: { userId: session.user.id, conversationId },
       update: { lastReadAt: new Date() },
     })
     .catch(() => {});

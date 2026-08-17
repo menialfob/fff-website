@@ -695,6 +695,7 @@ export const en: typeof da = {
     alreadySuggestedBy: "Already suggested by {name}.",
     tracklistFull: "The tracklist is full ({count} songs).",
     channelNotFound: "Channel not found.",
+    conversationNotFound: "Conversation not found.",
     messageEmpty: "Write a message first.",
     messageTooLong: "That message is too long.",
     messageNotFound: "Message not found.",

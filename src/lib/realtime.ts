@@ -43,7 +43,7 @@ export type EventCardDTO = {
 
 export type MessageDTO = {
   id: string;
-  channelId: string;
+  conversationId: string;
   body: string;
   createdAt: string;
   author: { id: string; name: string } | null;
@@ -53,15 +53,24 @@ export type MessageDTO = {
 };
 
 export type RealtimeEvent =
-  | { type: "message"; channelId: string; message: MessageDTO }
+  | { type: "message"; conversationId: string; message: MessageDTO }
   | {
       type: "reaction";
-      channelId: string;
+      conversationId: string;
       messageId: string;
       reactions: ReactionSummary[];
     }
-  | { type: "poll"; channelId: string; pollId: string; tallies: PollTally[] }
-  | { type: "typing"; channelId: string; user: { id: string; name: string } }
+  | {
+      type: "poll";
+      conversationId: string;
+      pollId: string;
+      tallies: PollTally[];
+    }
+  | {
+      type: "typing";
+      conversationId: string;
+      user: { id: string; name: string };
+    }
   | { type: "presence"; online: string[] };
 
 type Bus = {

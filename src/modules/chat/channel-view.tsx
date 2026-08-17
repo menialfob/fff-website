@@ -9,7 +9,7 @@ import { MessageItem } from "./message-item";
 import { PollComposer } from "./poll-composer";
 import {
   createPoll,
-  markChannelRead,
+  markConversationRead,
   recentMessages,
   sendMessage,
   sendTyping,
@@ -24,8 +24,8 @@ const TYPING_CLEAR_MS = 4000;
 const COMPOSER_MAX_PX = 128;
 
 /** Move the read cursor, then refresh the app-icon badge it feeds. */
-function markRead(channelId: string) {
-  markChannelRead(channelId).then(refreshAppBadge).catch(() => {});
+function markRead(conversationId: string) {
+  markConversationRead(conversationId).then(refreshAppBadge).catch(() => {});
 }
 
 /** Union two message lists by id, ordered oldest-first. */
@@ -83,15 +83,15 @@ function useNow(): Date {
   return now;
 }
 
-export function ChannelView({
-  channelId,
-  channelName,
+export function ConversationView({
+  conversationId,
+  conversationName,
   viewerId,
   members,
   initialMessages,
 }: {
-  channelId: string;
-  channelName: string;
+  conversationId: string;
+  conversationName: string;
   viewerId: string;
   members: { id: string; name: string }[];
   initialMessages: MessageDTO[];
@@ -139,16 +139,16 @@ export function ChannelView({
       }
       switch (ev.type) {
         case "message":
-          if (ev.channelId !== channelId) return;
+          if (ev.conversationId !== conversationId) return;
           setMessages((prev) =>
             prev.some((m) => m.id === ev.message.id)
               ? prev
               : [...prev, ev.message],
           );
-          markRead(channelId);
+          markRead(conversationId);
           break;
         case "reaction":
-          if (ev.channelId !== channelId) return;
+          if (ev.conversationId !== conversationId) return;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === ev.messageId ? { ...m, reactions: ev.reactions } : m,
@@ -165,7 +165,7 @@ export function ChannelView({
           );
           break;
         case "typing": {
-          if (ev.channelId !== channelId || ev.user.id === viewerId) return;
+          if (ev.conversationId !== conversationId || ev.user.id === viewerId) return;
           const { id, name } = ev.user;
           setTyping((prev) =>
             prev.some((u) => u.id === id) ? prev : [...prev, { id, name }],
@@ -188,17 +188,17 @@ export function ChannelView({
       }
     };
     return () => es.close();
-  }, [channelId, viewerId]);
+  }, [conversationId, viewerId]);
 
   // Mark read on open and stop typing timers on unmount.
   useEffect(() => {
-    markRead(channelId);
+    markRead(conversationId);
     const timers = typingTimers.current;
     return () => {
       timers.forEach((t2) => clearTimeout(t2));
       timers.clear();
     };
-  }, [channelId]);
+  }, [conversationId]);
 
   // Keep the newest message in view.
   useEffect(() => {
@@ -241,16 +241,16 @@ export function ChannelView({
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
-      recentMessages(channelId)
+      recentMessages(conversationId)
         .then((fresh) => {
           if (fresh.length) setMessages((prev) => mergeMessages(prev, fresh));
-          markRead(channelId);
+          markRead(conversationId);
         })
         .catch(() => {});
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [channelId]);
+  }, [conversationId]);
 
   useEffect(() => {
     setIsTouch(window.matchMedia("(pointer: coarse)").matches);
@@ -269,7 +269,7 @@ export function ChannelView({
     const now = Date.now();
     if (now - lastTypingSent.current > TYPING_THROTTLE_MS) {
       lastTypingSent.current = now;
-      void sendTyping(channelId);
+      void sendTyping(conversationId);
     }
   }
 
@@ -281,7 +281,7 @@ export function ChannelView({
     const el = textareaRef.current;
     if (el) el.style.height = "auto";
     startTransition(async () => {
-      await sendMessage(channelId, body);
+      await sendMessage(conversationId, body);
     });
   }
 
@@ -299,7 +299,7 @@ export function ChannelView({
 
   function onCreatePoll(question: string, options: string[], multiple: boolean) {
     startTransition(async () => {
-      await createPoll(channelId, question, options, multiple);
+      await createPoll(conversationId, question, options, multiple);
       setShowPoll(false);
     });
   }
@@ -330,7 +330,7 @@ export function ChannelView({
       }`}
     >
       <header className="flex items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
-        <h1 className="text-lg font-semibold text-white">{channelName}</h1>
+        <h1 className="text-lg font-semibold text-white">{conversationName}</h1>
         <span
           className="flex items-center gap-1.5 text-xs text-zinc-400"
           title={onlineOthers.map(nameById).filter(Boolean).join(", ")}

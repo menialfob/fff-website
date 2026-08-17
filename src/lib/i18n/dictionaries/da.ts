@@ -700,6 +700,7 @@ export const da = {
     alreadySuggestedBy: "Allerede foreslået af {name}.",
     tracklistFull: "Tracklisten er fuld ({count} sange).",
     channelNotFound: "Kanalen blev ikke fundet.",
+    conversationNotFound: "Samtalen blev ikke fundet.",
     messageEmpty: "Skriv en besked først.",
     messageTooLong: "Beskeden er for lang.",
     messageNotFound: "Beskeden blev ikke fundet.",
