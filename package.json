@@ -12,7 +12,9 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "create-user": "tsx scripts/create-user.ts"
+    "create-user": "tsx scripts/create-user.ts",
+    "predev": "node scripts/copy-emoji-data.mjs",
+    "prebuild": "node scripts/copy-emoji-data.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
@@ -40,6 +42,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/web-push": "^3.6.4",
+    "emojibase-data": "^17.0.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.3.0",
     "prisma": "^6.5.0",

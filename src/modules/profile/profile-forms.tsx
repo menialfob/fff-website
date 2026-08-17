@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useI18n } from "@/lib/i18n/client";
-import { btnPrimary, errorText, input, label, okText } from "@/components/ui";
-import { changePassword, updateProfile } from "./actions";
+import { btnPrimary, btnSecondary, errorText, input, label, okText } from "@/components/ui";
+import { Avatar } from "@/components/avatar";
+import { changePassword, removeAvatar, updateAvatar, updateProfile } from "./actions";
 
 type ActionResult = { error?: string; ok?: boolean } | undefined;
 
@@ -17,6 +18,71 @@ function StatusMessage({ result }: { result: ActionResult }) {
       </p>
     );
   return <p className={okText}>{t.common.saved}</p>;
+}
+
+export function AvatarForm({
+  userId,
+  userName,
+  avatarUrl,
+}: {
+  userId: string;
+  userName: string;
+  avatarUrl: string | null;
+}) {
+  const { t } = useI18n();
+  const [result, setResult] = useState<ActionResult>();
+  const [isPending, startTransition] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function onPick(file: File | undefined) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.set("avatar", file);
+    startTransition(async () => {
+      setResult(await updateAvatar(formData));
+      // Allow re-selecting the same file after an error.
+      if (fileRef.current) fileRef.current.value = "";
+    });
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-4">
+        <Avatar id={userId} name={userName} avatarUrl={avatarUrl} size="lg" />
+        <div className="flex flex-col gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => onPick(e.target.files?.[0])}
+          />
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => fileRef.current?.click()}
+            className={btnPrimary}
+          >
+            {isPending ? t.common.saving : t.profile.avatarChange}
+          </button>
+          {avatarUrl && (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() =>
+                startTransition(async () => setResult(await removeAvatar()))
+              }
+              className={btnSecondary}
+            >
+              {t.profile.avatarRemove}
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-zinc-500">{t.profile.avatarHint}</p>
+      <StatusMessage result={result} />
+    </div>
+  );
 }
 
 export function ProfileForm({

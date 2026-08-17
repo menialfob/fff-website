@@ -41,27 +41,99 @@ export type EventCardDTO = {
   goingCount: number;
 };
 
+export type MessageAuthorDTO = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+};
+
+export type AttachmentDTO = {
+  id: string;
+  kind: "IMAGE" | "FILE" | "GIF";
+  name: string;
+  mimeType: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  // Tiny inline webp data URL shown while the thumbnail loads.
+  blurData: string | null;
+  url: string;
+  thumbUrl: string | null;
+};
+
+export type MentionDTO = {
+  userId: string;
+  offset: number;
+  length: number;
+};
+
+export type ReplyPreviewDTO = {
+  id: string;
+  authorName: string | null;
+  // Short text summary of the quoted message ("" when it was deleted).
+  preview: string;
+  deleted: boolean;
+};
+
 export type MessageDTO = {
   id: string;
-  channelId: string;
+  conversationId: string;
   body: string;
   createdAt: string;
-  author: { id: string; name: string } | null;
+  // Echo of the sender's optimistic id so their client can reconcile the
+  // pending bubble with the stored message.
+  clientId: string | null;
+  editedAt: string | null;
+  // Tombstoned: body is blanked, render a "message deleted" placeholder.
+  deleted: boolean;
+  replyTo: ReplyPreviewDTO | null;
+  attachments: AttachmentDTO[];
+  mentions: MentionDTO[];
+  author: MessageAuthorDTO | null;
   reactions: ReactionSummary[];
   poll: PollDTO | null;
   event: EventCardDTO | null;
 };
 
 export type RealtimeEvent =
-  | { type: "message"; channelId: string; message: MessageDTO }
+  | { type: "message"; conversationId: string; message: MessageDTO }
+  // An existing message changed in place (edit or delete-tombstone).
+  | { type: "message-updated"; conversationId: string; message: MessageDTO }
   | {
       type: "reaction";
-      channelId: string;
+      conversationId: string;
       messageId: string;
       reactions: ReactionSummary[];
     }
-  | { type: "poll"; channelId: string; pollId: string; tallies: PollTally[] }
-  | { type: "typing"; channelId: string; user: { id: string; name: string } }
+  | {
+      type: "poll";
+      conversationId: string;
+      pollId: string;
+      tallies: PollTally[];
+    }
+  | {
+      type: "typing";
+      conversationId: string;
+      user: { id: string; name: string };
+    }
+  // A member's read cursor moved — drives live seen-by receipts.
+  | {
+      type: "read";
+      conversationId: string;
+      userId: string;
+      lastReadAt: string;
+    }
+  | {
+      // Membership/metadata change on a DM or group. `memberIds` is the
+      // authoritative post-change member list: the SSE route forwards the
+      // event to current members plus anyone who could previously see the
+      // conversation (so removed/leaving members learn about it too), and
+      // each connection updates its own allow-set from it.
+      type: "conversation";
+      conversationId: string;
+      kind: "created" | "updated" | "member-added" | "member-removed" | "deleted";
+      memberIds: string[];
+    }
   | { type: "presence"; online: string[] };
 
 type Bus = {

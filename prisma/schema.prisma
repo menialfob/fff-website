@@ -35,6 +35,10 @@ model User {
   passwordHash String
   role         Role       @default(MEMBER)
   bio          String?
+  // Profile picture: name of the processed 512px webp inside UPLOAD_DIR
+  // (served via /api/avatar/[userId]); avatarUpdatedAt cache-busts the URL.
+  avatarStoredName String?
+  avatarUpdatedAt  DateTime?
   // Deactivated users keep their account and content but cannot log in.
   isActive     Boolean    @default(true)
   // Secret for the personal iCal subscription feed (/api/calendar/feed/…).
@@ -65,13 +69,17 @@ model User {
   // Web Push (browser notification) subscriptions — one per installed
   // browser/device the member enabled notifications on.
   pushSubscriptions PushSubscription[]
-  // Chat: messages authored, reactions given, polls created + voted on, and
-  // per-channel read cursors.
-  channelMessages  ChannelMessage[]
+  // Chat: messages authored, reactions given, polls created + voted on,
+  // per-conversation read cursors, and DM/group memberships.
+  messages         Message[]
   messageReactions MessageReaction[]
   pollsCreated     Poll[]
   pollVotes        PollVote[]
-  channelReads     ChannelRead[]
+  conversationReads ConversationRead[]
+  conversationMemberships ConversationMember[]
+  conversationsCreated    Conversation[]
+  messageAttachments      MessageAttachment[]
+  messageMentions         MessageMention[]
 }
 
 model UserRole {
@@ -137,37 +145,85 @@ model PushSubscription {
 }
 
 // ── Chat ───────────────────────────────────────────────────────────────────
-// A shared group channel (e.g. "general", "bestyrelse"). Not per-user DMs.
-// `requiredRole` gates a channel to holders of an extra role (plus admins),
-// mirroring the module registry's access model; null means everyone.
-model Channel {
+// What kind of conversation a row is. CHANNEL = shared, access computed from
+// `requiredRole` (everyone when null, plus admins) — no membership rows. DM
+// and GROUP materialize their membership in ConversationMember.
+enum ConversationType {
+  CHANNEL
+  DM
+  GROUP
+}
+
+// A chat conversation: a shared channel (e.g. "general", "bestyrelse"), a 1:1
+// DM, or a user-created group. `key` is the stable URL slug for seeded
+// channels only (DMs/groups are addressed by id). `dmKey` dedupes DMs: the
+// two member ids sorted and joined with ":", unique so a pair has exactly one
+// DM. `name` is null for DMs (the UI shows the other member's name).
+model Conversation {
   id           String    @id @default(cuid())
-  key          String    @unique
-  name         String
+  type         ConversationType @default(CHANNEL)
+  key          String?   @unique
+  name         String?
   description  String?
   order        Int       @default(0)
   requiredRole ExtraRole?
+  dmKey        String?   @unique
+  createdBy    User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById  String?
+  // Denormalized timestamp of the newest message, for ordering the
+  // conversation list without a per-row scan.
+  lastMessageAt DateTime?
   createdAt    DateTime  @default(now())
 
-  messages ChannelMessage[]
+  messages Message[]
   polls    Poll[]
-  reads    ChannelRead[]
+  reads    ConversationRead[]
+  members  ConversationMember[]
 
   @@index([order])
 }
 
+// Membership of one user in a DM or GROUP conversation (channels compute
+// access from roles instead). `isAdmin` marks group admins (the creator);
+// admins rename the group and add/remove members.
+model ConversationMember {
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  isAdmin        Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
 // A single chat message. `body` is plain text (chat-style, not rich Tiptap
 // like the forum). A message may instead/also carry a poll (see Poll.message)
-// or, from Phase C, reference a calendar occurrence as an event card. Author is
-// SetNull so messages survive account deletion.
-model ChannelMessage {
-  id        String   @id @default(cuid())
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  channelId String
-  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  authorId  String?
-  body      String
-  createdAt DateTime @default(now())
+// or reference a calendar occurrence as an event card. Author is SetNull so
+// messages survive account deletion. Deleting a message tombstones it
+// (`deletedAt` set, body blanked) rather than removing the row, so reply
+// quotes keep pointing at something. `clientId` echoes the sender's optimistic
+// id back through SSE; `searchText` is the locale-lowercased body maintained
+// on every write for LIKE search (SQLite lower() is ASCII-only).
+model Message {
+  id             String   @id @default(cuid())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+  author         User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId       String?
+  body           String
+  clientId       String?
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  searchText     String?
+  createdAt      DateTime @default(now())
+
+  // Reply/quote target. SetNull keeps the reply if the original row ever
+  // disappears (deletes normally tombstone instead of removing rows).
+  replyTo   Message?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replyToId String?
+  replies   Message[] @relation("MessageReply")
 
   // Optional shared calendar event: rendered as an event card with a Sign-up
   // deep link. Keyed by event + date (attendance is per eventId+date, and an
@@ -177,21 +233,75 @@ model ChannelMessage {
   eventId   String?
   eventDate String?
 
-  reactions MessageReaction[]
-  poll      Poll?
+  reactions   MessageReaction[]
+  poll        Poll?
+  attachments MessageAttachment[]
+  mentions    MessageMention[]
 
-  @@index([channelId, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+enum AttachmentKind {
+  IMAGE
+  FILE
+  GIF
+}
+
+// Media/file attached to a chat message. Uploaded ahead of the send (two
+// phase: POST /api/chat/upload creates the row with messageId null, then
+// sendMessage claims it), so progress is real and a failed send never leaves
+// media in a message. Chat media is deliberately separate from FileItem —
+// it must not clutter the Files section. Served only through the auth-gated
+// /api/chat/media/[id] route. `thumbName` and `blurData` (tiny webp data URL)
+// exist for images/GIFs; unclaimed rows older than a day are garbage
+// collected by the upload route.
+model MessageAttachment {
+  id           String   @id @default(cuid())
+  message      Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId    String?
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedById String?
+  kind         AttachmentKind
+  name         String
+  storedName   String   @unique
+  thumbName    String?
+  mimeType     String
+  size         Int
+  width        Int?
+  height       Int?
+  blurData     String?
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([messageId])
+  @@index([uploadedById, messageId])
+}
+
+// An @mention of a member inside a message body. Offsets into the stored
+// body (computed server-side by scanning for "@Name" at write time), so
+// highlighting survives later renames. Recomputed on edit.
+model MessageMention {
+  id        String  @id @default(cuid())
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  offset    Int
+  length    Int
+
+  @@index([messageId])
+  @@index([userId])
 }
 
 // One emoji reaction by one user on one message. Toggling adds/removes the row.
 model MessageReaction {
-  id        String         @id @default(cuid())
-  message   ChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   messageId String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   emoji     String
-  createdAt DateTime       @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
@@ -200,17 +310,17 @@ model MessageReaction {
 // A quick poll, always attached to a carrier message (Poll.messageId). When
 // `multiple` is false the app enforces a single vote per user across options.
 model Poll {
-  id          String    @id @default(cuid())
-  channel     Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  channelId   String
-  message     ChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  messageId   String    @unique
-  question    String
-  multiple    Boolean   @default(false)
-  closesAt    DateTime?
-  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdById String?
-  createdAt   DateTime  @default(now())
+  id             String    @id @default(cuid())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+  message        Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId      String    @unique
+  question       String
+  multiple       Boolean   @default(false)
+  closesAt       DateTime?
+  createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById    String?
+  createdAt      DateTime  @default(now())
 
   options PollOption[]
 }
@@ -239,16 +349,18 @@ model PollVote {
   @@index([optionId])
 }
 
-// Per-user, per-channel read cursor for unread badges. Same idea as
-// SectionView but scoped to a channel.
-model ChannelRead {
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId     String
-  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  channelId  String
-  lastReadAt DateTime @default(now())
+// Per-user, per-conversation read cursor for unread badges and seen-by
+// receipts. `muted` silences normal push notifications for the conversation
+// (mentions still push; unread counts are unaffected).
+model ConversationRead {
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+  lastReadAt     DateTime @default(now())
+  muted          Boolean  @default(false)
 
-  @@id([userId, channelId])
+  @@id([userId, conversationId])
 }
 
 // Per-user Spotify connection (Authorization Code + PKCE). Only needed to
@@ -353,7 +465,7 @@ model CalendarEvent {
   // discussion as an archive after the event is deleted.
   forumThread     ForumThread?
   // Chat messages that shared this event as an event card.
-  channelMessages ChannelMessage[]
+  chatMessages    Message[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
