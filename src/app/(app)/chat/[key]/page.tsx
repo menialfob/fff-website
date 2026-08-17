@@ -37,10 +37,7 @@ export default async function ConversationPage({
       include: { members: { include: { user: { select: { name: true } } } } },
     }));
 
-  const viewer = {
-    role: session.user.role,
-    extraRoles: session.user.extraRoles,
-  };
+  const viewer = { extraRoles: session.user.extraRoles };
   const isMember =
     conversation?.members.some((m) => m.userId === session.user.id) ?? false;
   if (!conversation || !canAccessConversation(conversation, viewer, isMember)) {

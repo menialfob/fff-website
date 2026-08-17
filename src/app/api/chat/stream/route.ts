@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   // Authorization snapshot for this connection. A role or membership change
   // mid-connection applies on reconnect (EventSource reconnects often).
   const accessible = await accessibleConversationIds(
-    { role: session.user.role, extraRoles: session.user.extraRoles },
+    { extraRoles: session.user.extraRoles },
     userId,
   );
   const allowed = new Set(accessible);

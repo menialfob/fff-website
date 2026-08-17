@@ -39,7 +39,7 @@ const MAX_OPTION = 100;
 const MAX_EMOJI = 24;
 
 function viewerOf(session: Session) {
-  return { role: session.user.role, extraRoles: session.user.extraRoles };
+  return { extraRoles: session.user.extraRoles };
 }
 
 /**

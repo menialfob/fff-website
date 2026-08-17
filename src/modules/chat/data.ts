@@ -217,7 +217,11 @@ export async function enrichEventCounts(dtos: MessageDTO[]): Promise<MessageDTO[
   return dtos;
 }
 
-export type Viewer = { role: "ADMIN" | "MEMBER"; extraRoles?: ExtraRole[] };
+/**
+ * The only thing chat access depends on: the extra roles the viewer holds. The
+ * site-admin flag is deliberately absent — see `canAccessConversation`.
+ */
+export type Viewer = { extraRoles?: ExtraRole[] };
 
 type ConversationGate = {
   type: ConversationType;
@@ -226,9 +230,17 @@ type ConversationGate = {
 
 /**
  * Whether a viewer may see/post in a conversation. Channels are gated by role
- * (null = everyone, admins always pass); DMs and groups by membership, which
- * the caller resolves (`isMember`) since it comes from different places — a
- * joined member list, a per-user membership query, or a members include.
+ * (null = everyone, otherwise the role must be held); DMs and groups by
+ * membership, which the caller resolves (`isMember`) since it comes from
+ * different places — a joined member list, a per-user membership query, or a
+ * members include.
+ *
+ * Unlike module access (src/modules/registry.ts) and `requireRole`, the
+ * site-admin flag grants nothing here: an internal channel such as
+ * "bestyrelse" is private conversation, not administrable content, so only
+ * holders of its role see it — an admin outside the board gets no listing, no
+ * messages, no unread count and no pushes. Admins who *are* on the board pass
+ * through their own BESTYRELSE role like everyone else.
  */
 export function canAccessConversation(
   conversation: ConversationGate,
@@ -237,7 +249,6 @@ export function canAccessConversation(
 ): boolean {
   if (conversation.type !== "CHANNEL") return isMember;
   if (!conversation.requiredRole) return true;
-  if (viewer.role === "ADMIN") return true;
   return viewer.extraRoles?.includes(conversation.requiredRole) ?? false;
 }
 
@@ -327,7 +338,6 @@ export async function conversationMembers(conversation: {
     select: {
       id: true,
       name: true,
-      role: true,
       avatarStoredName: true,
       avatarUpdatedAt: true,
       extraRoles: { select: { role: true } },
@@ -338,7 +348,7 @@ export async function conversationMembers(conversation: {
     .filter((u) =>
       canAccessConversation(
         conversation,
-        { role: u.role, extraRoles: u.extraRoles.map((r) => r.role) },
+        { extraRoles: u.extraRoles.map((r) => r.role) },
         false,
       ),
     )

@@ -9,7 +9,7 @@ export default async function ChatPage() {
   const session = await requireSession();
   const t = await getDict();
   const summaries = await conversationSummaries(
-    { role: session.user.role, extraRoles: session.user.extraRoles },
+    { extraRoles: session.user.extraRoles },
     session.user.id,
   );
 

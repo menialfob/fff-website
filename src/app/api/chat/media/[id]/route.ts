@@ -39,7 +39,7 @@ export async function GET(
     const conversation = attachment.message.conversation;
     const allowed = canAccessConversation(
       conversation,
-      { role: session.user.role, extraRoles: session.user.extraRoles },
+      { extraRoles: session.user.extraRoles },
       conversation.members.length > 0,
     );
     if (!allowed) return new NextResponse("Not found", { status: 404 });

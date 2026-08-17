@@ -168,10 +168,7 @@ export default async function EventPage({
   const shareChannels = attendanceDate
     ? (
         await conversationsForViewer(
-          {
-            role: session.user.role,
-            extraRoles: session.user.extraRoles,
-          },
+          { extraRoles: session.user.extraRoles },
           session.user.id,
         )
       ).map((c) => ({

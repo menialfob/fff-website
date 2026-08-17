@@ -15,15 +15,12 @@ import { chatUnreadCount } from "@/modules/chat/data";
 export async function getBadgeCount(userId: string): Promise<number> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { role: true, extraRoles: { select: { role: true } } },
+    select: { extraRoles: { select: { role: true } } },
   });
   if (!user) return 0;
 
   const [chat, sections] = await Promise.all([
-    chatUnreadCount(
-      { role: user.role, extraRoles: user.extraRoles.map((r) => r.role) },
-      userId,
-    ),
+    chatUnreadCount({ extraRoles: user.extraRoles.map((r) => r.role) }, userId),
     getSectionCounts(userId),
   ]);
 
