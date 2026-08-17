@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { avatarUrlFor } from "@/components/avatar";
 import type { ExtraRole } from "@/lib/roles";
 import type {
   MessageDTO,
@@ -10,7 +11,14 @@ import type { ConversationType } from "@prisma/client";
 // Include shape used everywhere a message is turned into a DTO, so the live
 // (SSE) payload and the server-rendered page always agree.
 export const messageInclude = {
-  author: { select: { id: true, name: true } },
+  author: {
+    select: {
+      id: true,
+      name: true,
+      avatarStoredName: true,
+      avatarUpdatedAt: true,
+    },
+  },
   reactions: { select: { emoji: true, userId: true } },
   event: { select: { id: true, title: true } },
   poll: {
@@ -62,12 +70,19 @@ export function buildPollDTO(poll: RawPoll): PollDTO {
   };
 }
 
+type RawAuthor = {
+  id: string;
+  name: string;
+  avatarStoredName: string | null;
+  avatarUpdatedAt: Date | null;
+};
+
 type RawMessage = {
   id: string;
   conversationId: string;
   body: string;
   createdAt: Date;
-  author: { id: string; name: string } | null;
+  author: RawAuthor | null;
   reactions: RawReaction[];
   poll: RawPoll | null;
   event: { id: string; title: string } | null;
@@ -80,7 +95,13 @@ export function buildMessageDTO(msg: RawMessage): MessageDTO {
     conversationId: msg.conversationId,
     body: msg.body,
     createdAt: msg.createdAt.toISOString(),
-    author: msg.author ? { id: msg.author.id, name: msg.author.name } : null,
+    author: msg.author
+      ? {
+          id: msg.author.id,
+          name: msg.author.name,
+          avatarUrl: avatarUrlFor(msg.author),
+        }
+      : null,
     reactions: summarizeReactions(msg.reactions),
     poll: msg.poll ? buildPollDTO(msg.poll) : null,
     // goingCount filled in by enrichEventCounts (needs a query).
@@ -144,7 +165,17 @@ export async function conversationsForViewer(viewer: Viewer, userId: string) {
     where: { OR: [{ type: "CHANNEL" }, { members: { some: { userId } } }] },
     include: {
       members: {
-        select: { userId: true, isAdmin: true, user: { select: { name: true } } },
+        select: {
+          userId: true,
+          isAdmin: true,
+          user: {
+            select: {
+              name: true,
+              avatarStoredName: true,
+              avatarUpdatedAt: true,
+            },
+          },
+        },
       },
     },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
@@ -183,18 +214,38 @@ export async function conversationMembers(conversation: {
   id: string;
   type: ConversationType;
   requiredRole: ExtraRole | null;
-}): Promise<{ id: string; name: string }[]> {
+}): Promise<{ id: string; name: string; avatarUrl: string | null }[]> {
   if (conversation.type !== "CHANNEL") {
     const members = await prisma.conversationMember.findMany({
       where: { conversationId: conversation.id, user: { isActive: true } },
-      select: { user: { select: { id: true, name: true } } },
+      select: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarStoredName: true,
+            avatarUpdatedAt: true,
+          },
+        },
+      },
       orderBy: { user: { name: "asc" } },
     });
-    return members.map((m) => m.user);
+    return members.map((m) => ({
+      id: m.user.id,
+      name: m.user.name,
+      avatarUrl: avatarUrlFor(m.user),
+    }));
   }
   const users = await prisma.user.findMany({
     where: { isActive: true },
-    select: { id: true, name: true, role: true, extraRoles: { select: { role: true } } },
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      avatarStoredName: true,
+      avatarUpdatedAt: true,
+      extraRoles: { select: { role: true } },
+    },
     orderBy: { name: "asc" },
   });
   return users
@@ -205,7 +256,7 @@ export async function conversationMembers(conversation: {
         false,
       ),
     )
-    .map((u) => ({ id: u.id, name: u.name }));
+    .map((u) => ({ id: u.id, name: u.name, avatarUrl: avatarUrlFor(u) }));
 }
 
 /**
@@ -236,7 +287,17 @@ export async function conversationSummaries(viewer: Viewer, userId: string) {
     where: { OR: [{ type: "CHANNEL" }, { members: { some: { userId } } }] },
     include: {
       members: {
-        select: { userId: true, isAdmin: true, user: { select: { name: true } } },
+        select: {
+          userId: true,
+          isAdmin: true,
+          user: {
+            select: {
+              name: true,
+              avatarStoredName: true,
+              avatarUpdatedAt: true,
+            },
+          },
+        },
       },
     },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
@@ -263,9 +324,22 @@ export async function conversationSummaries(viewer: Viewer, userId: string) {
           createdAt: { gt: read?.lastReadAt ?? new Date(0) },
         },
       });
+      // DMs show the other member's face; channels/groups fall back to the
+      // gradient initial of the conversation itself.
+      const dmPartner =
+        conversation.type === "DM"
+          ? conversation.members.find((m) => m.userId !== userId)
+          : undefined;
       return {
         conversation,
         title: conversationDisplayName(conversation, userId),
+        avatar: dmPartner
+          ? {
+              id: dmPartner.userId,
+              name: dmPartner.user.name,
+              avatarUrl: avatarUrlFor({ id: dmPartner.userId, ...dmPartner.user }),
+            }
+          : null,
         unread,
         muted: read?.muted ?? false,
         last: last

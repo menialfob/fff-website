@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { fmt, formatDate, type Dictionary } from "@/lib/i18n";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { card, PageTitle } from "@/components/ui";
+import { Avatar, avatarUrlFor } from "@/components/avatar";
 
 /**
  * One badge per member: their elected title if they have one, otherwise a
@@ -31,22 +32,6 @@ function MemberBadge({
   );
 }
 
-/** Stable, friendly gradient per member — derived from their id. */
-const avatarGradients = [
-  "from-amber-400 to-orange-500",
-  "from-sky-400 to-cyan-500",
-  "from-fuchsia-500 to-pink-500",
-  "from-emerald-400 to-teal-500",
-  "from-violet-400 to-indigo-500",
-  "from-rose-400 to-red-500",
-];
-
-function gradientFor(id: string): string {
-  let hash = 0;
-  for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return avatarGradients[hash % avatarGradients.length];
-}
-
 export default async function MembersPage() {
   const [t, locale] = await Promise.all([getDict(), getLocale()]);
   const members = await prisma.user.findMany({
@@ -56,6 +41,8 @@ export default async function MembersPage() {
       name: true,
       bio: true,
       createdAt: true,
+      avatarStoredName: true,
+      avatarUpdatedAt: true,
       extraRoles: { select: { role: true, title: true } },
     },
   });
@@ -67,11 +54,13 @@ export default async function MembersPage() {
         {members.map((member) => (
           <li key={member.id} className={`${card} p-5`}>
             <div className="mb-2 flex items-center gap-3">
-              <span
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${gradientFor(member.id)} font-bold text-white shadow-lg`}
-              >
-                {member.name.charAt(0).toUpperCase()}
-              </span>
+              <Avatar
+                id={member.id}
+                name={member.name}
+                avatarUrl={avatarUrlFor(member)}
+                size="md"
+                className="shadow-lg"
+              />
               <div className="min-w-0">
                 <h2 className="flex flex-wrap items-center gap-2 font-semibold text-white">
                   {member.name}

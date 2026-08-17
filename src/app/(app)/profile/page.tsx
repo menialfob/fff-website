@@ -5,7 +5,8 @@ import { hostOf, siteOrigin } from "@/lib/site-url";
 import { btnDangerOutline, cardPad, PageTitle } from "@/components/ui";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LogOutIcon } from "@/components/icons";
-import { PasswordForm, ProfileForm } from "@/modules/profile/profile-forms";
+import { AvatarForm, PasswordForm, ProfileForm } from "@/modules/profile/profile-forms";
+import { avatarUrlFor } from "@/components/avatar";
 import { CalendarFeed } from "@/modules/profile/calendar-feed";
 import { NotificationSettings } from "@/modules/notifications/notification-settings";
 
@@ -27,6 +28,16 @@ export default async function ProfilePage() {
   return (
     <div className="max-w-lg">
       <PageTitle>{t.profile.title}</PageTitle>
+      <section className={`${cardPad} mb-6`}>
+        <h2 className="mb-1 text-lg font-semibold text-white">
+          {t.profile.avatarTitle}
+        </h2>
+        <AvatarForm
+          userId={user.id}
+          userName={user.name}
+          avatarUrl={avatarUrlFor(user)}
+        />
+      </section>
       <section className={`${cardPad} mb-6`}>
         <ProfileForm defaultName={user.name} defaultBio={user.bio ?? ""} />
       </section>

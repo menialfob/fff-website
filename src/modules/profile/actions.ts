@@ -6,6 +6,59 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
+import { processAvatar } from "@/lib/images";
+import { deleteUpload, saveProcessedUpload } from "@/lib/storage";
+
+// Before processing; the stored webp is far smaller.
+const MAX_AVATAR_BYTES = 15 * 1024 * 1024;
+
+export async function updateAvatar(formData: FormData) {
+  const session = await requireSession();
+  const t = await getDict();
+
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: t.errors.avatarInvalid };
+  }
+  if (file.size > MAX_AVATAR_BYTES) return { error: t.errors.avatarTooLarge };
+  if (!file.type.startsWith("image/")) return { error: t.errors.avatarInvalid };
+
+  let processed: Buffer;
+  try {
+    processed = await processAvatar(Buffer.from(await file.arrayBuffer()));
+  } catch {
+    return { error: t.errors.avatarInvalid };
+  }
+  const storedName = await saveProcessedUpload(processed, ".webp");
+
+  const previous = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { avatarStoredName: true },
+  });
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { avatarStoredName: storedName, avatarUpdatedAt: new Date() },
+  });
+  if (previous?.avatarStoredName) await deleteUpload(previous.avatarStoredName);
+
+  revalidatePath("/profile");
+  return { ok: true };
+}
+
+export async function removeAvatar() {
+  const session = await requireSession();
+  const previous = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { avatarStoredName: true },
+  });
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { avatarStoredName: null, avatarUpdatedAt: new Date() },
+  });
+  if (previous?.avatarStoredName) await deleteUpload(previous.avatarStoredName);
+  revalidatePath("/profile");
+  return { ok: true };
+}
 
 const profileSchema = z.object({
   name: z.string().trim().min(1).max(100),

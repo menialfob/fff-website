@@ -35,6 +35,10 @@ model User {
   passwordHash String
   role         Role       @default(MEMBER)
   bio          String?
+  // Profile picture: name of the processed 512px webp inside UPLOAD_DIR
+  // (served via /api/avatar/[userId]); avatarUpdatedAt cache-busts the URL.
+  avatarStoredName String?
+  avatarUpdatedAt  DateTime?
   // Deactivated users keep their account and content but cannot log in.
   isActive     Boolean    @default(true)
   // Secret for the personal iCal subscription feed (/api/calendar/feed/…).

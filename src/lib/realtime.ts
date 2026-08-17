@@ -41,12 +41,18 @@ export type EventCardDTO = {
   goingCount: number;
 };
 
+export type MessageAuthorDTO = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+};
+
 export type MessageDTO = {
   id: string;
   conversationId: string;
   body: string;
   createdAt: string;
-  author: { id: string; name: string } | null;
+  author: MessageAuthorDTO | null;
   reactions: ReactionSummary[];
   poll: PollDTO | null;
   event: EventCardDTO | null;

@@ -10,6 +10,7 @@ import {
   type Locale,
 } from "@/lib/i18n";
 import type { EventCardDTO, MessageDTO } from "@/lib/realtime";
+import { Avatar } from "@/components/avatar";
 import { PollCard } from "./poll-card";
 
 function EventCard({ event, locale }: { event: EventCardDTO; locale: Locale }) {
@@ -86,12 +87,13 @@ export function MessageItem({
 
   return (
     <div className="group flex gap-2.5">
-      <span
-        className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-xs font-bold text-white"
-        aria-hidden
-      >
-        {name.charAt(0).toUpperCase()}
-      </span>
+      <Avatar
+        id={message.author?.id ?? "deleted"}
+        name={name}
+        avatarUrl={message.author?.avatarUrl ?? null}
+        size="sm"
+        className="mt-0.5"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-semibold text-white">

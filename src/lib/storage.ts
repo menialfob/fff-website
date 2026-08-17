@@ -19,6 +19,20 @@ export async function saveUpload(file: File): Promise<string> {
   return storedName;
 }
 
+/**
+ * Saves server-produced bytes (e.g. a sharp-processed image) under a
+ * randomized name with the given extension and returns the stored name.
+ */
+export async function saveProcessedUpload(
+  bytes: Buffer,
+  ext: string,
+): Promise<string> {
+  await mkdir(uploadDir, { recursive: true });
+  const storedName = `${randomUUID()}${ext}`;
+  await writeFile(path.join(uploadDir, storedName), bytes);
+  return storedName;
+}
+
 export async function deleteUpload(storedName: string): Promise<void> {
   await unlink(storedPath(storedName)).catch(() => {});
 }
