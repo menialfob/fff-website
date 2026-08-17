@@ -13,6 +13,7 @@ import type { EventCardDTO, MessageDTO } from "@/lib/realtime";
 import { Avatar } from "@/components/avatar";
 import { PollCard } from "./poll-card";
 import { MessageMenu } from "./message-menu";
+import { AttachmentView } from "./attachment-view";
 
 function EventCard({ event, locale }: { event: EventCardDTO; locale: Locale }) {
   const { t } = useI18n();
@@ -278,6 +279,10 @@ export function MessageItem({
           <p className="whitespace-pre-wrap break-words text-sm text-zinc-200">
             {renderBody(message.body)}
           </p>
+        )}
+
+        {message.attachments.length > 0 && (
+          <AttachmentView attachments={message.attachments} />
         )}
 
         {message.event && (

@@ -18,6 +18,8 @@ import { MessageItem } from "./message-item";
 import { PollComposer } from "./poll-composer";
 import { ConversationInfo } from "./conversation-info";
 import { SeenBy } from "./seen-by";
+import { compressImage, uploadAttachment } from "./attachment-upload";
+import type { AttachmentDTO } from "@/lib/realtime";
 import {
   aroundMessages,
   createPoll,
@@ -64,7 +66,21 @@ type OutboxItem = {
   body: string;
   createdAt: string;
   failed: boolean;
+  attachmentIds: string[];
+  attachmentCount: number;
 };
+
+/** An attachment being prepared in the composer. */
+type DraftAttachment = {
+  localId: string;
+  name: string;
+  isImage: boolean;
+  progress: number;
+  dto: AttachmentDTO | null;
+  failed: boolean;
+};
+
+const MAX_DRAFTS = 10;
 
 /** Split a thread into calendar days, oldest first. */
 function groupByDay(messages: MessageDTO[]) {
@@ -175,11 +191,13 @@ export function ConversationView({
     () => new Map(initialReads.map((r) => [r.userId, r.lastReadAt])),
   );
   const [editTarget, setEditTarget] = useState<MessageDTO | null>(null);
+  const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const [pending, startTransition] = useTransition();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const lastTypingSent = useRef(0);
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -572,9 +590,62 @@ export function ConversationView({
     }
   }
 
+  function addFiles(list: FileList | null) {
+    if (!list) return;
+    const room = MAX_DRAFTS - drafts.length;
+    const files = [...list].slice(0, Math.max(0, room));
+    for (const original of files) {
+      const localId = crypto.randomUUID();
+      setDrafts((prev) => [
+        ...prev,
+        {
+          localId,
+          name: original.name,
+          isImage: original.type.startsWith("image/"),
+          progress: 0,
+          dto: null,
+          failed: false,
+        },
+      ]);
+      void (async () => {
+        try {
+          const file = await compressImage(original);
+          const dto = await uploadAttachment(file, (fraction) => {
+            setDrafts((prev) =>
+              prev.map((d) =>
+                d.localId === localId ? { ...d, progress: fraction } : d,
+              ),
+            );
+          });
+          setDrafts((prev) =>
+            prev.map((d) =>
+              d.localId === localId ? { ...d, dto, progress: 1 } : d,
+            ),
+          );
+        } catch {
+          setDrafts((prev) =>
+            prev.map((d) =>
+              d.localId === localId ? { ...d, failed: true } : d,
+            ),
+          );
+        }
+      })();
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removeDraft(localId: string) {
+    setDrafts((prev) => prev.filter((d) => d.localId !== localId));
+  }
+
   const deliverSend = useCallback(
-    (clientId: string, body: string, replyToId?: string) => {
-      sendMessage(conversationId, body, clientId, replyToId)
+    (
+      clientId: string,
+      body: string,
+      replyToId?: string,
+      attachmentIds: string[] = [],
+    ) => {
+      sendMessage(conversationId, body, clientId, replyToId, attachmentIds)
         .then((res) => {
           if (res.error || !res.message) {
             setOutbox((prev) =>
@@ -606,7 +677,12 @@ export function ConversationView({
 
   function send() {
     const body = text.trim();
-    if (!body) return;
+    const readyAttachments = drafts
+      .filter((d) => d.dto)
+      .map((d) => d.dto!.id);
+    if (!body && (editTarget || readyAttachments.length === 0)) return;
+    // Wait for in-flight uploads before sending.
+    if (!editTarget && drafts.some((d) => !d.dto && !d.failed)) return;
     setText("");
     // Reset the grown composer back to a single row.
     const el = textareaRef.current;
@@ -624,15 +700,23 @@ export function ConversationView({
 
     const replyToId = replyTarget?.id;
     setReplyTarget(null);
+    setDrafts([]);
     const clientId = crypto.randomUUID();
     setOutbox((prev) => [
       ...prev,
-      { clientId, body, createdAt: new Date().toISOString(), failed: false },
+      {
+        clientId,
+        body,
+        createdAt: new Date().toISOString(),
+        failed: false,
+        attachmentIds: readyAttachments,
+        attachmentCount: readyAttachments.length,
+      },
     ]);
     // Sending always returns you to the live tail.
     if (hasNewerRef.current) jumpToLatest();
     requestAnimationFrame(scrollToBottom);
-    deliverSend(clientId, body, replyToId);
+    deliverSend(clientId, body, replyToId, readyAttachments);
   }
 
   function startReply(message: MessageDTO) {
@@ -669,7 +753,7 @@ export function ConversationView({
         o.clientId === item.clientId ? { ...o, failed: false } : o,
       ),
     );
-    deliverSend(item.clientId, item.body);
+    deliverSend(item.clientId, item.body, undefined, item.attachmentIds);
   }
 
   function discardSend(clientId: string) {
@@ -862,9 +946,16 @@ export function ConversationView({
                 <span className="text-sm font-semibold text-white">
                   {t.chat.you}
                 </span>
-                <p className="whitespace-pre-wrap break-words text-sm text-zinc-200">
-                  {o.body}
-                </p>
+                {o.body && (
+                  <p className="whitespace-pre-wrap break-words text-sm text-zinc-200">
+                    {o.body}
+                  </p>
+                )}
+                {o.attachmentCount > 0 && (
+                  <p className="text-sm text-zinc-400">
+                    📷 ×{o.attachmentCount}
+                  </p>
+                )}
                 {o.failed ? (
                   <p className="mt-0.5 flex items-center gap-2 text-xs text-red-400">
                     {t.chat.sendFailed}
@@ -946,12 +1037,72 @@ export function ConversationView({
           pending={pending}
         />
       ) : (
-        <div className="flex items-end gap-2 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex flex-col gap-1.5 pb-[env(safe-area-inset-bottom)]">
+          {drafts.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto px-1 py-1">
+              {drafts.map((d) => (
+                <div
+                  key={d.localId}
+                  className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]"
+                >
+                  {d.dto?.thumbUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- auth-gated dynamic media route
+                    <img
+                      src={d.dto.thumbUrl}
+                      alt={d.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center px-1 text-center text-[0.55rem] text-zinc-400">
+                      {d.isImage ? "🖼️" : d.name}
+                    </span>
+                  )}
+                  {!d.dto && !d.failed && (
+                    <span className="absolute inset-x-0 bottom-0 h-1 bg-white/20">
+                      <span
+                        className="block h-full bg-violet-400 transition-[width]"
+                        style={{ width: `${Math.round(d.progress * 100)}%` }}
+                      />
+                    </span>
+                  )}
+                  {d.failed && (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-[0.55rem] text-red-300">
+                      {t.chat.uploadFailed}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeDraft(d.localId)}
+                    aria-label={t.chat.removeAttachment}
+                    className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-[0.6rem] text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => addFiles(e.target.files)}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label={t.chat.attachImage}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-lg text-zinc-300 transition hover:border-white/20"
+          >
+            📎
+          </button>
           <button
             type="button"
             onClick={() => setShowPoll(true)}
             aria-label={t.chat.newPoll}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-lg text-zinc-300 transition hover:border-white/20"
+            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-lg text-zinc-300 transition hover:border-white/20 sm:flex"
           >
             📊
           </button>
@@ -974,11 +1125,15 @@ export function ConversationView({
           <button
             type="button"
             onClick={send}
-            disabled={!text.trim()}
+            disabled={
+              (!text.trim() && !drafts.some((d) => d.dto)) ||
+              drafts.some((d) => !d.dto && !d.failed)
+            }
             className={`${btnPrimary} h-11 shrink-0`}
           >
             {t.chat.send}
           </button>
+          </div>
         </div>
       )}
     </div>

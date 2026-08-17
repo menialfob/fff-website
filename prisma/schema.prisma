@@ -78,6 +78,7 @@ model User {
   conversationReads ConversationRead[]
   conversationMemberships ConversationMember[]
   conversationsCreated    Conversation[]
+  messageAttachments      MessageAttachment[]
 }
 
 model UserRole {
@@ -231,10 +232,47 @@ model Message {
   eventId   String?
   eventDate String?
 
-  reactions MessageReaction[]
-  poll      Poll?
+  reactions   MessageReaction[]
+  poll        Poll?
+  attachments MessageAttachment[]
 
   @@index([conversationId, createdAt])
+}
+
+enum AttachmentKind {
+  IMAGE
+  FILE
+  GIF
+}
+
+// Media/file attached to a chat message. Uploaded ahead of the send (two
+// phase: POST /api/chat/upload creates the row with messageId null, then
+// sendMessage claims it), so progress is real and a failed send never leaves
+// media in a message. Chat media is deliberately separate from FileItem —
+// it must not clutter the Files section. Served only through the auth-gated
+// /api/chat/media/[id] route. `thumbName` and `blurData` (tiny webp data URL)
+// exist for images/GIFs; unclaimed rows older than a day are garbage
+// collected by the upload route.
+model MessageAttachment {
+  id           String   @id @default(cuid())
+  message      Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId    String?
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedById String?
+  kind         AttachmentKind
+  name         String
+  storedName   String   @unique
+  thumbName    String?
+  mimeType     String
+  size         Int
+  width        Int?
+  height       Int?
+  blurData     String?
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([messageId])
+  @@index([uploadedById, messageId])
 }
 
 // One emoji reaction by one user on one message. Toggling adds/removes the row.

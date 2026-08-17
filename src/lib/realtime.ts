@@ -47,6 +47,20 @@ export type MessageAuthorDTO = {
   avatarUrl: string | null;
 };
 
+export type AttachmentDTO = {
+  id: string;
+  kind: "IMAGE" | "FILE" | "GIF";
+  name: string;
+  mimeType: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  // Tiny inline webp data URL shown while the thumbnail loads.
+  blurData: string | null;
+  url: string;
+  thumbUrl: string | null;
+};
+
 export type ReplyPreviewDTO = {
   id: string;
   authorName: string | null;
@@ -67,6 +81,7 @@ export type MessageDTO = {
   // Tombstoned: body is blanked, render a "message deleted" placeholder.
   deleted: boolean;
   replyTo: ReplyPreviewDTO | null;
+  attachments: AttachmentDTO[];
   author: MessageAuthorDTO | null;
   reactions: ReactionSummary[];
   poll: PollDTO | null;

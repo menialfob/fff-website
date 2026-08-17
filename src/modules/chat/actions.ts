@@ -24,6 +24,7 @@ import {
   type ConversationSummaryDTO,
 } from "./data";
 import { avatarUrlFor } from "@/components/avatar";
+import { deleteUpload } from "@/lib/storage";
 import type { MessageDTO } from "@/lib/realtime";
 
 type ActionResult = { ok?: true; error?: string };
@@ -65,11 +66,14 @@ function pushTitle(
   return conversation.name;
 }
 
+const MAX_ATTACHMENTS = 10;
+
 export async function sendMessage(
   conversationId: string,
   body: string,
   clientId?: string,
   replyToId?: string,
+  attachmentIds?: string[],
 ): Promise<ActionResult & { message?: MessageDTO }> {
   const t = await getDict();
   const session = await requireSession();
@@ -78,7 +82,13 @@ export async function sendMessage(
   const conversation = gate.conversation!;
 
   const text = body.trim();
-  if (!text) return { error: t.errors.messageEmpty };
+  const wantedAttachments = [...new Set(attachmentIds ?? [])].slice(
+    0,
+    MAX_ATTACHMENTS,
+  );
+  if (!text && wantedAttachments.length === 0) {
+    return { error: t.errors.messageEmpty };
+  }
   if (text.length > MAX_BODY) return { error: t.errors.messageTooLong };
 
   // A quote must point at a message in the same conversation.
@@ -90,24 +100,52 @@ export async function sendMessage(
     if (!target) return { error: t.errors.messageNotFound };
   }
 
+  // Claimable = uploaded by this user and not yet attached to any message.
+  if (wantedAttachments.length > 0) {
+    const claimable = await prisma.messageAttachment.count({
+      where: {
+        id: { in: wantedAttachments },
+        uploadedById: session.user.id,
+        messageId: null,
+      },
+    });
+    if (claimable !== wantedAttachments.length) {
+      return { error: t.errors.invalidInput };
+    }
+  }
+
   const now = new Date();
   const created = await prisma.message.create({
     data: {
       conversationId,
       authorId: session.user.id,
       body: text,
-      searchText: toSearchText(text),
+      searchText: text ? toSearchText(text) : null,
       clientId: clientId?.slice(0, 64) || null,
       replyToId: replyToId || null,
       createdAt: now,
     },
-    include: messageInclude,
   });
+  if (wantedAttachments.length > 0) {
+    // Preserve the picker's ordering.
+    await Promise.all(
+      wantedAttachments.map((id, order) =>
+        prisma.messageAttachment.update({
+          where: { id },
+          data: { messageId: created.id, order },
+        }),
+      ),
+    );
+  }
   await prisma.conversation.update({
     where: { id: conversationId },
     data: { lastMessageAt: now },
   });
-  const dto = buildMessageDTO(created);
+  const full = await prisma.message.findUniqueOrThrow({
+    where: { id: created.id },
+    include: messageInclude,
+  });
+  const dto = buildMessageDTO(full);
   emitEvent({ type: "message", conversationId, message: dto });
 
   // Notify members who aren't currently connected (online users got it live).
@@ -117,14 +155,39 @@ export async function sendMessage(
     onlineUserIds(),
   );
   const slug = conversationSlug(conversation);
+  const pushBody = text
+    ? `${session.user.name}: ${text}`
+    : `${session.user.name}: ${attachmentPreviewLabel(dto.attachments, t)}`;
   await sendPushToUsers(recipients, {
     title: pushTitle(conversation, session.user.name ?? ""),
-    body: `${session.user.name}: ${text}`.slice(0, 160),
+    body: pushBody.slice(0, 160),
     url: `/chat/${slug}`,
     tag: `chat-${slug}`,
   });
 
   return { ok: true, message: dto };
+}
+
+type AttachmentLite = { kind: "IMAGE" | "FILE" | "GIF"; name: string };
+
+/** "📷 Billede" / "📎 fil.pdf" preview line for pushes and list previews. */
+function attachmentPreviewLabel(
+  attachments: AttachmentLite[],
+  t: Awaited<ReturnType<typeof getDict>>,
+): string {
+  const first = attachments[0];
+  if (!first) return "";
+  if (first.kind === "GIF") return "GIF";
+  if (first.kind === "IMAGE") {
+    return attachments.length > 1
+      ? `📷 ${fmtCount(t.chat.imageCountPreview, attachments.length)}`
+      : `📷 ${t.chat.imagePreview}`;
+  }
+  return `📎 ${first.name}`;
+}
+
+function fmtCount(template: string, count: number): string {
+  return template.replace("{count}", String(count));
 }
 
 /** Edit your own message's text; broadcasts the updated message. */
@@ -197,9 +260,15 @@ export async function deleteMessage(messageId: string): Promise<ActionResult> {
   }
   if (message.deletedAt) return { ok: true };
 
+  // Collect attachment files before the rows disappear.
+  const attachments = await prisma.messageAttachment.findMany({
+    where: { messageId },
+    select: { storedName: true, thumbName: true },
+  });
   await prisma.$transaction([
     prisma.messageReaction.deleteMany({ where: { messageId } }),
     prisma.poll.deleteMany({ where: { messageId } }),
+    prisma.messageAttachment.deleteMany({ where: { messageId } }),
     prisma.message.update({
       where: { id: messageId },
       data: {
@@ -211,6 +280,10 @@ export async function deleteMessage(messageId: string): Promise<ActionResult> {
       },
     }),
   ]);
+  for (const a of attachments) {
+    await deleteUpload(a.storedName);
+    if (a.thumbName) await deleteUpload(a.thumbName);
+  }
   const fresh = await prisma.message.findUniqueOrThrow({
     where: { id: messageId },
     include: messageInclude,

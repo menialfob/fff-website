@@ -20,6 +20,20 @@ export const messageInclude = {
     },
   },
   reactions: { select: { emoji: true, userId: true } },
+  attachments: {
+    orderBy: { order: "asc" as const },
+    select: {
+      id: true,
+      kind: true,
+      name: true,
+      mimeType: true,
+      size: true,
+      width: true,
+      height: true,
+      blurData: true,
+      thumbName: true,
+    },
+  },
   replyTo: {
     select: {
       id: true,
@@ -87,6 +101,18 @@ type RawAuthor = {
   avatarUpdatedAt: Date | null;
 };
 
+type RawAttachment = {
+  id: string;
+  kind: "IMAGE" | "FILE" | "GIF";
+  name: string;
+  mimeType: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  blurData: string | null;
+  thumbName: string | null;
+};
+
 type RawReply = {
   id: string;
   body: string;
@@ -105,6 +131,7 @@ type RawMessage = {
   editedAt: Date | null;
   deletedAt: Date | null;
   replyTo: RawReply | null;
+  attachments: RawAttachment[];
   author: RawAuthor | null;
   reactions: RawReaction[];
   poll: RawPoll | null;
@@ -139,6 +166,18 @@ export function buildMessageDTO(msg: RawMessage): MessageDTO {
           deleted: msg.replyTo.deletedAt !== null,
         }
       : null,
+    attachments: msg.attachments.map((a) => ({
+      id: a.id,
+      kind: a.kind,
+      name: a.name,
+      mimeType: a.mimeType,
+      size: a.size,
+      width: a.width,
+      height: a.height,
+      blurData: a.blurData,
+      url: `/api/chat/media/${a.id}`,
+      thumbUrl: a.thumbName ? `/api/chat/media/${a.id}?v=thumb` : null,
+    })),
     author: msg.author
       ? {
           id: msg.author.id,
@@ -388,7 +427,15 @@ export async function conversationSummaries(
         prisma.message.findFirst({
           where: { conversationId: conversation.id },
           orderBy: { createdAt: "desc" },
-          include: { author: { select: { name: true } }, poll: { select: { question: true } } },
+          include: {
+            author: { select: { name: true } },
+            poll: { select: { question: true } },
+            attachments: {
+              orderBy: { order: "asc" },
+              take: 1,
+              select: { kind: true, name: true },
+            },
+          },
         }),
         prisma.conversationRead.findUnique({
           where: { userId_conversationId: { userId, conversationId: conversation.id } },
@@ -425,14 +472,27 @@ export async function conversationSummaries(
         last: last
           ? {
               authorName: last.author?.name ?? null,
-              // Polls have an empty body — preview the question instead.
-              preview: last.poll ? `📊 ${last.poll.question}` : last.body,
+              // Polls and attachment-only messages have an empty body —
+              // preview a marker instead.
+              preview: last.poll
+                ? `📊 ${last.poll.question}`
+                : last.body || attachmentMarker(last.attachments[0]),
               createdAt: last.createdAt.toISOString(),
             }
           : null,
       };
     }),
   );
+}
+
+/** Locale-free preview marker for an attachment-only last message. */
+function attachmentMarker(
+  attachment?: { kind: "IMAGE" | "FILE" | "GIF"; name: string },
+): string {
+  if (!attachment) return "";
+  if (attachment.kind === "GIF") return "GIF";
+  if (attachment.kind === "IMAGE") return "📷";
+  return `📎 ${attachment.name}`;
 }
 
 /**
