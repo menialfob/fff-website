@@ -19,7 +19,6 @@ import { PollComposer } from "./poll-composer";
 import { ConversationInfo } from "./conversation-info";
 import { SeenBy } from "./seen-by";
 import { compressImage, uploadAttachment } from "./attachment-upload";
-import { GifPicker } from "./gif-picker";
 import dynamic from "next/dynamic";
 
 // Loaded on demand — the picker fetches a ~700KB dataset on first open.
@@ -37,7 +36,6 @@ import {
   newerMessages,
   olderMessages,
   recentMessages,
-  sendGif,
   sendMessage,
   sendTyping,
   toggleReaction,
@@ -162,7 +160,6 @@ export function ConversationView({
   initialLastReadAt,
   initialReads,
   focusMessageId,
-  gifEnabled,
   initialMuted,
 }: {
   conversationId: string;
@@ -179,7 +176,6 @@ export function ConversationView({
   initialLastReadAt: string | null;
   initialReads: { userId: string; lastReadAt: string }[];
   focusMessageId: string | null;
-  gifEnabled: boolean;
   initialMuted: boolean;
 }) {
   const { t, locale } = useI18n();
@@ -205,7 +201,6 @@ export function ConversationView({
   );
   const [editTarget, setEditTarget] = useState<MessageDTO | null>(null);
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
-  const [showGif, setShowGif] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   // Active "@query" token at the caret, if any (drives the mention popover).
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -814,44 +809,6 @@ export function ConversationView({
     });
   }
 
-  function pickGif(tenorId: string) {
-    setShowGif(false);
-    const clientId = crypto.randomUUID();
-    setOutbox((prev) => [
-      ...prev,
-      {
-        clientId,
-        body: "",
-        createdAt: new Date().toISOString(),
-        failed: false,
-        attachmentIds: [],
-        attachmentCount: 1,
-      },
-    ]);
-    if (hasNewerRef.current) jumpToLatest();
-    requestAnimationFrame(scrollToBottom);
-    sendGif(conversationId, tenorId, clientId)
-      .then((res) => {
-        if (res.error || !res.message) {
-          // GIF sends have nothing local to retry against — just drop the
-          // bubble; the picker can be reopened.
-          setOutbox((prev) => prev.filter((o) => o.clientId !== clientId));
-          return;
-        }
-        const message = res.message;
-        setOutbox((prev) => prev.filter((o) => o.clientId !== clientId));
-        if (!hasNewerRef.current) {
-          setMessages((prev) =>
-            prev.some((m) => m.id === message.id) ? prev : [...prev, message],
-          );
-          requestAnimationFrame(scrollToBottom);
-        }
-      })
-      .catch(() => {
-        setOutbox((prev) => prev.filter((o) => o.clientId !== clientId));
-      });
-  }
-
   function onDeleteMessage(messageId: string) {
     startTransition(async () => {
       await deleteMessage(messageId);
@@ -1116,7 +1073,6 @@ export function ConversationView({
         {typingLabel}
       </div>
 
-      {showGif && <GifPicker onPick={pickGif} onClose={() => setShowGif(false)} />}
       {showEmoji && (
         <EmojiPicker
           onPick={insertEmoji}
@@ -1238,25 +1194,12 @@ export function ConversationView({
           </button>
           <button
             type="button"
-            onClick={() => {
-              setShowGif(false);
-              setShowEmoji((v) => !v);
-            }}
+            onClick={() => setShowEmoji((v) => !v)}
             aria-label={t.chat.emojiPicker}
             className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-lg text-zinc-300 transition hover:border-white/20 sm:flex"
           >
             🙂
           </button>
-          {gifEnabled && (
-            <button
-              type="button"
-              onClick={() => setShowGif((v) => !v)}
-              aria-label={t.chat.gif}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-[0.65rem] font-bold text-zinc-300 transition hover:border-white/20"
-            >
-              GIF
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setShowPoll(true)}

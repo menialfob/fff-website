@@ -38,7 +38,7 @@ export const modules: AppModule[] = [
   // Discussion forum. The seeded "Begivenheder" section mirrors calendar
   // events; ordinary sections are member-created content.
   { id: "forum", href: "/forum" },
-  // Real-time chat: channels, DMs and groups, attachments/GIFs, replies,
+  // Real-time chat: channels, DMs and groups, attachments, replies,
   // reactions, read receipts, mentions, search, polls, push notifications.
   { id: "chat", href: "/chat" },
   { id: "files", href: "/files" },

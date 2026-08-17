@@ -103,7 +103,6 @@ export default async function ConversationPage({
         lastReadAt: r.lastReadAt.toISOString(),
       }))}
       focusMessageId={around ? (focusMessageId ?? null) : null}
-      gifEnabled={Boolean(process.env.TENOR_API_KEY)}
       initialMuted={read?.muted ?? false}
     />
   );
