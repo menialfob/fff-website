@@ -30,3 +30,7 @@ npm-debug.log*
 
 # typescript
 *.tsbuildinfo
+
+# SQLite WAL side files
+*.db-shm
+*.db-wal
