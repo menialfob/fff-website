@@ -18,7 +18,11 @@ import {
   toRenderFields,
 } from "@/modules/calendar/structured-fields";
 import { renderContent } from "@/modules/content/render";
-import { conversationDisplayName, conversationsForViewer } from "@/modules/chat/data";
+import {
+  conversationDisplayName,
+  conversationsForViewer,
+  viewerFor,
+} from "@/modules/chat/data";
 import { ShareToChat } from "@/modules/chat/share-to-chat";
 import {
   describeRule,
@@ -168,10 +172,7 @@ export default async function EventPage({
   const shareChannels = attendanceDate
     ? (
         await conversationsForViewer(
-          {
-            role: session.user.role,
-            extraRoles: session.user.extraRoles,
-          },
+          await viewerFor(session.user.id),
           session.user.id,
         )
       ).map((c) => ({

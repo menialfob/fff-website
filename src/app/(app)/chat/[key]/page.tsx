@@ -8,6 +8,7 @@ import {
   conversationMessages,
   messagesAround,
   MESSAGE_PAGE,
+  viewerFor,
 } from "@/modules/chat/data";
 import { ConversationView } from "@/modules/chat/channel-view";
 import { avatarUrlFor } from "@/components/avatar";
@@ -37,10 +38,7 @@ export default async function ConversationPage({
       include: { members: { include: { user: { select: { name: true } } } } },
     }));
 
-  const viewer = {
-    role: session.user.role,
-    extraRoles: session.user.extraRoles,
-  };
+  const viewer = await viewerFor(session.user.id);
   const isMember =
     conversation?.members.some((m) => m.userId === session.user.id) ?? false;
   if (!conversation || !canAccessConversation(conversation, viewer, isMember)) {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { uploadStream } from "@/lib/storage";
-import { canAccessConversation } from "@/modules/chat/data";
+import { canAccessConversation, viewerFor } from "@/modules/chat/data";
 
 /**
  * Streams a chat attachment (?v=thumb for the image thumbnail). Access
@@ -39,7 +39,7 @@ export async function GET(
     const conversation = attachment.message.conversation;
     const allowed = canAccessConversation(
       conversation,
-      { role: session.user.role, extraRoles: session.user.extraRoles },
+      await viewerFor(session.user.id),
       conversation.members.length > 0,
     );
     if (!allowed) return new NextResponse("Not found", { status: 404 });

@@ -70,8 +70,10 @@ export async function requireAdmin() {
 
 /**
  * Returns the session or throws unless the user holds the given extra role.
- * Site-wide ADMINs pass every role check (same superuser precedent as
- * elsewhere in the app).
+ * Site-wide ADMINs pass every role check (same superuser precedent as module
+ * access in src/modules/registry.ts). Role-gated chat channels are the one
+ * exception — they are private conversation rather than administrable content,
+ * so `canAccessConversation` requires the role itself.
  */
 export async function requireRole(role: ExtraRole) {
   const session = await requireSession();

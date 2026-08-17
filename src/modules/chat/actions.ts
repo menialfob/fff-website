@@ -24,6 +24,7 @@ import {
   searchMessages,
   summarizeReactions,
   toSearchText,
+  viewerFor,
   type ConversationSummaryDTO,
 } from "./data";
 import { fmt } from "@/lib/i18n";
@@ -38,10 +39,6 @@ const MAX_QUESTION = 200;
 const MAX_OPTION = 100;
 const MAX_EMOJI = 24;
 
-function viewerOf(session: Session) {
-  return { role: session.user.role, extraRoles: session.user.extraRoles };
-}
-
 /**
  * Load a conversation and confirm the session may use it, or return an error.
  * Membership is checked via a scoped include so one query covers both channel
@@ -49,13 +46,16 @@ function viewerOf(session: Session) {
  */
 async function conversationGate(conversationId: string, session: Session) {
   const t = await getDict();
-  const conversation = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    include: { members: { where: { userId: session.user.id } } },
-  });
+  const [conversation, viewer] = await Promise.all([
+    prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { members: { where: { userId: session.user.id } } },
+    }),
+    viewerFor(session.user.id),
+  ]);
   if (!conversation) return { error: t.errors.conversationNotFound as string };
   const isMember = conversation.members.length > 0;
-  if (!canAccessConversation(conversation, viewerOf(session), isMember)) {
+  if (!canAccessConversation(conversation, viewer, isMember)) {
     return { error: t.errors.notAuthorized as string };
   }
   return { conversation };
@@ -648,7 +648,10 @@ export async function listConversationSummaries(): Promise<
   ConversationSummaryDTO[]
 > {
   const session = await requireSession();
-  return conversationSummaries(viewerOf(session), session.user.id);
+  return conversationSummaries(
+    await viewerFor(session.user.id),
+    session.user.id,
+  );
 }
 
 /**
@@ -686,7 +689,11 @@ export async function addableMembers(
 /** Search messages across the viewer's conversations (min 2 characters). */
 export async function searchChatMessages(query: string) {
   const session = await requireSession();
-  return searchMessages(viewerOf(session), session.user.id, query);
+  return searchMessages(
+    await viewerFor(session.user.id),
+    session.user.id,
+    query,
+  );
 }
 
 /**
@@ -721,11 +728,18 @@ export async function toggleMute(conversationId: string): Promise<ActionResult> 
   return { ok: true };
 }
 
-/** Move the viewer's read cursor for a conversation to now (clears unread). */
+/**
+ * Move the viewer's read cursor for a conversation to now (clears unread).
+ * Gated like every other conversation action: without the check any logged-in
+ * member could write a read cursor for — and broadcast a read receipt into —
+ * a conversation they are not in, such as the bestyrelse channel.
+ */
 export async function markConversationRead(
   conversationId: string,
 ): Promise<void> {
   const session = await requireSession();
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error) return;
   const now = new Date();
   try {
     await prisma.conversationRead.upsert({

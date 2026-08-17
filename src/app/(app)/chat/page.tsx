@@ -2,14 +2,14 @@ import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { getDict } from "@/lib/i18n/server";
 import { PageTitle, btnPrimary, listCard } from "@/components/ui";
-import { conversationSummaries } from "@/modules/chat/data";
+import { conversationSummaries, viewerFor } from "@/modules/chat/data";
 import { ConversationList } from "@/modules/chat/conversation-list";
 
 export default async function ChatPage() {
   const session = await requireSession();
   const t = await getDict();
   const summaries = await conversationSummaries(
-    { role: session.user.role, extraRoles: session.user.extraRoles },
+    await viewerFor(session.user.id),
     session.user.id,
   );
 

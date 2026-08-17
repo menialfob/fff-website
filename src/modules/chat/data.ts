@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { avatarUrlFor } from "@/components/avatar";
 import type { ExtraRole } from "@/lib/roles";
+import { emitEvent } from "@/lib/realtime";
 import type {
   MessageDTO,
   PollDTO,
@@ -217,7 +218,61 @@ export async function enrichEventCounts(dtos: MessageDTO[]): Promise<MessageDTO[
   return dtos;
 }
 
-export type Viewer = { role: "ADMIN" | "MEMBER"; extraRoles?: ExtraRole[] };
+/**
+ * The only thing chat access depends on: the extra roles the viewer holds. The
+ * site-admin flag is deliberately absent — see `canAccessConversation`.
+ */
+export type Viewer = { extraRoles?: ExtraRole[] };
+
+/**
+ * The viewer's current roles, read from the database — never from the session
+ * token. A role-gated channel has no member rows: holding the role *is* the
+ * membership, and roles are granted and revoked ad hoc, while a JWT is only
+ * re-minted at login and lives up to a week (see src/lib/auth.config.ts). So
+ * trusting `session.user.extraRoles` here would leave a former bestyrelse
+ * member reading the channel for days after losing the role, and make a new
+ * one wait for a re-login to get in. Every chat access check resolves the
+ * viewer through this instead, so a role change takes effect on the next
+ * request.
+ */
+export async function viewerFor(userId: string): Promise<Viewer> {
+  const roles = await prisma.userRole.findMany({
+    where: { userId },
+    select: { role: true },
+  });
+  return { extraRoles: roles.map((r) => r.role) };
+}
+
+/**
+ * Announce the current holders of every channel gated on `role` after a grant
+ * or revoke, so open clients follow the change without a reload: each SSE
+ * connection recomputes its allow-set from `memberIds` (exactly as it does for
+ * group membership) and the conversation list refetches, making the channel
+ * appear for a new holder and disappear for a former one.
+ */
+export async function broadcastRoleChannelMembership(
+  role: ExtraRole,
+  granted: boolean,
+): Promise<void> {
+  const channels = await prisma.conversation.findMany({
+    where: { type: "CHANNEL", requiredRole: role },
+    select: { id: true },
+  });
+  if (channels.length === 0) return;
+  const holders = await prisma.userRole.findMany({
+    where: { role },
+    select: { userId: true },
+  });
+  const memberIds = holders.map((h) => h.userId);
+  for (const channel of channels) {
+    emitEvent({
+      type: "conversation",
+      conversationId: channel.id,
+      kind: granted ? "member-added" : "member-removed",
+      memberIds,
+    });
+  }
+}
 
 type ConversationGate = {
   type: ConversationType;
@@ -226,9 +281,17 @@ type ConversationGate = {
 
 /**
  * Whether a viewer may see/post in a conversation. Channels are gated by role
- * (null = everyone, admins always pass); DMs and groups by membership, which
- * the caller resolves (`isMember`) since it comes from different places — a
- * joined member list, a per-user membership query, or a members include.
+ * (null = everyone, otherwise the role must be held); DMs and groups by
+ * membership, which the caller resolves (`isMember`) since it comes from
+ * different places — a joined member list, a per-user membership query, or a
+ * members include.
+ *
+ * Unlike module access (src/modules/registry.ts) and `requireRole`, the
+ * site-admin flag grants nothing here: an internal channel such as
+ * "bestyrelse" is private conversation, not administrable content, so only
+ * holders of its role see it — an admin outside the board gets no listing, no
+ * messages, no unread count and no pushes. Admins who *are* on the board pass
+ * through their own BESTYRELSE role like everyone else.
  */
 export function canAccessConversation(
   conversation: ConversationGate,
@@ -237,7 +300,6 @@ export function canAccessConversation(
 ): boolean {
   if (conversation.type !== "CHANNEL") return isMember;
   if (!conversation.requiredRole) return true;
-  if (viewer.role === "ADMIN") return true;
   return viewer.extraRoles?.includes(conversation.requiredRole) ?? false;
 }
 
@@ -327,7 +389,6 @@ export async function conversationMembers(conversation: {
     select: {
       id: true,
       name: true,
-      role: true,
       avatarStoredName: true,
       avatarUpdatedAt: true,
       extraRoles: { select: { role: true } },
@@ -338,7 +399,7 @@ export async function conversationMembers(conversation: {
     .filter((u) =>
       canAccessConversation(
         conversation,
-        { role: u.role, extraRoles: u.extraRoles.map((r) => r.role) },
+        { extraRoles: u.extraRoles.map((r) => r.role) },
         false,
       ),
     )

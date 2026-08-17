@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSectionCounts } from "@/lib/activity";
-import { chatUnreadCount } from "@/modules/chat/data";
+import { chatUnreadCount, viewerFor } from "@/modules/chat/data";
 
 /**
  * How many things are waiting for a member — the number shown on the installed
@@ -15,15 +15,12 @@ import { chatUnreadCount } from "@/modules/chat/data";
 export async function getBadgeCount(userId: string): Promise<number> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { role: true, extraRoles: { select: { role: true } } },
+    select: { id: true },
   });
   if (!user) return 0;
 
   const [chat, sections] = await Promise.all([
-    chatUnreadCount(
-      { role: user.role, extraRoles: user.extraRoles.map((r) => r.role) },
-      userId,
-    ),
+    chatUnreadCount(await viewerFor(userId), userId),
     getSectionCounts(userId),
   ]);
 
