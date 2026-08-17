@@ -1,17 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
 import { dayKey, formatDayLabel, msUntilNextDay } from "@/lib/i18n";
 import type { MessageDTO, RealtimeEvent } from "@/lib/realtime";
 import { btnPrimary } from "@/components/ui";
+import { Avatar } from "@/components/avatar";
 import { MessageItem } from "./message-item";
 import { PollComposer } from "./poll-composer";
 import { ConversationInfo } from "./conversation-info";
 import {
   createPoll,
   markConversationRead,
+  newerMessages,
+  olderMessages,
   recentMessages,
   sendMessage,
   sendTyping,
@@ -24,6 +34,10 @@ const TYPING_THROTTLE_MS = 3000;
 const TYPING_CLEAR_MS = 4000;
 // Grow the composer up to this height (px), then it scrolls internally.
 const COMPOSER_MAX_PX = 128;
+// "At the tail" tolerance: within this many px of the bottom counts as there.
+const AT_BOTTOM_PX = 80;
+// How long a jumped-to message stays highlighted.
+const HIGHLIGHT_MS = 2000;
 
 /** Move the read cursor, then refresh the app-icon badge it feeds. */
 function markRead(conversationId: string) {
@@ -39,6 +53,14 @@ function mergeMessages(a: MessageDTO[], b: MessageDTO[]): MessageDTO[] {
     x.createdAt.localeCompare(y.createdAt),
   );
 }
+
+/** A message being sent optimistically (not yet acknowledged by the server). */
+type OutboxItem = {
+  clientId: string;
+  body: string;
+  createdAt: string;
+  failed: boolean;
+};
 
 /** Split a thread into calendar days, oldest first. */
 function groupByDay(messages: MessageDTO[]) {
@@ -60,6 +82,17 @@ function DayDivider({ label }: { label: string }) {
       <span className="rounded-full border border-white/[0.06] bg-panel/90 px-3 py-1 text-xs font-medium text-zinc-400 backdrop-blur">
         {label}
       </span>
+    </div>
+  );
+}
+
+/** "New messages" line marking where unread content starts. */
+function UnreadDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3" role="separator">
+      <span className="h-px flex-1 bg-violet-400/40" />
+      <span className="text-xs font-semibold text-violet-300">{label}</span>
+      <span className="h-px flex-1 bg-violet-400/40" />
     </div>
   );
 }
@@ -91,35 +124,81 @@ export function ConversationView({
   conversationType,
   isAdmin,
   viewerId,
+  viewerName,
+  viewerAvatarUrl,
   members,
   initialMessages,
+  initialHasOlder,
+  initialHasNewer,
+  initialLastReadAt,
+  focusMessageId,
 }: {
   conversationId: string;
   conversationName: string;
   conversationType: "CHANNEL" | "DM" | "GROUP";
   isAdmin: boolean;
   viewerId: string;
+  viewerName: string;
+  viewerAvatarUrl: string | null;
   members: { id: string; name: string; avatarUrl: string | null }[];
   initialMessages: MessageDTO[];
+  initialHasOlder: boolean;
+  initialHasNewer: boolean;
+  initialLastReadAt: string | null;
+  focusMessageId: string | null;
 }) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const now = useNow();
   const [showInfo, setShowInfo] = useState(false);
   const [messages, setMessages] = useState<MessageDTO[]>(initialMessages);
+  const [hasOlder, setHasOlder] = useState(initialHasOlder);
+  const [hasNewer, setHasNewer] = useState(initialHasNewer);
+  const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [online, setOnline] = useState<string[]>([]);
   const [typing, setTyping] = useState<{ id: string; name: string }[]>([]);
   const [text, setText] = useState("");
   const [showPoll, setShowPoll] = useState(false);
+  const [atBottom, setAtBottom] = useState(!focusMessageId);
+  const [newBelow, setNewBelow] = useState(0);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
   const lastTypingSent = useRef(0);
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
+  const hasNewerRef = useRef(initialHasNewer);
+  hasNewerRef.current = hasNewer;
+  const atBottomRef = useRef(atBottom);
+  atBottomRef.current = atBottom;
+  const loadingOlderRef = useRef(false);
+  const loadingNewerRef = useRef(false);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set before prepending history so the layout effect can keep the viewport
+  // anchored to the message the user was looking at.
+  const scrollRestore = useRef<{ height: number; top: number } | null>(null);
+  // Newest createdAt we already marked read, to avoid redundant round-trips.
+  const lastMarkedAt = useRef<string>("");
+
+  // The unread divider position is frozen at open: the first message from
+  // someone else that is newer than the cursor the page loaded with. No
+  // cursor means everything is unread (same rule as the unread pills).
+  const unreadDividerId = useRef<string | null>(
+    (() => {
+      const cursor = initialLastReadAt ?? "";
+      const first = initialMessages.find(
+        (m) => m.author?.id !== viewerId && m.createdAt > cursor,
+      );
+      return first?.id ?? null;
+    })(),
+  ).current;
+
   // When the on-screen keyboard is open we size the panel to the visual
   // viewport instead of 100dvh (which iOS doesn't shrink for the keyboard),
   // so the composer sits directly above the keyboard with no dead gap.
@@ -134,6 +213,30 @@ export function ConversationView({
     [members],
   );
 
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
+
+  const flashMessage = useCallback((id: string) => {
+    setHighlightId(id);
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS);
+  }, []);
+
+  /** Back to the live tail: newest page, scrolled to the bottom. */
+  const jumpToLatest = useCallback(() => {
+    recentMessages(conversationId)
+      .then((fresh) => {
+        setMessages(fresh);
+        setHasOlder(true);
+        setHasNewer(false);
+        setNewBelow(0);
+        requestAnimationFrame(scrollToBottom);
+      })
+      .catch(() => {});
+  }, [conversationId, scrollToBottom]);
+
   // Live stream. EventSource auto-reconnects, so a dropped connection (e.g. a
   // deploy) heals itself; on reconnect we simply resume receiving events.
   useEffect(() => {
@@ -146,15 +249,28 @@ export function ConversationView({
         return;
       }
       switch (ev.type) {
-        case "message":
+        case "message": {
           if (ev.conversationId !== conversationId) return;
+          const incoming = ev.message;
+          // Our own optimistic send coming back — drop the pending bubble.
+          if (incoming.clientId) {
+            setOutbox((prev) =>
+              prev.filter((o) => o.clientId !== incoming.clientId),
+            );
+          }
+          if (hasNewerRef.current) {
+            // Viewing history — the message belongs below the loaded window.
+            setNewBelow((n) => n + 1);
+            return;
+          }
+          const stick = atBottomRef.current;
           setMessages((prev) =>
-            prev.some((m) => m.id === ev.message.id)
-              ? prev
-              : [...prev, ev.message],
+            prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming],
           );
-          markRead(conversationId);
+          if (stick) requestAnimationFrame(scrollToBottom);
+          else if (incoming.author?.id !== viewerId) setNewBelow((n) => n + 1);
           break;
+        }
         case "reaction":
           if (ev.conversationId !== conversationId) return;
           setMessages((prev) =>
@@ -209,23 +325,130 @@ export function ConversationView({
       }
     };
     return () => es.close();
-  }, [conversationId, conversationType, viewerId, router]);
+  }, [conversationId, conversationType, viewerId, router, scrollToBottom]);
+
+  // Initial position: deep-linked message centered and highlighted, otherwise
+  // the tail.
+  useLayoutEffect(() => {
+    if (focusMessageId) {
+      document
+        .getElementById(`msg-${focusMessageId}`)
+        ?.scrollIntoView({ block: "center" });
+      flashMessage(focusMessageId);
+    } else {
+      scrollToBottom();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
+
+  // Restore the anchor after prepending a history page.
+  useLayoutEffect(() => {
+    const restore = scrollRestore.current;
+    const el = scrollRef.current;
+    if (restore && el) {
+      scrollRestore.current = null;
+      el.scrollTop = el.scrollHeight - restore.height + restore.top;
+    }
+  }, [messages]);
+
+  // Track whether the user is at the tail; leaving it stops auto-scroll and
+  // read-marking until they return.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const near =
+        el.scrollHeight - el.scrollTop - el.clientHeight < AT_BOTTOM_PX;
+      setAtBottom(near);
+      if (near && !hasNewerRef.current) setNewBelow(0);
+    };
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Mark read only when the user can actually see the tail: document visible,
+  // scrolled to the bottom, not browsing history.
+  useEffect(() => {
+    if (!atBottom || hasNewer || messages.length === 0) return;
+    if (document.visibilityState !== "visible") return;
+    const newest = messages[messages.length - 1].createdAt;
+    if (newest <= lastMarkedAt.current) return;
+    lastMarkedAt.current = newest;
+    markRead(conversationId);
+  }, [messages, atBottom, hasNewer, conversationId]);
+
+  // Load older history when the top sentinel becomes visible.
+  useEffect(() => {
+    const sentinel = topSentinelRef.current;
+    const scroller = scrollRef.current;
+    if (!sentinel || !scroller || !hasOlder) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        if (loadingOlderRef.current) return;
+        const oldest = messages[0];
+        if (!oldest) return;
+        loadingOlderRef.current = true;
+        setLoadingOlder(true);
+        olderMessages(conversationId, oldest.id)
+          .then((res) => {
+            if (res.messages.length) {
+              scrollRestore.current = {
+                height: scroller.scrollHeight,
+                top: scroller.scrollTop,
+              };
+              setMessages((prev) => mergeMessages(res.messages, prev));
+            }
+            setHasOlder(res.hasMore);
+          })
+          .catch(() => {})
+          .finally(() => {
+            loadingOlderRef.current = false;
+            setLoadingOlder(false);
+          });
+      },
+      { root: scroller },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [conversationId, hasOlder, messages]);
+
+  // While viewing history, scrolling to the loaded window's bottom pages
+  // forward until we catch up with the live tail.
+  useEffect(() => {
+    if (!hasNewer || !atBottom || loadingNewerRef.current) return;
+    const newest = messages[messages.length - 1];
+    if (!newest) return;
+    loadingNewerRef.current = true;
+    newerMessages(conversationId, newest.id)
+      .then((res) => {
+        if (res.messages.length) {
+          setMessages((prev) => mergeMessages(prev, res.messages));
+        }
+        setHasNewer(res.hasMore);
+        if (!res.hasMore) setNewBelow(0);
+      })
+      .catch(() => {})
+      .finally(() => {
+        loadingNewerRef.current = false;
+      });
+  }, [conversationId, hasNewer, atBottom, messages]);
 
   // Mark read on open and stop typing timers on unmount.
   useEffect(() => {
-    markRead(conversationId);
     const timers = typingTimers.current;
     return () => {
       timers.forEach((t2) => clearTimeout(t2));
       timers.clear();
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
     };
-  }, [conversationId]);
+  }, []);
 
-  // Keep the newest message in view.
+  // Keep the tail pinned when the keyboard resizes the panel.
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, typing, panelHeight]);
+    if (atBottomRef.current && !hasNewerRef.current) scrollToBottom();
+  }, [panelHeight, typing, scrollToBottom]);
 
   // Track the on-screen keyboard via the visual viewport so the composer isn't
   // hidden behind it and there's no dead space below it (iOS doesn't shrink
@@ -258,14 +481,15 @@ export function ConversationView({
 
   // When the app returns to the foreground (e.g. after tapping a push
   // notification), the SSE connection was suspended while backgrounded, so any
-  // messages that arrived meanwhile were missed. Refetch the latest and merge.
+  // messages that arrived meanwhile were missed. Refetch the latest and merge
+  // (only in live-tail mode; a history view stays put).
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
+      if (hasNewerRef.current) return;
       recentMessages(conversationId)
         .then((fresh) => {
           if (fresh.length) setMessages((prev) => mergeMessages(prev, fresh));
-          markRead(conversationId);
         })
         .catch(() => {});
     };
@@ -294,6 +518,38 @@ export function ConversationView({
     }
   }
 
+  const deliverSend = useCallback(
+    (clientId: string, body: string) => {
+      sendMessage(conversationId, body, clientId)
+        .then((res) => {
+          if (res.error || !res.message) {
+            setOutbox((prev) =>
+              prev.map((o) =>
+                o.clientId === clientId ? { ...o, failed: true } : o,
+              ),
+            );
+            return;
+          }
+          const message = res.message;
+          setOutbox((prev) => prev.filter((o) => o.clientId !== clientId));
+          if (!hasNewerRef.current) {
+            setMessages((prev) =>
+              prev.some((m) => m.id === message.id) ? prev : [...prev, message],
+            );
+            requestAnimationFrame(scrollToBottom);
+          }
+        })
+        .catch(() => {
+          setOutbox((prev) =>
+            prev.map((o) =>
+              o.clientId === clientId ? { ...o, failed: true } : o,
+            ),
+          );
+        });
+    },
+    [conversationId, scrollToBottom],
+  );
+
   function send() {
     const body = text.trim();
     if (!body) return;
@@ -301,9 +557,28 @@ export function ConversationView({
     // Reset the grown composer back to a single row.
     const el = textareaRef.current;
     if (el) el.style.height = "auto";
-    startTransition(async () => {
-      await sendMessage(conversationId, body);
-    });
+    const clientId = crypto.randomUUID();
+    setOutbox((prev) => [
+      ...prev,
+      { clientId, body, createdAt: new Date().toISOString(), failed: false },
+    ]);
+    // Sending always returns you to the live tail.
+    if (hasNewerRef.current) jumpToLatest();
+    requestAnimationFrame(scrollToBottom);
+    deliverSend(clientId, body);
+  }
+
+  function retrySend(item: OutboxItem) {
+    setOutbox((prev) =>
+      prev.map((o) =>
+        o.clientId === item.clientId ? { ...o, failed: false } : o,
+      ),
+    );
+    deliverSend(item.clientId, item.body);
+  }
+
+  function discardSend(clientId: string) {
+    setOutbox((prev) => prev.filter((o) => o.clientId !== clientId));
   }
 
   function onReact(messageId: string, emoji: string) {
@@ -332,6 +607,7 @@ export function ConversationView({
       : typing.length > 1
         ? t.chat.typingMany.replace("{count}", String(typing.length))
         : "";
+  const showJumpPill = hasNewer || newBelow > 0 || !atBottom;
 
   return (
     // Fill the space between the sticky app header (h-16 + safe-area) and the
@@ -385,29 +661,111 @@ export function ConversationView({
         />
       )}
 
-      <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">
-        {messages.length === 0 ? (
-          <p className="py-8 text-center text-sm text-zinc-500">
-            {t.chat.empty}
-          </p>
-        ) : (
-          // One section per day: scoping the heading to its own group is what
-          // makes it stick to the top only while that day is on screen.
-          groupByDay(messages).map((day) => (
-            <section key={day.key} className="space-y-4">
-              <DayDivider label={formatDayLabel(day.at, locale, t, now)} />
-              {day.messages.map((m) => (
-                <MessageItem
-                  key={m.id}
-                  message={m}
-                  viewerId={viewerId}
-                  locale={locale}
-                  onToggleReaction={onReact}
-                  onVote={onVote}
-                />
-              ))}
-            </section>
-          ))
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollRef}
+          className="h-full space-y-4 overflow-y-auto py-4"
+        >
+          {hasOlder && (
+            <div ref={topSentinelRef} className="py-1 text-center">
+              <span className="text-xs text-zinc-500">
+                {loadingOlder ? t.chat.loadingOlder : ""}
+              </span>
+            </div>
+          )}
+          {messages.length === 0 && outbox.length === 0 ? (
+            <p className="py-8 text-center text-sm text-zinc-500">
+              {t.chat.empty}
+            </p>
+          ) : (
+            // One section per day: scoping the heading to its own group is what
+            // makes it stick to the top only while that day is on screen.
+            groupByDay(messages).map((day) => (
+              <section key={day.key} className="space-y-4">
+                <DayDivider label={formatDayLabel(day.at, locale, t, now)} />
+                {day.messages.map((m) => (
+                  <div key={m.id} id={`msg-${m.id}`}>
+                    {m.id === unreadDividerId && (
+                      <div className="mb-4">
+                        <UnreadDivider label={t.chat.newMessagesDivider} />
+                      </div>
+                    )}
+                    <div
+                      className={`rounded-xl transition-colors duration-700 ${
+                        highlightId === m.id ? "bg-violet-500/15" : ""
+                      }`}
+                    >
+                      <MessageItem
+                        message={m}
+                        viewerId={viewerId}
+                        locale={locale}
+                        onToggleReaction={onReact}
+                        onVote={onVote}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </section>
+            ))
+          )}
+
+          {outbox.map((o) => (
+            <div key={o.clientId} className="flex gap-2.5 opacity-80">
+              <Avatar
+                id={viewerId}
+                name={viewerName}
+                avatarUrl={viewerAvatarUrl}
+                size="sm"
+                className="mt-0.5"
+              />
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-semibold text-white">
+                  {t.chat.you}
+                </span>
+                <p className="whitespace-pre-wrap break-words text-sm text-zinc-200">
+                  {o.body}
+                </p>
+                {o.failed ? (
+                  <p className="mt-0.5 flex items-center gap-2 text-xs text-red-400">
+                    {t.chat.sendFailed}
+                    <button
+                      type="button"
+                      onClick={() => retrySend(o)}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      {t.chat.retry}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => discardSend(o.clientId)}
+                      className="text-zinc-400 underline underline-offset-2"
+                    >
+                      {t.chat.discard}
+                    </button>
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {t.chat.sending}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {showJumpPill && (
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-panel/95 px-4 py-2 text-xs font-semibold text-white shadow-lg backdrop-blur transition hover:border-white/25"
+          >
+            {newBelow > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-500 px-1.5 text-[0.65rem]">
+                {newBelow}
+              </span>
+            )}
+            {t.chat.jumpToLatest} ↓
+          </button>
         )}
       </div>
 
@@ -450,7 +808,7 @@ export function ConversationView({
           <button
             type="button"
             onClick={send}
-            disabled={pending || !text.trim()}
+            disabled={!text.trim()}
             className={`${btnPrimary} h-11 shrink-0`}
           >
             {t.chat.send}

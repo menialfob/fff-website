@@ -82,6 +82,7 @@ type RawMessage = {
   conversationId: string;
   body: string;
   createdAt: Date;
+  clientId: string | null;
   author: RawAuthor | null;
   reactions: RawReaction[];
   poll: RawPoll | null;
@@ -95,6 +96,7 @@ export function buildMessageDTO(msg: RawMessage): MessageDTO {
     conversationId: msg.conversationId,
     body: msg.body,
     createdAt: msg.createdAt.toISOString(),
+    clientId: msg.clientId,
     author: msg.author
       ? {
           id: msg.author.id,
@@ -458,4 +460,83 @@ export function conversationSlug(conversation: {
  */
 export function toSearchText(body: string): string {
   return body.toLocaleLowerCase("da");
+}
+
+/** Page size for history pagination and jump-to windows. */
+export const MESSAGE_PAGE = 50;
+
+/**
+ * Messages older than a cursor message (exclusive), oldest-first, plus
+ * whether more remain beyond them.
+ */
+export async function messagesBefore(conversationId: string, beforeId: string) {
+  const rows = await prisma.message.findMany({
+    where: { conversationId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    cursor: { id: beforeId },
+    skip: 1,
+    take: MESSAGE_PAGE + 1,
+    include: messageInclude,
+  });
+  const hasMore = rows.length > MESSAGE_PAGE;
+  const page = rows.slice(0, MESSAGE_PAGE).reverse().map(buildMessageDTO);
+  return { messages: await enrichEventCounts(page), hasMore };
+}
+
+/** Messages newer than a cursor message (exclusive), oldest-first. */
+export async function messagesAfter(conversationId: string, afterId: string) {
+  const rows = await prisma.message.findMany({
+    where: { conversationId },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    cursor: { id: afterId },
+    skip: 1,
+    take: MESSAGE_PAGE + 1,
+    include: messageInclude,
+  });
+  const hasMore = rows.length > MESSAGE_PAGE;
+  const page = rows.slice(0, MESSAGE_PAGE).map(buildMessageDTO);
+  return { messages: await enrichEventCounts(page), hasMore };
+}
+
+/**
+ * A window of messages around one target message (for search results, quote
+ * taps and notification deep links), oldest-first.
+ */
+export async function messagesAround(conversationId: string, messageId: string) {
+  const target = await prisma.message.findFirst({
+    where: { id: messageId, conversationId },
+    include: messageInclude,
+  });
+  if (!target) return null;
+  const half = Math.floor(MESSAGE_PAGE / 2);
+  const [older, newer] = await Promise.all([
+    prisma.message.findMany({
+      where: { conversationId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      cursor: { id: messageId },
+      skip: 1,
+      take: half + 1,
+      include: messageInclude,
+    }),
+    prisma.message.findMany({
+      where: { conversationId },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      cursor: { id: messageId },
+      skip: 1,
+      take: half + 1,
+      include: messageInclude,
+    }),
+  ]);
+  const hasOlder = older.length > half;
+  const hasNewer = newer.length > half;
+  const windowRows = [
+    ...older.slice(0, half).reverse(),
+    target,
+    ...newer.slice(0, half),
+  ].map(buildMessageDTO);
+  return {
+    messages: await enrichEventCounts(windowRows),
+    hasOlder,
+    hasNewer,
+  };
 }

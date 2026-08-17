@@ -15,6 +15,9 @@ import {
   conversationSummaries,
   enrichEventCounts,
   messageInclude,
+  messagesAfter,
+  messagesAround,
+  messagesBefore,
   pushRecipients,
   summarizeReactions,
   toSearchText,
@@ -65,7 +68,8 @@ function pushTitle(
 export async function sendMessage(
   conversationId: string,
   body: string,
-): Promise<ActionResult> {
+  clientId?: string,
+): Promise<ActionResult & { message?: MessageDTO }> {
   const t = await getDict();
   const session = await requireSession();
   const gate = await conversationGate(conversationId, session);
@@ -83,6 +87,7 @@ export async function sendMessage(
       authorId: session.user.id,
       body: text,
       searchText: toSearchText(text),
+      clientId: clientId?.slice(0, 64) || null,
       createdAt: now,
     },
     include: messageInclude,
@@ -108,7 +113,44 @@ export async function sendMessage(
     tag: `chat-${slug}`,
   });
 
-  return { ok: true };
+  return { ok: true, message: dto };
+}
+
+/** Page of messages older than `beforeId` (scroll-up history). */
+export async function olderMessages(
+  conversationId: string,
+  beforeId: string,
+): Promise<{ messages: MessageDTO[]; hasMore: boolean }> {
+  const session = await requireSession();
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error) return { messages: [], hasMore: false };
+  return messagesBefore(conversationId, beforeId);
+}
+
+/** Page of messages newer than `afterId` (filling down after a jump). */
+export async function newerMessages(
+  conversationId: string,
+  afterId: string,
+): Promise<{ messages: MessageDTO[]; hasMore: boolean }> {
+  const session = await requireSession();
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error) return { messages: [], hasMore: false };
+  return messagesAfter(conversationId, afterId);
+}
+
+/** Window around one message (search results, quote taps, deep links). */
+export async function aroundMessages(
+  conversationId: string,
+  messageId: string,
+): Promise<{
+  messages: MessageDTO[];
+  hasOlder: boolean;
+  hasNewer: boolean;
+} | null> {
+  const session = await requireSession();
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error) return null;
+  return messagesAround(conversationId, messageId);
 }
 
 export async function toggleReaction(

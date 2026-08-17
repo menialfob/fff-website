@@ -52,6 +52,9 @@ export type MessageDTO = {
   conversationId: string;
   body: string;
   createdAt: string;
+  // Echo of the sender's optimistic id so their client can reconcile the
+  // pending bubble with the stored message.
+  clientId: string | null;
   author: MessageAuthorDTO | null;
   reactions: ReactionSummary[];
   poll: PollDTO | null;
