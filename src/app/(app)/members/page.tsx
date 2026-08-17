@@ -4,6 +4,7 @@ import { fmt, formatDate, type Dictionary } from "@/lib/i18n";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { card, PageTitle } from "@/components/ui";
 import { Avatar, avatarUrlFor } from "@/components/avatar";
+import { MarkSeen } from "@/components/mark-seen";
 
 /**
  * One badge per member: their elected title if they have one, otherwise a
@@ -49,6 +50,7 @@ export default async function MembersPage() {
 
   return (
     <div>
+      <MarkSeen section="members" />
       <PageTitle>{t.modules.members.label}</PageTitle>
       <ul className="grid gap-4 sm:grid-cols-2">
         {members.map((member) => (

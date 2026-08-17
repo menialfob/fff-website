@@ -82,9 +82,13 @@ Premium for playback hosting — only the party host needs to connect. See
 ### Home
 
 - The dashboard greets you and links to every module you can access.
-- It flags **new activity since you last visited** each section — unread
-  badges on the Forum / Events / Files cards plus a short "recent activity"
-  list — so you can see at a glance what's happened.
+- It flags **new activity since you last visited** each section — numbered
+  badges on the Calendar / Forum / Chat / Files / Members cards plus a short
+  "recent activity" list — so you can see at a glance what's happened. Klub 100
+  is a shared workspace rather than a feed, so it carries no badge.
+- The same numbers add up to the count on the installed app's icon, and each
+  badge-raising event (new thread or reply, new event, new upload, new member)
+  also sends a **push notification** to everyone else.
 
 ### Admin
 

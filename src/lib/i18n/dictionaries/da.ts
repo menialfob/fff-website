@@ -85,7 +85,18 @@ export const da = {
       newEvent: "Ny begivenhed: {title}",
       newThread: "Ny tråd: {title}",
       newReply: "Nyt svar i {title}",
+      newMember: "Ny i klubhuset: {name}",
     },
+  },
+  // Push notifications sent when something new lands in a section — the same
+  // events that bump the home screen badges. The notification's title is the
+  // module's own label (t.modules.<id>.label).
+  push: {
+    newThread: "{name} startede tråden “{title}”",
+    newReply: "{name} svarede i “{title}”",
+    newEvent: "{name} satte “{title}” i kalenderen",
+    newFile: "{name} lagde “{file}” op",
+    newMember: "{name} er kommet med i klubhuset",
   },
   files: {
     uploadTitle: "Upload en fil",

@@ -5,7 +5,8 @@ import { logEvent } from "@/lib/audit";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
-import type { Dictionary } from "@/lib/i18n";
+import { fmt, type Dictionary } from "@/lib/i18n";
+import { notifyMembers } from "@/lib/notify";
 import {
   claimAssets,
   collectAssetIds,
@@ -243,6 +244,13 @@ export async function createThread(categoryId: string, formData: FormData) {
     targetId: thread.id,
     meta: { title },
   });
+  await notifyMembers({
+    actorId: session.user.id,
+    section: "forum",
+    title: t.modules.forum.label,
+    body: fmt(t.push.newThread, { name: session.user.name ?? "", title }),
+    url: `/forum/t/${thread.id}`,
+  });
   revalidatePath("/forum");
   revalidatePath(`/forum/c/${category.slug}`);
   return { ok: true, id: thread.id };
@@ -282,6 +290,16 @@ export async function createReply(threadId: string, formData: FormData) {
     targetType: "forumThread",
     targetId: threadId,
     meta: { title: thread.title },
+  });
+  await notifyMembers({
+    actorId: session.user.id,
+    section: "forum",
+    title: t.modules.forum.label,
+    body: fmt(t.push.newReply, {
+      name: session.user.name ?? "",
+      title: thread.title,
+    }),
+    url: `/forum/t/${threadId}`,
   });
   revalidatePath(`/forum/t/${threadId}`);
   revalidatePath("/forum");
