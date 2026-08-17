@@ -17,6 +17,7 @@ import { Avatar } from "@/components/avatar";
 import { MessageItem } from "./message-item";
 import { PollComposer } from "./poll-composer";
 import { ConversationInfo } from "./conversation-info";
+import { SeenBy } from "./seen-by";
 import {
   aroundMessages,
   createPoll,
@@ -134,6 +135,7 @@ export function ConversationView({
   initialHasOlder,
   initialHasNewer,
   initialLastReadAt,
+  initialReads,
   focusMessageId,
 }: {
   conversationId: string;
@@ -148,6 +150,7 @@ export function ConversationView({
   initialHasOlder: boolean;
   initialHasNewer: boolean;
   initialLastReadAt: string | null;
+  initialReads: { userId: string; lastReadAt: string }[];
   focusMessageId: string | null;
 }) {
   const { t, locale } = useI18n();
@@ -167,6 +170,10 @@ export function ConversationView({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [replyTarget, setReplyTarget] = useState<MessageDTO | null>(null);
+  // userId -> lastReadAt ISO, kept live from read events (seen-by receipts).
+  const [reads, setReads] = useState<Map<string, string>>(
+    () => new Map(initialReads.map((r) => [r.userId, r.lastReadAt])),
+  );
   const [editTarget, setEditTarget] = useState<MessageDTO | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -347,6 +354,14 @@ export function ConversationView({
         }
         case "presence":
           setOnline(ev.online);
+          break;
+        case "read":
+          if (ev.conversationId !== conversationId) return;
+          setReads((prev) => {
+            const next = new Map(prev);
+            next.set(ev.userId, ev.lastReadAt);
+            return next;
+          });
           break;
         case "conversation":
           if (ev.conversationId !== conversationId) return;
@@ -680,6 +695,39 @@ export function ConversationView({
     });
   }
 
+  // Where each other member's read cursor sits: their face goes under the
+  // last loaded message at or before their cursor (only meaningful in live
+  // mode with the tail loaded).
+  const seenByMessage = new Map<
+    string,
+    { id: string; name: string; avatarUrl: string | null }[]
+  >();
+  if (!hasNewer) {
+    for (const member of members) {
+      if (member.id === viewerId) continue;
+      const cursor = reads.get(member.id);
+      if (!cursor) continue;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].createdAt <= cursor) {
+          const list = seenByMessage.get(messages[i].id) ?? [];
+          list.push(member);
+          seenByMessage.set(messages[i].id, list);
+          break;
+        }
+      }
+    }
+  }
+  // "Sendt" under the viewer's own newest message while nobody has seen it.
+  const lastMessage = messages[messages.length - 1];
+  const sentMarkerId =
+    !hasNewer &&
+    outbox.length === 0 &&
+    lastMessage &&
+    lastMessage.author?.id === viewerId &&
+    !seenByMessage.has(lastMessage.id)
+      ? lastMessage.id
+      : null;
+
   const onlineOthers = online.filter((id) => id !== viewerId);
   const typingLabel =
     typing.length === 1
@@ -787,6 +835,14 @@ export function ConversationView({
                         onJumpTo={jumpToMessage}
                       />
                     </div>
+                    {seenByMessage.has(m.id) && (
+                      <SeenBy members={seenByMessage.get(m.id)!} />
+                    )}
+                    {sentMarkerId === m.id && (
+                      <p className="mt-0.5 pr-1 text-right text-[0.65rem] text-zinc-500">
+                        {t.chat.sent}
+                      </p>
+                    )}
                   </div>
                 ))}
               </section>

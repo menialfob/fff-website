@@ -49,21 +49,18 @@ export default async function ConversationPage({
 
   // The read cursor must be captured before the client marks the
   // conversation read — it decides where the "new messages" divider goes.
-  const [members, read, viewerUser] = await Promise.all([
+  const [members, reads, viewerUser] = await Promise.all([
     conversationMembers(conversation),
-    prisma.conversationRead.findUnique({
-      where: {
-        userId_conversationId: {
-          userId: session.user.id,
-          conversationId: conversation.id,
-        },
-      },
+    prisma.conversationRead.findMany({
+      where: { conversationId: conversation.id },
+      select: { userId: true, lastReadAt: true },
     }),
     prisma.user.findUniqueOrThrow({
       where: { id: session.user.id },
       select: { name: true, avatarStoredName: true, avatarUpdatedAt: true },
     }),
   ]);
+  const read = reads.find((r) => r.userId === session.user.id);
 
   // Deep link (?m=<id>, e.g. from a push or search hit): load a window around
   // that message; otherwise the latest page.
@@ -101,6 +98,10 @@ export default async function ConversationPage({
       initialHasOlder={hasOlder}
       initialHasNewer={hasNewer}
       initialLastReadAt={read?.lastReadAt.toISOString() ?? null}
+      initialReads={reads.map((r) => ({
+        userId: r.userId,
+        lastReadAt: r.lastReadAt.toISOString(),
+      }))}
       focusMessageId={around ? (focusMessageId ?? null) : null}
     />
   );

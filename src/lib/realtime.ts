@@ -94,6 +94,13 @@ export type RealtimeEvent =
       conversationId: string;
       user: { id: string; name: string };
     }
+  // A member's read cursor moved — drives live seen-by receipts.
+  | {
+      type: "read";
+      conversationId: string;
+      userId: string;
+      lastReadAt: string;
+    }
   | {
       // Membership/metadata change on a DM or group. `memberIds` is the
       // authoritative post-change member list: the SSE route forwards the

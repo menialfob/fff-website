@@ -650,6 +650,8 @@ export const en: typeof da = {
     messageDeleted: "Message deleted",
     copy: "Copy",
     messageActions: "Message actions",
+    seenBy: "Seen by {names}",
+    sent: "Sent",
     online: "{count} online",
     empty: "No messages yet — write the first one!",
     noMessagesYet: "No messages yet",

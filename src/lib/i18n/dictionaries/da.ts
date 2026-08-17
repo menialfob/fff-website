@@ -653,6 +653,8 @@ export const da = {
     messageDeleted: "Beskeden er slettet",
     copy: "Kopiér",
     messageActions: "Beskedhandlinger",
+    seenBy: "Set af {names}",
+    sent: "Sendt",
     online: "{count} online",
     empty: "Ingen beskeder endnu — skriv den første!",
     noMessagesYet: "Ingen beskeder endnu",

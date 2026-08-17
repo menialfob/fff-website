@@ -578,13 +578,22 @@ export async function markConversationRead(
   conversationId: string,
 ): Promise<void> {
   const session = await requireSession();
-  await prisma.conversationRead
-    .upsert({
+  const now = new Date();
+  try {
+    await prisma.conversationRead.upsert({
       where: {
         userId_conversationId: { userId: session.user.id, conversationId },
       },
-      create: { userId: session.user.id, conversationId },
-      update: { lastReadAt: new Date() },
-    })
-    .catch(() => {});
+      create: { userId: session.user.id, conversationId, lastReadAt: now },
+      update: { lastReadAt: now },
+    });
+  } catch {
+    return;
+  }
+  emitEvent({
+    type: "read",
+    conversationId,
+    userId: session.user.id,
+    lastReadAt: now.toISOString(),
+  });
 }
