@@ -14,6 +14,13 @@ import { Avatar } from "@/components/avatar";
 import { PollCard } from "./poll-card";
 import { MessageMenu } from "./message-menu";
 import { AttachmentView } from "./attachment-view";
+import { isJumboEmoji } from "@/lib/emoji";
+import dynamic from "next/dynamic";
+
+const EmojiPicker = dynamic(
+  () => import("./emoji-picker").then((m) => m.EmojiPicker),
+  { ssr: false },
+);
 
 function EventCard({ event, locale }: { event: EventCardDTO; locale: Locale }) {
   const { t } = useI18n();
@@ -97,6 +104,7 @@ export function MessageItem({
 }) {
   const { t } = useI18n();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [fullPickerOpen, setFullPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragX, setDragX] = useState(0);
   const mine = message.author?.id === viewerId;
@@ -275,11 +283,16 @@ export function MessageItem({
           </button>
         )}
 
-        {message.body && (
-          <p className="whitespace-pre-wrap break-words text-sm text-zinc-200">
-            {renderBody(message.body)}
-          </p>
-        )}
+        {message.body &&
+          (isJumboEmoji(message.body) ? (
+            <p className="whitespace-pre-wrap break-words text-4xl leading-snug">
+              {message.body}
+            </p>
+          ) : (
+            <p className="whitespace-pre-wrap break-words text-sm text-zinc-200">
+              {renderBody(message.body)}
+            </p>
+          ))}
 
         {message.attachments.length > 0 && (
           <AttachmentView attachments={message.attachments} />
@@ -340,11 +353,42 @@ export function MessageItem({
                     {e}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  aria-label={t.chat.emojiPicker}
+                  onClick={() => {
+                    setPickerOpen(false);
+                    setFullPickerOpen(true);
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-base text-zinc-400 transition hover:bg-white/10"
+                >
+                  +
+                </button>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {fullPickerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 md:items-center"
+          onClick={() => setFullPickerOpen(false)}
+        >
+          <div
+            className="w-full rounded-t-2xl bg-panel p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:max-w-md md:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <EmojiPicker
+              onPick={(emoji) => {
+                onToggleReaction(message.id, emoji);
+                setFullPickerOpen(false);
+              }}
+              onClose={() => setFullPickerOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {menuOpen && (
         <MessageMenu

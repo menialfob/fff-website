@@ -20,6 +20,13 @@ import { ConversationInfo } from "./conversation-info";
 import { SeenBy } from "./seen-by";
 import { compressImage, uploadAttachment } from "./attachment-upload";
 import { GifPicker } from "./gif-picker";
+import dynamic from "next/dynamic";
+
+// Loaded on demand — the picker fetches a ~700KB dataset on first open.
+const EmojiPicker = dynamic(
+  () => import("./emoji-picker").then((m) => m.EmojiPicker),
+  { ssr: false },
+);
 import type { AttachmentDTO } from "@/lib/realtime";
 import {
   aroundMessages,
@@ -197,6 +204,7 @@ export function ConversationView({
   const [editTarget, setEditTarget] = useState<MessageDTO | null>(null);
   const [drafts, setDrafts] = useState<DraftAttachment[]>([]);
   const [showGif, setShowGif] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -746,6 +754,24 @@ export function ConversationView({
     setEditTarget(null);
   }
 
+  function insertEmoji(emoji: string) {
+    const el = textareaRef.current;
+    if (!el) {
+      setText((prev) => prev + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? text.length;
+    const end = el.selectionEnd ?? text.length;
+    const next = text.slice(0, start) + emoji + text.slice(end);
+    setText(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + emoji.length;
+      el.setSelectionRange(pos, pos);
+      autosizeComposer();
+    });
+  }
+
   function pickGif(tenorId: string) {
     setShowGif(false);
     const clientId = crypto.randomUUID();
@@ -1048,6 +1074,12 @@ export function ConversationView({
       </div>
 
       {showGif && <GifPicker onPick={pickGif} onClose={() => setShowGif(false)} />}
+      {showEmoji && (
+        <EmojiPicker
+          onPick={insertEmoji}
+          onClose={() => setShowEmoji(false)}
+        />
+      )}
 
       {(replyTarget || editTarget) && (
         <div className="mb-1 flex items-center gap-2 rounded-lg border-l-2 border-violet-400/60 bg-white/[0.04] px-2.5 py-1.5">
@@ -1142,6 +1174,17 @@ export function ConversationView({
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-lg text-zinc-300 transition hover:border-white/20"
           >
             📎
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowGif(false);
+              setShowEmoji((v) => !v);
+            }}
+            aria-label={t.chat.emojiPicker}
+            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-lg text-zinc-300 transition hover:border-white/20 sm:flex"
+          >
+            🙂
           </button>
           {gifEnabled && (
             <button
