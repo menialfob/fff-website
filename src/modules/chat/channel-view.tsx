@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
 import { dayKey, formatDayLabel, msUntilNextDay } from "@/lib/i18n";
 import type { MessageDTO, RealtimeEvent } from "@/lib/realtime";
 import { btnPrimary } from "@/components/ui";
 import { MessageItem } from "./message-item";
 import { PollComposer } from "./poll-composer";
+import { ConversationInfo } from "./conversation-info";
 import {
   createPoll,
   markConversationRead,
@@ -86,18 +88,24 @@ function useNow(): Date {
 export function ConversationView({
   conversationId,
   conversationName,
+  conversationType,
+  isAdmin,
   viewerId,
   members,
   initialMessages,
 }: {
   conversationId: string;
   conversationName: string;
+  conversationType: "CHANNEL" | "DM" | "GROUP";
+  isAdmin: boolean;
   viewerId: string;
-  members: { id: string; name: string }[];
+  members: { id: string; name: string; avatarUrl: string | null }[];
   initialMessages: MessageDTO[];
 }) {
   const { t, locale } = useI18n();
+  const router = useRouter();
   const now = useNow();
+  const [showInfo, setShowInfo] = useState(false);
   const [messages, setMessages] = useState<MessageDTO[]>(initialMessages);
   const [online, setOnline] = useState<string[]>([]);
   const [typing, setTyping] = useState<{ id: string; name: string }[]>([]);
@@ -185,10 +193,23 @@ export function ConversationView({
         case "presence":
           setOnline(ev.online);
           break;
+        case "conversation":
+          if (ev.conversationId !== conversationId) return;
+          if (
+            conversationType !== "CHANNEL" &&
+            !ev.memberIds.includes(viewerId)
+          ) {
+            // Removed from (or left) this conversation — nothing to see here.
+            router.push("/chat");
+          } else {
+            // Rename / membership change: re-render the server bits.
+            router.refresh();
+          }
+          break;
       }
     };
     return () => es.close();
-  }, [conversationId, viewerId]);
+  }, [conversationId, conversationType, viewerId, router]);
 
   // Mark read on open and stop typing timers on unmount.
   useEffect(() => {
@@ -330,15 +351,39 @@ export function ConversationView({
       }`}
     >
       <header className="flex items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
-        <h1 className="text-lg font-semibold text-white">{conversationName}</h1>
-        <span
-          className="flex items-center gap-1.5 text-xs text-zinc-400"
+        <button
+          type="button"
+          onClick={() => setShowInfo(true)}
+          className="min-w-0 text-left"
+          aria-label={t.chat.conversationInfo}
+        >
+          <h1 className="truncate text-lg font-semibold text-white">
+            {conversationName}
+          </h1>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowInfo(true)}
+          className="flex items-center gap-1.5 text-xs text-zinc-400 transition hover:text-zinc-200"
           title={onlineOthers.map(nameById).filter(Boolean).join(", ")}
         >
           <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
           {t.chat.online.replace("{count}", String(online.length))}
-        </span>
+        </button>
       </header>
+
+      {showInfo && (
+        <ConversationInfo
+          conversationId={conversationId}
+          conversationType={conversationType}
+          conversationName={conversationName}
+          members={members}
+          online={online}
+          viewerId={viewerId}
+          isAdmin={isAdmin}
+          onClose={() => setShowInfo(false)}
+        />
+      )}
 
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">
         {messages.length === 0 ? (

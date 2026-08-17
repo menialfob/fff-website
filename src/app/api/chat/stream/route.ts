@@ -68,6 +68,18 @@ export async function GET(request: Request) {
       send({ type: "presence", online: onlineUserIds() });
 
       unsubscribe = subscribe((event) => {
+        // Membership changes keep this connection's allow-set current:
+        // added members start receiving events immediately, removed members
+        // stop — and both get the conversation event itself so the UI can
+        // update the list.
+        if (event.type === "conversation") {
+          const couldSee = allowed.has(event.conversationId);
+          const nowMember = event.memberIds.includes(userId);
+          if (nowMember) allowed.add(event.conversationId);
+          else allowed.delete(event.conversationId);
+          if (nowMember || couldSee) send(event);
+          return;
+        }
         if (mayForward(event)) send(event);
       });
       // Comment pings keep the connection alive through Caddy/proxies and let

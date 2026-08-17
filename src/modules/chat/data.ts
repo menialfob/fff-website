@@ -278,11 +278,31 @@ export function conversationDisplayName(
   return conversation.name ?? "";
 }
 
+export type ConversationSummaryDTO = {
+  id: string;
+  slug: string;
+  type: ConversationType;
+  title: string;
+  avatar: { id: string; name: string; avatarUrl: string | null } | null;
+  unread: number;
+  muted: boolean;
+  lastMessageAt: string | null;
+  last: {
+    authorName: string | null;
+    preview: string;
+    createdAt: string;
+  } | null;
+};
+
 /**
  * Conversation list with unread counts + last-message preview for the index
- * page.
+ * page: channels first (their display order), then DMs/groups by latest
+ * activity.
  */
-export async function conversationSummaries(viewer: Viewer, userId: string) {
+export async function conversationSummaries(
+  viewer: Viewer,
+  userId: string,
+): Promise<ConversationSummaryDTO[]> {
   const conversations = await prisma.conversation.findMany({
     where: { OR: [{ type: "CHANNEL" }, { members: { some: { userId } } }] },
     include: {
@@ -302,9 +322,22 @@ export async function conversationSummaries(viewer: Viewer, userId: string) {
     },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
-  const visible = conversations.filter((c) =>
-    canAccessConversation(c, viewer, c.members.some((m) => m.userId === userId)),
-  );
+  const visible = conversations
+    .filter((c) =>
+      canAccessConversation(c, viewer, c.members.some((m) => m.userId === userId)),
+    )
+    .sort((a, b) => {
+      // Channels stay pinned on top in display order; everything else by
+      // latest activity, newest first.
+      const aChannel = a.type === "CHANNEL";
+      const bChannel = b.type === "CHANNEL";
+      if (aChannel !== bChannel) return aChannel ? -1 : 1;
+      if (aChannel) return a.order - b.order;
+      return (
+        (b.lastMessageAt?.getTime() ?? b.createdAt.getTime()) -
+        (a.lastMessageAt?.getTime() ?? a.createdAt.getTime())
+      );
+    });
   return Promise.all(
     visible.map(async (conversation) => {
       const [last, read] = await Promise.all([
@@ -331,7 +364,9 @@ export async function conversationSummaries(viewer: Viewer, userId: string) {
           ? conversation.members.find((m) => m.userId !== userId)
           : undefined;
       return {
-        conversation,
+        id: conversation.id,
+        slug: conversationSlug(conversation),
+        type: conversation.type,
         title: conversationDisplayName(conversation, userId),
         avatar: dmPartner
           ? {
@@ -342,6 +377,7 @@ export async function conversationSummaries(viewer: Viewer, userId: string) {
           : null,
         unread,
         muted: read?.muted ?? false,
+        lastMessageAt: conversation.lastMessageAt?.toISOString() ?? null,
         last: last
           ? {
               authorName: last.author?.name ?? null,

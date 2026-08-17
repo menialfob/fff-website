@@ -12,12 +12,15 @@ import {
   canAccessConversation,
   conversationMessages,
   conversationSlug,
+  conversationSummaries,
   enrichEventCounts,
   messageInclude,
   pushRecipients,
   summarizeReactions,
   toSearchText,
+  type ConversationSummaryDTO,
 } from "./data";
+import { avatarUrlFor } from "@/components/avatar";
 import type { MessageDTO } from "@/lib/realtime";
 
 type ActionResult = { ok?: true; error?: string };
@@ -376,6 +379,49 @@ export async function sendTyping(conversationId: string): Promise<void> {
     conversationId,
     user: { id: session.user.id, name: session.user.name ?? "" },
   });
+}
+
+/**
+ * Fresh conversation summaries for the viewer — the live conversation list
+ * refetches through this after membership/metadata events.
+ */
+export async function listConversationSummaries(): Promise<
+  ConversationSummaryDTO[]
+> {
+  const session = await requireSession();
+  return conversationSummaries(viewerOf(session), session.user.id);
+}
+
+/**
+ * Active members that can be added to a group (admins' add-member picker):
+ * everyone active who isn't already in it.
+ */
+export async function addableMembers(
+  conversationId: string,
+): Promise<{ id: string; name: string; avatarUrl: string | null }[]> {
+  const session = await requireSession();
+  const gate = await conversationGate(conversationId, session);
+  if (gate.error || gate.conversation!.type !== "GROUP") return [];
+  // The gate only loads the caller's own membership row; the exclusion set
+  // needs the full member list.
+  const memberRows = await prisma.conversationMember.findMany({
+    where: { conversationId },
+    select: { userId: true },
+  });
+  const memberIds = new Set(memberRows.map((m) => m.userId));
+  const users = await prisma.user.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      name: true,
+      avatarStoredName: true,
+      avatarUpdatedAt: true,
+    },
+    orderBy: { name: "asc" },
+  });
+  return users
+    .filter((u) => !memberIds.has(u.id))
+    .map((u) => ({ id: u.id, name: u.name, avatarUrl: avatarUrlFor(u) }));
 }
 
 /** Move the viewer's read cursor for a conversation to now (clears unread). */

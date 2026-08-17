@@ -48,6 +48,12 @@ export default async function ConversationPage({
     <ConversationView
       conversationId={conversation.id}
       conversationName={conversationDisplayName(conversation, session.user.id)}
+      conversationType={conversation.type}
+      isAdmin={
+        conversation.members.some(
+          (m) => m.userId === session.user.id && m.isAdmin,
+        )
+      }
       viewerId={session.user.id}
       members={members}
       initialMessages={messages}

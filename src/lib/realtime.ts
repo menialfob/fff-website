@@ -77,6 +77,17 @@ export type RealtimeEvent =
       conversationId: string;
       user: { id: string; name: string };
     }
+  | {
+      // Membership/metadata change on a DM or group. `memberIds` is the
+      // authoritative post-change member list: the SSE route forwards the
+      // event to current members plus anyone who could previously see the
+      // conversation (so removed/leaving members learn about it too), and
+      // each connection updates its own allow-set from it.
+      type: "conversation";
+      conversationId: string;
+      kind: "created" | "updated" | "member-added" | "member-removed" | "deleted";
+      memberIds: string[];
+    }
   | { type: "presence"; online: string[] };
 
 type Bus = {
