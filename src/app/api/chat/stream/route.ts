@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { channelsForViewer } from "@/modules/chat/data";
 import {
   addPresence,
   onlineUserIds,
@@ -12,9 +13,12 @@ export const dynamic = "force-dynamic";
 
 /**
  * Server-Sent Events stream for chat. One connection per open client carries
- * every channel's events (a small friend group, so no per-channel streams);
- * the client filters by the channel it's viewing. Opening the stream also
- * marks the user present; closing it releases presence.
+ * every channel the user may access (a small friend group, so no per-channel
+ * streams); the client filters by the channel it's viewing. Events for
+ * channels the user cannot access are filtered out server-side — role-gated
+ * content must never reach an unauthorized client, even one that only
+ * ignores it. Opening the stream also marks the user present; closing it
+ * releases presence.
  */
 export async function GET(request: Request) {
   const session = await auth();
@@ -23,6 +27,16 @@ export async function GET(request: Request) {
   }
   const userId = session.user.id;
   const encoder = new TextEncoder();
+
+  // Authorization snapshot for this connection. A role change mid-connection
+  // applies on reconnect (EventSource reconnects often; good enough).
+  const accessible = await channelsForViewer({
+    role: session.user.role,
+    extraRoles: session.user.extraRoles,
+  });
+  const allowed = new Set(accessible.map((c) => c.id));
+  const mayForward = (event: RealtimeEvent) =>
+    event.type === "presence" || allowed.has(event.channelId);
 
   let cleanedUp = false;
   let unsubscribe: (() => void) | null = null;
@@ -53,7 +67,9 @@ export async function GET(request: Request) {
       // online list without waiting for the next transition.
       send({ type: "presence", online: onlineUserIds() });
 
-      unsubscribe = subscribe(send);
+      unsubscribe = subscribe((event) => {
+        if (mayForward(event)) send(event);
+      });
       // Comment pings keep the connection alive through Caddy/proxies and let
       // us notice a dead peer.
       heartbeat = setInterval(() => write(`: ping\n\n`), 25_000);
