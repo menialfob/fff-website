@@ -257,3 +257,19 @@ export function formatMinutes(minutes: number): string {
   const m = String(minutes % 60).padStart(2, "0");
   return `${h}:${m}`;
 }
+
+/**
+ * Name of the attachment folder holding one occurrence's assets, e.g.
+ * "Småevent Juni 2025" — the way members refer to the instance itself, rather
+ * than the ISO date the occurrence is keyed by. All three recurrence patterns
+ * yield at most one occurrence per month, so month + year still identifies it
+ * uniquely within a series. Always Danish: the name is stored in the database
+ * once, not re-rendered per reader's locale.
+ */
+export function occurrenceFolderName(title: string, iso: string): string {
+  const parsed = parseISODate(iso);
+  if (!parsed) return `${title} ${iso}`;
+  const month = monthName(parsed.month, "da");
+  const capitalized = month.charAt(0).toUpperCase() + month.slice(1);
+  return `${title} ${capitalized} ${parsed.year}`;
+}
