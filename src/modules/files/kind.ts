@@ -27,7 +27,7 @@ const EXT_KINDS: Record<string, FileKind> = {
   doc: "DOC", docx: "DOC", odt: "DOC", rtf: "DOC",
   xls: "DOC", xlsx: "DOC", ods: "DOC", csv: "DOC",
   ppt: "DOC", pptx: "DOC", odp: "DOC",
-  txt: "DOC", md: "DOC",
+  txt: "DOC", md: "DOC", markdown: "DOC", log: "DOC",
 };
 
 const MIME_KINDS: Record<string, FileKind> = {
@@ -96,6 +96,22 @@ export function docFamily(mimeType: string, filename: string): DocFamily {
   ) {
     return "powerpoint";
   }
-  if (["txt", "md"].includes(ext) || mime.startsWith("text/")) return "text";
+  if (TEXT_EXTENSIONS.includes(ext) || mime.startsWith("text/")) return "text";
   return "other";
+}
+
+/** Extensions we are willing to show as text in the viewer. */
+const TEXT_EXTENSIONS = ["txt", "md", "markdown", "log"];
+
+/** Files the viewer reads out in place rather than offering as a download. */
+export function isTextLike(mimeType: string, filename: string): boolean {
+  return docFamily(mimeType, filename) === "text";
+}
+
+/** Of those, the ones worth rendering as formatted prose. */
+export function isMarkdown(mimeType: string, filename: string): boolean {
+  return (
+    mimeType.toLowerCase() === "text/markdown" ||
+    ["md", "markdown"].includes(extensionOf(filename))
+  );
 }

@@ -46,6 +46,10 @@ body {
 .ProseMirror {
   @apply text-sm leading-relaxed text-zinc-200;
 }
+.event-content h1,
+.ProseMirror h1 {
+  @apply mb-3 mt-6 text-xl font-bold text-white first:mt-0;
+}
 .event-content h2,
 .ProseMirror h2 {
   @apply mb-2 mt-5 text-lg font-semibold text-white first:mt-0;
@@ -81,4 +85,37 @@ body {
 .event-content hr,
 .ProseMirror hr {
   @apply my-4 border-white/10;
+}
+
+/* Code and tables: reachable from TipTap's StarterKit and from rendered
+   Markdown documents in the file viewer, which share these styles. */
+.event-content code,
+.ProseMirror code {
+  @apply rounded bg-white/10 px-1 py-0.5 font-mono text-[0.85em] text-amber-200;
+}
+.event-content pre,
+.ProseMirror pre {
+  @apply mb-3 overflow-x-auto rounded-xl border border-white/10 bg-black/40 p-3;
+}
+.event-content pre code,
+.ProseMirror pre code {
+  @apply bg-transparent p-0 text-zinc-200;
+}
+.event-content table,
+.ProseMirror table {
+  @apply mb-3 w-full border-collapse text-left text-sm;
+}
+.event-content th,
+.event-content td,
+.ProseMirror th,
+.ProseMirror td {
+  @apply border border-white/10 px-2.5 py-1.5;
+}
+.event-content th,
+.ProseMirror th {
+  @apply bg-white/[0.06] font-semibold text-white;
+}
+.event-content strong,
+.ProseMirror strong {
+  @apply font-semibold text-white;
 }

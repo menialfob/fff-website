@@ -9,6 +9,8 @@ import { SaveButton } from "@/components/save-button";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import { ImagePane } from "./image-pane";
 import { DocCard, MediaPane, PdfPane } from "./panes";
+import { TextPane } from "./text-pane";
+import { isTextLike } from "../kind";
 import type { FileDTO } from "../types";
 import { downloadUrl } from "../types";
 
@@ -180,6 +182,8 @@ export function Viewer({
           <MediaPane file={file} />
         ) : file.kind === "PDF" ? (
           <PdfPane file={file} />
+        ) : isTextLike(file.mimeType, file.name) ? (
+          <TextPane file={file} />
         ) : (
           <DocCard file={file} />
         )}
