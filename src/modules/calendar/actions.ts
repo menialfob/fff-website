@@ -19,6 +19,7 @@ import {
 import {
   daysInMonth,
   isOccurrenceDate,
+  occurrenceFolderName,
   parseISODate,
   type RecurrenceRule,
 } from "./recurrence";
@@ -596,9 +597,9 @@ export async function deleteEvent(eventId: string) {
 
 /**
  * Save the content (description + attachments) of one occurrence date of a
- * recurring event. The row and its folder ("{title} {date}") are created
- * lazily on first save, so every other date stays blank. Same permission as
- * the series: ADMIN/BESTYRELSE.
+ * recurring event. The row and its folder ("{title} {month} {year}") are
+ * created lazily on first save, so every other date stays blank. Same
+ * permission as the series: ADMIN/BESTYRELSE.
  */
 export async function saveOccurrenceContent(
   eventId: string,
@@ -636,7 +637,7 @@ export async function saveOccurrenceContent(
   if (!folderId) {
     const folder = await prisma.folder.create({
       data: {
-        name: `${event.title} ${date}`,
+        name: occurrenceFolderName(event.title, date),
         kind: "ATTACHMENT",
         createdById: session.user.id,
       },
