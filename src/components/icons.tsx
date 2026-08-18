@@ -365,3 +365,134 @@ export function ChatBubblesIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/* --- files module ----------------------------------------------------------- */
+
+export function GridIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </Svg>
+  );
+}
+
+export function ListIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M8 6h13M8 12h13M8 18h13" />
+      <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+    </Svg>
+  );
+}
+
+export function SearchIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </Svg>
+  );
+}
+
+export function SortIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 6h11M3 12h8M3 18h5" />
+      <path d="M17 8v10m0 0 3-3m-3 3-3-3" />
+    </Svg>
+  );
+}
+
+export function MoreVerticalIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function FileTextIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6M9 17h4" />
+    </Svg>
+  );
+}
+
+export function FilmIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 4v16M17 4v16M3 12h18M3 8h4M3 16h4M17 8h4M17 16h4" />
+    </Svg>
+  );
+}
+
+export function ArchiveIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+      <path d="M10 12h4" />
+    </Svg>
+  );
+}
+
+export function FolderPlusIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M12 11v5M9.5 13.5h5" />
+    </Svg>
+  );
+}
+
+export function MoveIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M9 13h6m0 0-2.5-2.5M15 13l-2.5 2.5" />
+    </Svg>
+  );
+}
+
+export function CameraIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </Svg>
+  );
+}
+
+export function ChevronRightIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m9 5 7 7-7 7" />
+    </Svg>
+  );
+}
+
+export function ChevronLeftIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m15 5-7 7 7 7" />
+    </Svg>
+  );
+}
+
+export function CheckCircleIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12 2.5 2.5 4.5-5" />
+    </Svg>
+  );
+}

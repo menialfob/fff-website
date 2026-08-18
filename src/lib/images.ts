@@ -32,12 +32,13 @@ export type ProcessedImage = {
 };
 
 /**
- * Derived assets for an image/GIF attachment: intrinsic dimensions, a 512px
+ * Derived assets for an image (chat attachment, uploaded file, or a video's
+ * poster frame): intrinsic dimensions, a 512px
  * webp thumbnail (first frame for animated GIFs) and a 16px blur placeholder
  * as an inline data URL. Returns null when the input can't be decoded as an
  * image — the caller then treats the upload as a plain file.
  */
-export async function processImageAttachment(
+export async function processImage(
   input: Buffer,
 ): Promise<ProcessedImage | null> {
   try {
@@ -69,3 +70,6 @@ export async function processImageAttachment(
     return null;
   }
 }
+
+/** @deprecated name kept for the chat module; use {@link processImage}. */
+export const processImageAttachment = processImage;

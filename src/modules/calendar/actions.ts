@@ -414,7 +414,11 @@ export async function createEvent(formData: FormData) {
   const folder =
     kind === "ADHOC"
       ? await prisma.folder.create({
-          data: { name: parsed.title, createdById: session.user.id },
+          data: {
+            name: parsed.title,
+            kind: "ATTACHMENT",
+            createdById: session.user.id,
+          },
         })
       : null;
   const event = await prisma.calendarEvent.create({
@@ -511,7 +515,11 @@ export async function updateEvent(eventId: string, formData: FormData) {
       });
     } else {
       const folder = await prisma.folder.create({
-        data: { name: parsed.title, createdById: session.user.id },
+        data: {
+          name: parsed.title,
+          kind: "ATTACHMENT",
+          createdById: session.user.id,
+        },
       });
       folderId = folder.id;
     }
@@ -629,6 +637,7 @@ export async function saveOccurrenceContent(
     const folder = await prisma.folder.create({
       data: {
         name: `${event.title} ${date}`,
+        kind: "ATTACHMENT",
         createdById: session.user.id,
       },
     });
