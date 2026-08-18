@@ -146,9 +146,14 @@ export function UploadSheet({
     onClose();
   }, [onClose]);
 
-  // Opening in camera mode goes straight to the capture UI.
+  // "Upload files" and "Take a photo" should do what they say: open the
+  // picker or the camera straight away. The sheet behind it is where the
+  // queue appears, and the drop zone is the fallback if the picker is
+  // dismissed without choosing anything.
   useEffect(() => {
-    if (open && capture) cameraRef.current?.click();
+    if (!open) return;
+    if (capture) cameraRef.current?.click();
+    else inputRef.current?.click();
   }, [open, capture]);
 
   return (

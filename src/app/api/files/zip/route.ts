@@ -26,9 +26,12 @@ export async function POST(request: Request) {
 
   // The session cookie is SameSite, so a cross-site form post arrives without
   // one and fails above — but this is a POST that reads member data, so check
-  // the origin explicitly rather than relying on that alone.
+  // the origin explicitly rather than relying on that alone. Compare against
+  // the Host header, not request.url: behind Caddy the latter carries the
+  // container's internal origin and would reject every genuine request.
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (origin && host && new URL(origin).host !== host) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 

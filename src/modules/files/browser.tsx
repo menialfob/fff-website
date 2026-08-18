@@ -493,7 +493,11 @@ export function FileBrowser({
         open={moving !== null}
         onClose={() => setMoving(null)}
         folders={allFolders}
-        excludeIds={moving?.kind === "folder" ? [moving.id] : []}
+        excludeIds={
+          moving?.kind === "folder"
+            ? subtreeOf(moving.id, allFolders)
+            : []
+        }
         onMove={async (destination) => {
           if (!moving) return;
           const result =
@@ -586,6 +590,23 @@ export function FileBrowser({
 }
 
 /* --- small pieces ----------------------------------------------------------- */
+/**
+ * A folder plus every folder beneath it. A folder cannot be moved into its own
+ * subtree — the server refuses it, and the picker should not offer a
+ * destination that is going to fail.
+ */
+function subtreeOf(rootId: string, folders: FolderDTO[]): string[] {
+  const ids = [rootId];
+  for (let i = 0; i < ids.length; i++) {
+    for (const folder of folders) {
+      if (folder.parentId === ids[i] && !ids.includes(folder.id)) {
+        ids.push(folder.id);
+      }
+    }
+  }
+  return ids;
+}
+
 
 function IconButton({
   label,

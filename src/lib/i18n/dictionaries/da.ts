@@ -113,6 +113,8 @@ export const da = {
     fileCountOne: "1 fil",
     folderCount: "{count} mapper",
     folderCountOne: "1 mappe",
+    itemCountOne: "1 element",
+    itemCount: "{count} elementer",
     emptyFolderShort: "Tom",
     attachedFolders: "Fra kalender og forum",
     attachedFoldersHint:

@@ -70,6 +70,29 @@ function SelectionDot({ selected }: { selected: boolean }) {
   );
 }
 
+/**
+ * What a folder holds, described in its own terms: "3 photos" reads wrong for
+ * a folder of subfolders, and "1 files" reads wrong for anything.
+ */
+function useCountLabel() {
+  const { t, fmt } = useI18n();
+  return (fileCount: number, folderCount: number): string => {
+    const total = fileCount + folderCount;
+    if (total === 0) return t.files.emptyFolderShort;
+    if (folderCount === 0) {
+      return fileCount === 1
+        ? t.files.fileCountOne
+        : fmt(t.files.fileCount, { count: fileCount });
+    }
+    if (fileCount === 0) {
+      return folderCount === 1
+        ? t.files.folderCountOne
+        : fmt(t.files.folderCount, { count: folderCount });
+    }
+    return fmt(t.files.itemCount, { count: total });
+  };
+}
+
 /* --- folders --------------------------------------------------------------- */
 
 export function FolderTile({
@@ -79,8 +102,7 @@ export function FolderTile({
   folder: FolderDTO;
   onMenu?: () => void;
 }) {
-  const { t, fmt } = useI18n();
-  const count = folder.fileCount + folder.folderCount;
+  const countLabel = useCountLabel();
   return (
     <div className="group relative">
       <Link
@@ -93,11 +115,7 @@ export function FolderTile({
             {folder.name}
           </span>
           <span className="mt-0.5 block text-xs text-zinc-500">
-            {count === 0
-              ? t.files.emptyFolderShort
-              : folder.fileCount === 1 && folder.folderCount === 0
-                ? t.files.fileCountOne
-                : fmt(t.files.fileCount, { count })}
+            {countLabel(folder.fileCount, folder.folderCount)}
           </span>
         </span>
       </Link>
@@ -113,8 +131,7 @@ export function FolderRow({
   folder: FolderDTO;
   onMenu?: () => void;
 }) {
-  const { t, fmt } = useI18n();
-  const count = folder.fileCount + folder.folderCount;
+  const countLabel = useCountLabel();
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
       <Link
@@ -129,9 +146,7 @@ export function FolderRow({
             {folder.name}
           </span>
           <span className="block text-xs text-zinc-500">
-            {count === 0
-              ? t.files.emptyFolderShort
-              : fmt(t.files.fileCount, { count })}
+            {countLabel(folder.fileCount, folder.folderCount)}
           </span>
         </span>
       </Link>
@@ -315,10 +330,15 @@ function MenuButton({
       className={
         inline
           ? "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-zinc-500 transition hover:bg-white/10 hover:text-zinc-100"
-          : "absolute right-1 top-1 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-black/50 text-zinc-200 opacity-0 backdrop-blur-sm transition hover:bg-black/70 focus-visible:opacity-100 group-hover:opacity-100 max-sm:opacity-100"
+          // Full 44px tap target, but only a small chip is drawn — over a
+          // photo the button is decoration competing with the picture, and
+          // long-press reaches the same menu.
+          : "absolute -right-0.5 -top-0.5 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-white/80 transition hover:text-white"
       }
     >
-      <MoreVerticalIcon className="h-4 w-4" />
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+        <MoreVerticalIcon className="h-4 w-4" />
+      </span>
     </button>
   );
 }
