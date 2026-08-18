@@ -262,7 +262,7 @@ export default async function ThreadPage({
       )}
 
       {/* Thread attachments folder */}
-      {thread.folder && thread.folder.files.length > 0 && (
+      {thread.folder && (
         <section className={`${cardPad} mb-6`}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-white">
@@ -276,7 +276,11 @@ export default async function ThreadPage({
               {t.calendar.openFolder}
             </Link>
           </div>
-          <AttachmentGrid files={thread.folder.files.map(toFileDTO)} />
+          {thread.folder.files.length > 0 ? (
+            <AttachmentGrid files={thread.folder.files.map(toFileDTO)} />
+          ) : (
+            <p className="text-sm text-zinc-500">{t.files.empty}</p>
+          )}
         </section>
       )}
 

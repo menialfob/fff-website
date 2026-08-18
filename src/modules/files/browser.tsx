@@ -116,7 +116,10 @@ export function FileBrowser({
   >(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
-  const locked = folder?.kind === "ATTACHMENT";
+  // A calendar/forum folder: its name and place belong to the event or thread
+  // that owns it, so it cannot be renamed, moved or deleted from here. Adding
+  // files to it is ordinary use, though — that is what it is for.
+  const attached = folder?.kind === "ATTACHMENT";
 
   // Remember grid-vs-list across visits; it is a per-person preference, not
   // something worth a round trip to the server.
@@ -289,7 +292,7 @@ export function FileBrowser({
               <FolderTile
                 folder={f}
                 onMenu={
-                  locked ? undefined : () => setMenuFor({ kind: "folder", folder: f })
+                  attached ? undefined : () => setMenuFor({ kind: "folder", folder: f })
                 }
               />
             </li>
@@ -314,7 +317,7 @@ export function FileBrowser({
               key={f.id}
               folder={f}
               onMenu={
-                locked ? undefined : () => setMenuFor({ kind: "folder", folder: f })
+                attached ? undefined : () => setMenuFor({ kind: "folder", folder: f })
               }
             />
           ))}
@@ -351,7 +354,7 @@ export function FileBrowser({
       )}
 
       {/* --- floating add button --- */}
-      {!locked && !selecting && (
+      {!selecting && (
         <button
           type="button"
           onClick={() => setAddOpen(true)}
@@ -436,14 +439,19 @@ export function FileBrowser({
               setCameraOpen(true);
             }}
           />
-          <SheetAction
-            icon={<FolderPlusIcon className="h-5 w-5" />}
-            label={t.files.newFolder}
-            onClick={() => {
-              setAddOpen(false);
-              setNewFolderOpen(true);
-            }}
-          />
+          {/* A subfolder here would hang off the attachment folder, outside
+              the browsable tree — unreachable from the root and invisible to
+              the move picker. Files are the point of these folders anyway. */}
+          {!attached && (
+            <SheetAction
+              icon={<FolderPlusIcon className="h-5 w-5" />}
+              label={t.files.newFolder}
+              onClick={() => {
+                setAddOpen(false);
+                setNewFolderOpen(true);
+              }}
+            />
+          )}
         </ul>
       </Sheet>
 
