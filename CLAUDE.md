@@ -65,12 +65,44 @@ SVG icons in `src/components/icons.tsx` — use these instead of unicode
 glyphs or new one-off styles. Navigation is a bottom tab bar on mobile and
 header pills on desktop (`src/components/nav.tsx`).
 
-**File storage.** Uploads are written to `UPLOAD_DIR` (a Docker volume in
-production) under randomized names via `src/lib/storage.ts`; metadata lives in
-the `FileItem` table. Downloads stream through the authenticated route
-`src/app/api/files/[id]/route.ts` — files are never served statically. Upload
-size is capped both in `next.config.ts` (`serverActions.bodySizeLimit`) and in
-the deploy Caddyfile (`request_body max_size`); keep these in sync.
+**File storage.** `src/lib/storage.ts` is the **only** module allowed to touch
+`fs` — everything else addresses bytes through it. Its contract is deliberately
+S3-shaped so the planned migration is a change to that one file: `storedName`
+is an opaque flat key (never a path), writes take a stream
+(`saveUploadStream`), and reads are `openObject(key, range?)`, which maps 1:1
+onto `GetObject` with a `Range` header. Keep it that way — no `fs` or path
+arithmetic at call sites, and no public storage URLs.
+
+Uploads go through `src/app/api/files/upload/route.ts`, a plain route rather
+than a server action so the browser gets real progress and each file in a batch
+retries on its own; the body is raw bytes with metadata in `x-file-*` headers,
+so a large video never sits in memory. Images are thumbnailed server-side with
+sharp (`src/lib/images.ts`); videos get a poster frame captured in the browser
+(`upload-client.ts`), which also covers formats libvips cannot decode. A batch
+raises **one** push, via `notifyUploads()` once the queue drains.
+
+Downloads stream through the authenticated route `src/app/api/files/[id]/route.ts`
+— files are never served statically. It honours `Range` (iOS Safari will not
+scrub without `206`), serves `?v=thumb` and `?dl=1`, and renders bytes inline
+only for an allow-list of types: anything else, `.svg` and `.html` above all,
+is forced to download so an upload cannot run as first-party script.
+
+Upload size is capped in `next.config.ts` (`serverActions.bodySizeLimit`), in
+the deploy Caddyfile (`request_body max_size`) and in
+`src/modules/files/types.ts` (`MAX_FILE_SIZE`); keep the three in sync.
+
+**Folders** (`Folder`) are nestable via `parentId` and carry a `kind`:
+`USER` folders are the tree members browse, while `ATTACHMENT` folders are
+created implicitly by the calendar and forum to hold an event's or thread's
+assets. Attachment folders live outside the tree and are read-only in the files
+section — when adding another module that attaches files, create its folder
+with `kind: "ATTACHMENT"`. Deleting a folder never deletes its contents: files
+and child folders are promoted to the deleted folder's parent.
+
+Any member may move and rename; only the uploader or an admin may delete.
+`src/modules/files/kind.ts` is the single classifier deciding how a file is
+presented, and `AttachmentGrid` (`src/modules/files/attachment-grid.tsx`)
+renders attachments with the same grid and viewer everywhere.
 
 **Database.** SQLite via Prisma. In production the db file and uploads share
 one volume (`/data`), and `docker-entrypoint.sh` runs `prisma migrate deploy`

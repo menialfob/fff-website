@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { AttachmentGrid } from "@/modules/files/attachment-grid";
+import { toFileDTO } from "@/modules/files/data";
 import { fmt } from "@/lib/i18n";
 import { getDict, getLocale } from "@/lib/i18n/server";
-import { formatSize } from "@/lib/format";
 import { btnSecondary, cardPad, PageTitle } from "@/components/ui";
 import { ArrowLeftIcon, FolderIcon, PencilIcon } from "@/components/icons";
 import { EventControls } from "@/modules/calendar/event-controls";
@@ -51,7 +52,10 @@ export default async function EventPage({
     include: {
       createdBy: { select: { name: true } },
       folder: {
-        include: { files: { orderBy: { createdAt: "asc" } } },
+        include: { files: {
+          orderBy: { createdAt: "asc" },
+          include: { uploadedBy: { select: { name: true } } },
+        } },
       },
       fields: { orderBy: { position: "asc" } },
     },
@@ -89,7 +93,10 @@ export default async function EventPage({
           where: { eventId_date: { eventId: event.id, date: focusDate } },
           include: {
             folder: {
-              include: { files: { orderBy: { createdAt: "asc" } } },
+              include: { files: {
+          orderBy: { createdAt: "asc" },
+          include: { uploadedBy: { select: { name: true } } },
+        } },
             },
             fieldValues: {
               include: {
@@ -355,21 +362,7 @@ export default async function EventPage({
               {t.calendar.openFolder}
             </Link>
           </div>
-          <ul className="grid gap-2">
-            {attachments.map((file) => (
-              <li key={file.id}>
-                <a
-                  href={`/api/files/${file.id}`}
-                  className="font-medium text-zinc-100 hover:text-sky-300 hover:underline"
-                >
-                  {file.name}
-                </a>{" "}
-                <span className="text-sm text-zinc-500">
-                  {formatSize(file.size)}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <AttachmentGrid files={attachments.map(toFileDTO)} />
         </section>
       )}
     </div>
