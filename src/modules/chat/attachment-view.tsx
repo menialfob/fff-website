@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n/client";
+import { SaveButton } from "@/components/save-button";
 import type { AttachmentDTO } from "@/lib/realtime";
 import { ImageViewer } from "./image-viewer";
 
@@ -69,11 +70,9 @@ export function AttachmentView({
       )}
 
       {files.map((a) => (
-        <a
+        <div
           key={a.id}
-          href={a.url}
-          download={a.name}
-          className="flex max-w-xs items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 transition hover:border-white/20"
+          className="flex max-w-xs items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5"
         >
           <span aria-hidden className="text-lg">
             📄
@@ -86,7 +85,14 @@ export function AttachmentView({
               {formatSize(a.size)} · {t.chat.download}
             </span>
           </span>
-        </a>
+          <SaveButton
+            url={a.url}
+            name={a.name}
+            mimeType={a.mimeType}
+            size={a.size}
+            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50"
+          />
+        </div>
       ))}
 
       {viewerIndex !== null && (

@@ -26,6 +26,9 @@ import {
   UploadIcon,
   XIcon,
 } from "@/components/icons";
+import { SaveButton, Spinner } from "@/components/save-button";
+import { MAX_SAVE_BYTES, SaveTooLargeError, saveBlob } from "@/lib/download";
+import { formatSize } from "@/lib/format";
 import { Breadcrumbs } from "./breadcrumbs";
 import { FileRow, FileTile, FolderRow, FolderTile } from "./items";
 import { MoveSheet } from "./move-sheet";
@@ -359,9 +362,13 @@ export function FileBrowser({
         </button>
       )}
 
-      {/* --- selection action bar --- */}
+      {/* Selection action bar. Must outrank the mobile tab bar (z-40), which
+          renders after this in the DOM and would otherwise cover these
+          controls and swallow every tap. Sheets portal to <body> and so still
+          land above it. Covering the tab bar during a selection is also what
+          people expect. */}
       {selecting && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-panel/95 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur md:bottom-0">
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-panel pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
           <div className="mx-auto flex max-w-5xl items-center gap-1 px-3">
             <button
               type="button"
@@ -374,7 +381,11 @@ export function FileBrowser({
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-200">
               {fmt(t.files.selectedCount, { count: selection.size })}
             </span>
-            <ZipButton ids={[...selection]} label={t.files.downloadZip} />
+            <ZipButton
+              ids={[...selection]}
+              label={t.files.downloadZip}
+              onError={setError}
+            />
             <IconButton
               label={t.files.move}
               onClick={() => setMoving({ kind: "files", ids: [...selection] })}
@@ -662,25 +673,61 @@ function SheetAction({
 }
 
 /**
- * Bulk download. A form POST rather than a link so the id list is not capped
- * by URL length, and so the browser treats the response as an ordinary
- * download instead of us buffering a zip in memory.
+ * Bulk download. Fetched rather than submitted as a form: a form post is a
+ * top-level navigation, which inside the installed app strands the member on
+ * iOS's document preview with no way back (see src/lib/download.ts). POST
+ * keeps the id list off the URL, where it would hit length limits.
  */
-function ZipButton({ ids, label }: { ids: string[]; label: string }) {
+function ZipButton({
+  ids,
+  label,
+  onError,
+}: {
+  ids: string[];
+  label: string;
+  onError: (message: string) => void;
+}) {
+  const { t, fmt } = useI18n();
+  const [saving, setSaving] = useState(false);
+
+  const download = async () => {
+    setSaving(true);
+    try {
+      const body = new FormData();
+      for (const id of ids) body.append("id", id);
+      const response = await fetch("/api/files/zip", {
+        method: "POST",
+        body,
+        credentials: "same-origin",
+      });
+      if (!response.ok) {
+        const reason = await response.json().catch(() => null);
+        throw new Error(reason?.error ?? String(response.status));
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      await saveBlob(await response.blob(), `fff-filer-${stamp}.zip`);
+    } catch (err) {
+      onError(
+        err instanceof SaveTooLargeError || (err as Error).message === "too-large"
+          ? fmt(t.errors.zipTooLarge, { size: formatSize(MAX_SAVE_BYTES) })
+          : t.errors.saveFailed,
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <form method="POST" action="/api/files/zip" className="contents">
-      {ids.map((id) => (
-        <input key={id} type="hidden" name="id" value={id} />
-      ))}
-      <button
-        type="submit"
-        aria-label={label}
-        title={label}
-        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"
-      >
-        <DownloadIcon className="h-5 w-5" />
-      </button>
-    </form>
+    <button
+      type="button"
+      disabled={saving}
+      onClick={download}
+      aria-label={label}
+      title={label}
+      className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50"
+    >
+      {saving ? <Spinner className="h-5 w-5" /> : <DownloadIcon className="h-5 w-5" />}
+    </button>
   );
 }
 
@@ -895,14 +942,15 @@ function ItemMenu({
               }}
             />
             <li>
-              <a
-                href={downloadUrl(target.file.id)}
-                onClick={onClose}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-zinc-100 transition hover:bg-white/5"
-              >
-                <DownloadIcon className="h-5 w-5 shrink-0" />
-                <span className="text-sm font-medium">{t.files.download}</span>
-              </a>
+              <SaveButton
+                variant="button"
+                url={downloadUrl(target.file.id)}
+                name={target.file.name}
+                mimeType={target.file.mimeType}
+                size={target.file.size}
+                onDone={onClose}
+                className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-zinc-100 transition hover:bg-white/5 disabled:opacity-50"
+              />
             </li>
           </>
         )}

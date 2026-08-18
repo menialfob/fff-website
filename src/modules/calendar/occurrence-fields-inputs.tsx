@@ -5,6 +5,7 @@ import { useI18n } from "@/lib/i18n/client";
 import { btnSecondary, errorText, input, label, linkDanger } from "@/components/ui";
 import { UploadIcon } from "@/components/icons";
 import { formatSize } from "@/lib/format";
+import { FileFieldLink } from "./file-field-link";
 import { uploadContentAsset } from "@/modules/content/actions";
 import type { FieldType } from "./event-fields-editor";
 
@@ -159,12 +160,7 @@ function DocumentFieldInput({
       <input type="hidden" name={`fv_file_${fieldId}`} value={file?.id ?? ""} />
       {file && (
         <div className="mb-2 flex items-center gap-2 text-sm">
-          <a
-            href={`/api/files/${file.id}`}
-            className="truncate font-medium text-zinc-100 hover:text-sky-300 hover:underline"
-          >
-            {file.name}
-          </a>
+          <FileFieldLink id={file.id} name={file.name} size={file.size} />
           <span className="shrink-0 text-zinc-500">{formatSize(file.size)}</span>
           <button
             type="button"

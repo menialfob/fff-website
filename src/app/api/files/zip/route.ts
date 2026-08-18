@@ -14,8 +14,12 @@ import { openObject } from "@/lib/storage";
  * instead of us buffering a whole archive in the page.
  */
 
-/** Total bytes we are willing to zip in one go, to bound server memory. */
-const MAX_TOTAL_BYTES = 250 * 1024 * 1024;
+/**
+ * Total bytes we are willing to zip in one go. Matches MAX_SAVE_BYTES on the
+ * client, which has to hold the finished archive in memory before handing it
+ * to the share sheet — no point building one the phone cannot accept.
+ */
+const MAX_TOTAL_BYTES = 150 * 1024 * 1024;
 const MAX_FILES = 500;
 
 export async function POST(request: Request) {
@@ -41,7 +45,7 @@ export async function POST(request: Request) {
     .filter((value): value is string => typeof value === "string")
     .slice(0, MAX_FILES);
   if (ids.length === 0) {
-    return new NextResponse("Bad request", { status: 400 });
+    return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
 
   const files = await prisma.fileItem.findMany({
@@ -49,11 +53,13 @@ export async function POST(request: Request) {
     select: { id: true, name: true, storedName: true, size: true },
     orderBy: { name: "asc" },
   });
-  if (files.length === 0) return new NextResponse("Not found", { status: 404 });
+  if (files.length === 0) {
+    return NextResponse.json({ error: "not-found" }, { status: 404 });
+  }
 
   const total = files.reduce((sum, file) => sum + file.size, 0);
   if (total > MAX_TOTAL_BYTES) {
-    return new NextResponse("Payload too large", { status: 413 });
+    return NextResponse.json({ error: "too-large" }, { status: 413 });
   }
 
   const zip = new JSZip();

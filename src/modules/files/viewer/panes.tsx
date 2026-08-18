@@ -3,7 +3,9 @@
 import { useI18n } from "@/lib/i18n/client";
 import { formatSize } from "@/lib/format";
 import { btnPrimary, btnSecondary } from "@/components/ui";
-import { ExternalLinkIcon, DownloadIcon } from "@/components/icons";
+import { ExternalLinkIcon } from "@/components/icons";
+import { SaveButton } from "@/components/save-button";
+import { useIsStandalone } from "@/lib/download";
 import { KindIcon, kindLabel } from "../kind-icon";
 import type { FileDTO } from "../types";
 import { downloadUrl, fileUrl, thumbUrl } from "../types";
@@ -68,6 +70,7 @@ export function MediaPane({ file }: { file: FileDTO }) {
  */
 export function PdfPane({ file }: { file: FileDTO }) {
   const { t } = useI18n();
+  const standalone = useIsStandalone();
   return (
     <div
       className="flex h-full w-full flex-col"
@@ -82,19 +85,28 @@ export function PdfPane({ file }: { file: FileDTO }) {
         <p className="w-full text-center text-xs text-zinc-500">
           {t.files.pdfFallback}
         </p>
-        <a
-          href={fileUrl(file.id)}
-          target="_blank"
-          rel="noreferrer"
+        {/* A new tab is a genuine escape in a browser, but inside the
+            installed app it strands the member — the share sheet covers
+            "open this in Books" there instead. */}
+        {!standalone && (
+          <a
+            href={fileUrl(file.id)}
+            target="_blank"
+            rel="noreferrer"
+            className={btnSecondary}
+          >
+            <ExternalLinkIcon className="h-4 w-4" />
+            {t.files.openInNewTab}
+          </a>
+        )}
+        <SaveButton
+          variant="button"
+          url={downloadUrl(file.id)}
+          name={file.name}
+          mimeType={file.mimeType}
+          size={file.size}
           className={btnSecondary}
-        >
-          <ExternalLinkIcon className="h-4 w-4" />
-          {t.files.openInNewTab}
-        </a>
-        <a href={downloadUrl(file.id)} className={btnSecondary}>
-          <DownloadIcon className="h-4 w-4" />
-          {t.files.download}
-        </a>
+        />
       </div>
     </div>
   );
@@ -108,6 +120,7 @@ export function PdfPane({ file }: { file: FileDTO }) {
  */
 export function DocCard({ file }: { file: FileDTO }) {
   const { t, fmt, formatDate, locale } = useI18n();
+  const standalone = useIsStandalone();
   return (
     <div
       className="flex h-full w-full items-center justify-center p-6"
@@ -126,19 +139,25 @@ export function DocCard({ file }: { file: FileDTO }) {
           {formatDate(new Date(file.createdAt), locale)}
         </p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <a href={downloadUrl(file.id)} className={btnPrimary}>
-            <DownloadIcon className="h-4 w-4" />
-            {t.files.download}
-          </a>
-          <a
-            href={fileUrl(file.id)}
-            target="_blank"
-            rel="noreferrer"
-            className={btnSecondary}
-          >
-            <ExternalLinkIcon className="h-4 w-4" />
-            {t.files.open}
-          </a>
+          <SaveButton
+            variant="button"
+            url={downloadUrl(file.id)}
+            name={file.name}
+            mimeType={file.mimeType}
+            size={file.size}
+            className={btnPrimary}
+          />
+          {!standalone && (
+            <a
+              href={fileUrl(file.id)}
+              target="_blank"
+              rel="noreferrer"
+              className={btnSecondary}
+            >
+              <ExternalLinkIcon className="h-4 w-4" />
+              {t.files.open}
+            </a>
+          )}
         </div>
       </div>
     </div>

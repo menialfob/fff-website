@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useI18n } from "@/lib/i18n/client";
 import { formatDuration, formatSize } from "@/lib/format";
-import { DownloadIcon, PlayIcon } from "@/components/icons";
+import { PlayIcon } from "@/components/icons";
+import { SaveButton } from "@/components/save-button";
 import { KindIcon, kindTint } from "./kind-icon";
 import { Viewer } from "./viewer/viewer";
 import type { FileDTO } from "./types";
@@ -18,7 +18,6 @@ import { downloadUrl, thumbUrl } from "./types";
  * is the thing worth reading.
  */
 export function AttachmentGrid({ files }: { files: FileDTO[] }) {
-  const { t } = useI18n();
   const [index, setIndex] = useState<number | null>(null);
   if (files.length === 0) return null;
 
@@ -93,13 +92,13 @@ export function AttachmentGrid({ files }: { files: FileDTO[] }) {
               </span>
             </span>
           </button>
-          <a
-            href={downloadUrl(file.id)}
-            aria-label={t.files.download}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"
-          >
-            <DownloadIcon className="h-4 w-4" />
-          </a>
+          <SaveButton
+            url={downloadUrl(file.id)}
+            name={file.name}
+            mimeType={file.mimeType}
+            size={file.size}
+            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50"
+          />
         </div>
       ))}
 

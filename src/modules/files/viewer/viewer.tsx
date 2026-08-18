@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/lib/i18n/client";
 import { formatSize } from "@/lib/format";
-import { DownloadIcon, XIcon } from "@/components/icons";
+import { XIcon } from "@/components/icons";
+import { SaveButton } from "@/components/save-button";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import { ImagePane } from "./image-pane";
 import { DocCard, MediaPane, PdfPane } from "./panes";
@@ -155,14 +156,13 @@ export function Viewer({
               })}`}
           </p>
         </div>
-        <a
-          href={downloadUrl(file.id)}
-          aria-label={t.files.download}
-          onClick={(e) => e.stopPropagation()}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition hover:bg-white/10"
-        >
-          <DownloadIcon className="h-5 w-5" />
-        </a>
+        <SaveButton
+          url={downloadUrl(file.id)}
+          name={file.name}
+          mimeType={file.mimeType}
+          size={file.size}
+          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-white transition hover:bg-white/10 disabled:opacity-50"
+        />
       </header>
 
       <div

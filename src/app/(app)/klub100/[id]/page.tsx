@@ -4,10 +4,9 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { fmt } from "@/lib/i18n";
 import { getDict } from "@/lib/i18n/server";
-import { btnSecondary, cardPad } from "@/components/ui";
+import { cardPad } from "@/components/ui";
 import {
   ArrowLeftIcon,
-  DownloadIcon,
   PlayIcon,
 } from "@/components/icons";
 import { DeleteProjectButton } from "@/modules/klub100/project-controls";
@@ -21,6 +20,7 @@ import {
   TRACKLIST_SIZE,
   type SongView,
 } from "@/modules/klub100/shared";
+import { ExportButton } from "@/modules/klub100/export-button";
 
 export default async function Klub100ProjectPage({
   params,
@@ -133,13 +133,7 @@ export default async function Klub100ProjectPage({
             {t.klub100.playMix}
           </Link>
           {isCurator && (
-            <a
-              href={`/api/klub100/export/${project.id}`}
-              className={btnSecondary}
-            >
-              <DownloadIcon className="h-4 w-4" />
-              {t.klub100.exportPackage}
-            </a>
+            <ExportButton projectId={project.id} projectName={project.name} />
           )}
         </div>
       </section>

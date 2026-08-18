@@ -1,4 +1,5 @@
 import type { FieldType } from "./event-fields-editor";
+import { FileFieldLink } from "./file-field-link";
 
 type FieldDef = { id: string; label: string; type: FieldType };
 
@@ -66,12 +67,7 @@ export function StructuredFields({ fields }: { fields: RenderField[] }) {
             {field.personName !== undefined && field.personName}
             {field.text !== undefined && field.text}
             {field.file !== undefined && (
-              <a
-                href={`/api/files/${field.file.id}`}
-                className="font-medium text-sky-300 hover:underline"
-              >
-                {field.file.name}
-              </a>
+              <FileFieldLink id={field.file.id} name={field.file.name} />
             )}
           </dd>
         </div>

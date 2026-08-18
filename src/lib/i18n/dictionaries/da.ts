@@ -832,6 +832,9 @@ export const da = {
     attachedFolderLocked: "Mapper fra kalenderen eller forummet kan ikke ændres her.",
     uploadFailed: "Uploaden fejlede — prøv igen.",
     zipTooLarge: "Udvalget er for stort til at pakke (maks {size}).",
+    saveTooLarge:
+      "Filen er for stor til at gemme her (maks {size}). Hent den fra en computer.",
+    saveFailed: "Kunne ikke gemme filen — prøv igen.",
     folderNotFound: "Mappen blev ikke fundet.",
     ownFoldersOnly:
       "Kun den der oprettede mappen eller en admin kan gøre dette.",

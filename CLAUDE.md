@@ -91,6 +91,23 @@ Upload size is capped in `next.config.ts` (`serverActions.bodySizeLimit`), in
 the deploy Caddyfile (`request_body max_size`) and in
 `src/modules/files/types.ts` (`MAX_FILE_SIZE`); keep the three in sync.
 
+**Nothing may navigate the window to a file URL.** The site installs to the home
+screen (`display: "standalone"`), so there is no browser chrome: a plain
+`<a href="/api/files/…">`, a `target="_blank"`, or a form post to a file route
+loads the file into the app's only window and leaves the member on iOS's
+document preview with no back button, no back-swipe and no way out but
+force-quitting. Safari is not an escape either — an installed PWA gets storage
+separate from Safari, so sending them there lands on the login page.
+
+Bytes reach a member through `src/lib/download.ts` (`saveUrl` / `saveBlob`) and
+the shared `<SaveButton>` (`src/components/save-button.tsx`), never a link. In a
+browser tab that is still a plain anchor download; in the installed app it
+fetches the bytes and hands them to the native share sheet, which returns to the
+app when dismissed. Saving is capped at `MAX_SAVE_BYTES` (150 MB, matched by the
+zip route) because that path must hold the file in memory. Affordances that
+genuinely need a new tab — "open in new tab" for a PDF — render only when
+`useIsStandalone()` is false.
+
 **Folders** (`Folder`) are nestable via `parentId` and carry a `kind`:
 `USER` folders are the tree members browse, while `ATTACHMENT` folders are
 created implicitly by the calendar and forum to hold an event's or thread's

@@ -825,6 +825,9 @@ export const en: typeof da = {
     attachedFolderLocked: "Folders from the calendar or forum cannot be changed here.",
     uploadFailed: "The upload failed — please try again.",
     zipTooLarge: "That selection is too large to zip (max {size}).",
+    saveTooLarge:
+      "That file is too large to save here (max {size}). Get it from a computer.",
+    saveFailed: "Could not save the file — please try again.",
     folderNotFound: "The folder was not found.",
     ownFoldersOnly: "Only the folder's creator or an admin can do this.",
     eventNotFound: "The event was not found.",
