@@ -21,10 +21,10 @@ function monthParam(year: number, month: number): string {
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ m?: string }>;
+  searchParams: Promise<{ m?: string; day?: string }>;
 }) {
   await requireSession();
-  const { m } = await searchParams;
+  const { m, day } = await searchParams;
   const [t, locale] = await Promise.all([getDict(), getLocale()]);
 
   const today = todayInCopenhagen();
@@ -35,6 +35,15 @@ export default async function CalendarPage({
     year = Number(requested.slice(0, 4));
     month = Number(requested.slice(5, 7));
   }
+
+  // A day picked before opening an event comes back on ?day=, so the list
+  // stays narrowed to it; ignored unless it falls in the month shown.
+  const selectedDay =
+    day &&
+    /^\d{4}-\d{2}-\d{2}$/.test(day) &&
+    day.slice(0, 7) === monthParam(year, month)
+      ? day
+      : null;
 
   const monthStart = toISODate(year, month, 1);
   const monthEnd = toISODate(year, month, daysInMonth(year, month));
@@ -108,6 +117,7 @@ export default async function CalendarPage({
         year={year}
         month={month}
         today={today}
+        initialSelected={selectedDay}
         occurrences={occurrences.map((occ) => ({
           date: occ.date,
           endDate: occ.endDate,

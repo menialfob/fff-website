@@ -42,9 +42,12 @@ function covers(occ: MonthOccurrence, iso: string): boolean {
 function OccurrenceCard({
   occ,
   weekdayLabel,
+  backQuery,
 }: {
   occ: MonthOccurrence;
   weekdayLabel: string;
+  /** Month (and picked day) to return to, as a query string. */
+  backQuery: string;
 }) {
   const { t } = useI18n();
   const accent = moduleAccents.calendar;
@@ -66,8 +69,8 @@ function OccurrenceCard({
     <Link
       href={
         occ.event.kind === "RECURRING"
-          ? `/calendar/${occ.event.id}?d=${occ.date}`
-          : `/calendar/${occ.event.id}`
+          ? `/calendar/${occ.event.id}?d=${occ.date}&${backQuery}`
+          : `/calendar/${occ.event.id}?${backQuery}`
       }
       className={`${cardHover} flex items-center gap-4 p-4`}
     >
@@ -107,6 +110,7 @@ export function MonthView({
   month,
   today,
   occurrences,
+  initialSelected = null,
   header,
 }: {
   year: number;
@@ -114,11 +118,13 @@ export function MonthView({
   /** Copenhagen "YYYY-MM-DD". */
   today: string;
   occurrences: MonthOccurrence[];
+  /** Day to start out selected, e.g. when coming back from an event. */
+  initialSelected?: string | null;
   /** Month label + prev/next links, rendered server-side. */
   header: React.ReactNode;
 }) {
   const { t, locale } = useI18n();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialSelected);
 
   const daysInThisMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const leadingBlanks = isoWeekday(year, month, 1) - 1;
@@ -142,6 +148,12 @@ export function MonthView({
   const newEventHref = selected
     ? `/calendar/new?date=${selected}`
     : "/calendar/new";
+
+  // Carried into every event link so its back link returns to the month the
+  // member was browsing — and the day they had picked — instead of today.
+  const backQuery =
+    `m=${toISODate(year, month, 1).slice(0, 7)}` +
+    (selected ? `&day=${selected}` : "");
 
   const weekdayShort = (isoDay: number) =>
     weekdayName(isoDay, locale).slice(0, 3);
@@ -218,6 +230,7 @@ export function MonthView({
             <li key={`${occ.event.id}-${occ.date}`}>
               <OccurrenceCard
                 occ={occ}
+                backQuery={backQuery}
                 weekdayLabel={weekdayShort(
                   // From the occurrence's own date — it may have started in
                   // the previous month.

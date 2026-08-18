@@ -40,12 +40,28 @@ export default async function EventPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ d?: string }>;
+  searchParams: Promise<{ d?: string; m?: string; day?: string }>;
 }) {
   const session = await requireSession();
   const { id } = await params;
-  const { d } = await searchParams;
+  const { d, m, day } = await searchParams;
   const [t, locale] = await Promise.all([getDict(), getLocale()]);
+
+  // Where the back link goes: the month — and the day picked in it — the
+  // member came from, carried on ?m= / ?day= by the month list. Links from
+  // elsewhere (chat, forum, dashboard, activity) carry neither and fall
+  // back to the month list's own default, the current month.
+  const backMonth = m && /^\d{4}-(0[1-9]|1[0-2])$/.test(m) ? m : null;
+  const backDay =
+    backMonth &&
+    day &&
+    /^\d{4}-\d{2}-\d{2}$/.test(day) &&
+    day.slice(0, 7) === backMonth
+      ? day
+      : null;
+  const backQuery = backMonth
+    ? `m=${backMonth}` + (backDay ? `&day=${backDay}` : "")
+    : "";
 
   const event = await prisma.calendarEvent.findUnique({
     where: { id },
@@ -191,7 +207,7 @@ export default async function EventPage({
   return (
     <div>
       <Link
-        href="/calendar"
+        href={backQuery ? `/calendar?${backQuery}` : "/calendar"}
         className="mb-4 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200"
       >
         <ArrowLeftIcon className="h-4 w-4" />
@@ -260,7 +276,9 @@ export default async function EventPage({
               {upcoming.map((date) => (
                 <li key={date}>
                   <Link
-                    href={`/calendar/${event.id}?d=${date}`}
+                    href={`/calendar/${event.id}?d=${date}${
+                      backQuery ? `&${backQuery}` : ""
+                    }`}
                     className={
                       date === focusDate
                         ? "font-medium text-lime-300"
