@@ -348,7 +348,9 @@ export default async function EventPage({
         </section>
       )}
 
-      {attachments.length > 0 && assetFolder && (
+      {/* Shown whenever the folder exists, empty or not: this link is how a
+          member reaches the folder to add the first photo after an event. */}
+      {assetFolder && (
         <section className={`${cardPad} mb-6`}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-white">
@@ -362,7 +364,11 @@ export default async function EventPage({
               {t.calendar.openFolder}
             </Link>
           </div>
-          <AttachmentGrid files={attachments.map(toFileDTO)} />
+          {attachments.length > 0 ? (
+            <AttachmentGrid files={attachments.map(toFileDTO)} />
+          ) : (
+            <p className="text-sm text-zinc-500">{t.files.empty}</p>
+          )}
         </section>
       )}
     </div>

@@ -8,6 +8,7 @@ import { deleteObject } from "@/lib/storage";
 import { getDict } from "@/lib/i18n/server";
 import { fmt } from "@/lib/i18n";
 import { notifyMembers } from "@/lib/notify";
+import { sourceOf } from "./data";
 
 const MAX_FOLDER_NAME = 100;
 const MAX_FILE_NAME = 200;
@@ -27,9 +28,14 @@ type Result = { error?: string; ok?: boolean; message?: string };
  *    editable from here at all.
  */
 
-function revalidateFolder(folderId: string | null | undefined) {
+async function revalidateFolder(folderId: string | null | undefined) {
   revalidatePath("/files");
-  if (folderId) revalidatePath(`/files/${folderId}`);
+  if (!folderId) return;
+  revalidatePath(`/files/${folderId}`);
+  // A calendar or forum folder is also rendered on the page that owns it, so
+  // a file added or removed here has to show up there too.
+  const source = await sourceOf(folderId);
+  if (source) revalidatePath(source.href.split("?")[0]);
 }
 
 /**
@@ -65,7 +71,7 @@ export async function renameFile(
   if (!file) return { error: t.errors.fileNotFound };
 
   await prisma.fileItem.update({ where: { id: fileId }, data: { name } });
-  revalidateFolder(file.folderId);
+  await revalidateFolder(file.folderId);
   return { ok: true };
 }
 
@@ -95,9 +101,9 @@ export async function moveFiles(
   });
 
   for (const from of new Set(files.map((f) => f.folderId))) {
-    revalidateFolder(from);
+    await revalidateFolder(from);
   }
-  revalidateFolder(folderId);
+  await revalidateFolder(folderId);
   return { ok: true };
 }
 
@@ -146,7 +152,7 @@ export async function deleteFiles(fileIds: string[]): Promise<Result> {
   }
 
   for (const folderId of new Set(allowed.map((f) => f.folderId))) {
-    revalidateFolder(folderId);
+    await revalidateFolder(folderId);
   }
   return {
     ok: true,
@@ -182,7 +188,7 @@ export async function notifyUploads(
         : fmt(t.push.newFiles, { name: session.user.name ?? "", count }),
     url: folderId ? `/files/${folderId}` : "/files",
   });
-  revalidateFolder(folderId);
+  await revalidateFolder(folderId);
   return { ok: true };
 }
 
@@ -239,7 +245,7 @@ export async function createFolder(formData: FormData): Promise<Result> {
     targetId: folder.id,
     meta: { name },
   });
-  revalidateFolder(parentId);
+  await revalidateFolder(parentId);
   return { ok: true };
 }
 
@@ -267,7 +273,7 @@ export async function renameFolder(
     targetId: folderId,
     meta: { from: folder.name, to: name },
   });
-  revalidateFolder(folder.parentId);
+  await revalidateFolder(folder.parentId);
   revalidatePath(`/files/${folderId}`);
   return { ok: true };
 }
@@ -305,8 +311,8 @@ export async function moveFolder(
   }
 
   await prisma.folder.update({ where: { id: folderId }, data: { parentId } });
-  revalidateFolder(folder.parentId);
-  revalidateFolder(parentId);
+  await revalidateFolder(folder.parentId);
+  await revalidateFolder(parentId);
   revalidatePath(`/files/${folderId}`);
   return { ok: true };
 }
@@ -348,6 +354,6 @@ export async function deleteFolder(folderId: string): Promise<Result> {
     targetId: folderId,
     meta: { name: folder.name },
   });
-  revalidateFolder(folder.parentId);
+  await revalidateFolder(folder.parentId);
   return { ok: true };
 }

@@ -116,6 +116,13 @@ section — when adding another module that attaches files, create its folder
 with `kind: "ATTACHMENT"`. Deleting a folder never deletes its contents: files
 and child folders are promoted to the deleted folder's parent.
 
+Text and Markdown open in the viewer rather than downloading
+(`src/modules/files/viewer/text-pane.tsx`). Markdown is lexed with `marked` and
+rendered as React elements, never through an HTML string — an uploaded document
+cannot introduce markup because none of it is ever parsed as HTML, and links are
+limited to http/https/mailto. It reuses the `.event-content` styles the calendar
+and forum already render rich text with.
+
 Any member may move and rename; only the uploader or an admin may delete.
 `src/modules/files/kind.ts` is the single classifier deciding how a file is
 presented, and `AttachmentGrid` (`src/modules/files/attachment-grid.tsx`)

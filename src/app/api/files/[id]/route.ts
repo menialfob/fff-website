@@ -31,7 +31,7 @@ const INLINE_TYPES = new Set([
   "audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg", "audio/wav",
   "audio/webm", "audio/flac", "audio/x-m4a",
   "application/pdf",
-  "text/plain",
+  "text/plain", "text/markdown",
 ]);
 
 /** Parses a single-range `Range` header against a known object size. */
