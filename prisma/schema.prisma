@@ -379,14 +379,26 @@ model SpotifyAccount {
   updatedAt     DateTime  @updatedAt
 }
 
-// One-level folders for the files section. Deleting a folder never deletes
-// its files — the SetNull relation moves them back to the root listing.
-// Calendar events own a folder (CalendarEvent.folderId) so event assets are
-// discoverable here; such a folder behaves like any other once the event is
-// gone.
+// Where a folder came from. USER folders are the browsable tree in the files
+// section; ATTACHMENT folders are created implicitly to hold the assets of a
+// calendar event/occurrence or a forum thread and are listed apart from the
+// tree, so tidying the files section never disturbs another module's content.
+enum FolderKind {
+  USER
+  ATTACHMENT
+}
+
+// Nestable folders for the files section. Deleting a folder never deletes its
+// contents: the SetNull relations promote both its files and its child folders
+// to the deleted folder's own parent. ATTACHMENT folders sit outside the tree
+// (always parentId null) and are managed by the module that owns them.
 model Folder {
   id          String     @id @default(cuid())
   name        String
+  kind        FolderKind @default(USER)
+  parent      Folder?    @relation("FolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  parentId    String?
+  children    Folder[]   @relation("FolderTree")
   createdBy   User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById String?
   files       FileItem[]
@@ -394,6 +406,8 @@ model Folder {
   occurrence  CalendarOccurrence?
   forumThread ForumThread?
   createdAt   DateTime   @default(now())
+
+  @@index([kind, parentId, name])
 }
 
 enum CalendarEventKind {
@@ -569,6 +583,18 @@ model OccurrenceFieldValue {
   @@index([fieldId])
 }
 
+// How a file is presented. Derived from the MIME type and extension at upload
+// time by kindFor() in src/modules/files/kind.ts — the single classifier the
+// upload route, the browser grid and the viewer all agree on.
+enum FileKind {
+  IMAGE
+  VIDEO
+  AUDIO
+  PDF
+  DOC
+  OTHER
+}
+
 model FileItem {
   id           String   @id @default(cuid())
   // Original filename as uploaded, for display and download.
@@ -577,6 +603,18 @@ model FileItem {
   storedName   String   @unique
   mimeType     String
   size         Int
+  kind         FileKind @default(OTHER)
+  // 512px webp preview: the downscaled image, or a video's poster frame
+  // (captured in the browser at upload — the server has no ffmpeg). Missing
+  // thumbnails for images are filled in lazily by the media route.
+  thumbName    String?
+  // 16px webp data URL rendered under the thumbnail so grids never reflow.
+  blurData     String?
+  // Intrinsic pixel size, for aspect-ratio boxes in the grid and viewer.
+  width        Int?
+  height       Int?
+  // Playback length of video/audio, measured client-side at upload.
+  durationMs   Int?
   uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
   uploadedById String
   folder       Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
@@ -584,6 +622,8 @@ model FileItem {
   createdAt    DateTime @default(now())
   // Document-type structured field values pointing at this file.
   occurrenceFieldValues OccurrenceFieldValue[]
+
+  @@index([folderId, createdAt])
 }
 
 enum Klub100SongStatus {

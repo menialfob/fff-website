@@ -74,7 +74,7 @@ async function ensureThreadFolder(
   let folderId = thread.folderId;
   if (!folderId) {
     const folder = await prisma.folder.create({
-      data: { name: thread.title, createdById: userId },
+      data: { name: thread.title, kind: "ATTACHMENT", createdById: userId },
     });
     folderId = folder.id;
     await prisma.forumThread.update({
