@@ -55,11 +55,15 @@ export function TextPane({ file }: { file: FileDTO }) {
   }
 
   return (
+    // Positioned rather than sized with a percentage: the parent centres its
+    // children, and a percentage height against a flex item whose cross size
+    // comes from alignment is not something every engine resolves the same
+    // way. inset-0 is unambiguous everywhere.
     <div
-      className="h-full w-full overflow-y-auto overscroll-contain"
+      className="absolute inset-0 overflow-y-auto overscroll-contain"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="mx-auto max-w-2xl px-1 py-2">
+      <div className="mx-auto max-w-2xl px-3 py-2">
         {isMarkdown(file.mimeType, file.name) ? (
           <Markdown source={text} />
         ) : (

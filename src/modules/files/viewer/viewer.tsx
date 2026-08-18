@@ -29,6 +29,26 @@ const PAGE_PX = 60;
 /** Vertical travel that dismisses. */
 const DISMISS_PX = 120;
 
+/**
+ * The nearest ancestor that actually has somewhere to scroll. Panes that hold
+ * a long document (text, Markdown) own their vertical gestures; the viewer
+ * only takes over once they are back at the top.
+ */
+function scrollableUnder(target: Element | null): HTMLElement | null {
+  let node = target instanceof HTMLElement ? target : null;
+  while (node) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      node.scrollHeight > node.clientHeight + 1
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
 export function Viewer({
   files,
   initialIndex,
@@ -45,6 +65,8 @@ export function Viewer({
   const [mounted, setMounted] = useState(false);
   const start = useRef<{ x: number; y: number } | null>(null);
   const axis = useRef<"x" | "y" | null>(null);
+  // The scrollable pane a gesture started in, if any.
+  const scroller = useRef<HTMLElement | null>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -88,6 +110,7 @@ export function Viewer({
     if (zoomed || e.pointerType === "mouse") return;
     start.current = { x: e.clientX, y: e.clientY };
     axis.current = null;
+    scroller.current = scrollableUnder(e.target as Element | null);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -100,6 +123,19 @@ export function Viewer({
       axis.current = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
     }
     if (!axis.current) return;
+
+    // A vertical drag inside something that scrolls belongs to that thing: a
+    // document is unreadable if pulling it down dismisses the viewer instead
+    // of scrolling back up. Bailing out leaves the browser to scroll
+    // natively, rather than a state update and an ancestor transform on every
+    // frame fighting it.
+    //
+    // There is no pull-to-dismiss inside such a pane, and there cannot be:
+    // once a touch starts scrolling, the browser claims it and sends us
+    // pointercancel after a single move. Documents close with the ✕, Escape
+    // or the backdrop instead — scrolling is what they are actually for.
+    if (axis.current === "y" && scroller.current) return;
+
     setDrag(
       axis.current === "x"
         ? { x: dx, y: 0 }
@@ -111,6 +147,7 @@ export function Viewer({
     const current = drag;
     start.current = null;
     axis.current = null;
+    scroller.current = null;
     setDrag(null);
     if (!current) return;
     if (current.y > DISMISS_PX) onClose();
