@@ -521,6 +521,25 @@ export const da = {
         "1. Tryk på Del-knappen nederst i Safari.\n2. Vælg “Føj til hjemmeskærm”.\n3. Åbn FFF fra hjemmeskærmen og kom tilbage hertil for at slå notifikationer til.",
       testTitle: "FFF",
       testBody: "Det virker! Du får nu notifikationer. 🎉",
+      prefsTitle: "Hvad vil du have besked om?",
+      prefsHint:
+        "Gælder på alle dine enheder. Du kan også slå en enkelt samtale fra inde i chatten.",
+      prefsAllOff: "Alt er slået fra — du får ingen notifikationer.",
+      prefsFailed: "Kunne ikke gemme — prøv igen.",
+      mutedTitle: "Samtaler du har slået fra",
+      mutedHint:
+        "Du får ingen notifikationer fra disse — undtagen når nogen nævner dig. Slå en samtale fra med klokken øverst i chatten.",
+      mutedNone:
+        "Ingen samtaler er slået fra. Tryk på klokken øverst i en chat for at slå den fra.",
+      categories: {
+        chatChannel: "Beskeder i kanaler",
+        chatDirect: "Private beskeder og grupper",
+        mention: "Når nogen nævner dig",
+        forum: "Nye tråde og svar i forum",
+        calendar: "Nye begivenheder i kalenderen",
+        files: "Nye filer",
+        members: "Nye medlemmer",
+      },
     },
   },
   klub100: {
@@ -811,6 +830,7 @@ export const da = {
   },
   errors: {
     invalidInput: "Ugyldigt input.",
+    actionFailed: "Noget gik galt — prøv igen.",
     userExists: "Der findes allerede en bruger med den e-mail.",
     invalidPassword: "Ugyldigt input (adgangskoden skal være mindst 8 tegn).",
     passwordTooShort: "Den nye adgangskode skal være mindst 8 tegn.",

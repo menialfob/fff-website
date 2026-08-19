@@ -347,6 +347,27 @@ export function MessageIcon(p: IconProps) {
   );
 }
 
+export function BellIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </Svg>
+  );
+}
+
+// Bell with a slash — notifications silenced for one conversation.
+export function BellOffIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M8.7 3A6 6 0 0 1 18 8c0 2.1.27 3.74.66 5" />
+      <path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </Svg>
+  );
+}
+
 export function LockIcon(p: IconProps) {
   return (
     <Svg {...p}>

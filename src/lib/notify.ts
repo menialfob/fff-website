@@ -17,6 +17,11 @@ import type { Section } from "@/lib/activity";
  * uploads in a row leave one "Filer" notification, matching the single number
  * the badge shows.
  *
+ * It doubles as the preference category (the two id sets are the same by
+ * design — see src/lib/push-categories.ts), so a member who turns "new files"
+ * off in their profile stops hearing about exactly the events behind the
+ * Filer badge, and nothing else.
+ *
  * Never throws — a failed notification must not break the write that triggered
  * it, exactly like the pushes in the chat module.
  */
@@ -38,6 +43,7 @@ export async function notifyMembers(input: {
     await sendPushToUsers(
       recipients.map((r) => r.id),
       {
+        category: input.section,
         title: input.title,
         body: input.body,
         url: input.url,

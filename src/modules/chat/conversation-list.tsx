@@ -7,6 +7,7 @@ import type { RealtimeEvent } from "@/lib/realtime";
 import type { ConversationSummaryDTO } from "./data";
 import { listConversationSummaries } from "./actions";
 import { Avatar } from "@/components/avatar";
+import { BellOffIcon } from "@/components/icons";
 
 /**
  * Live conversation index: renders the server-provided summaries and keeps
@@ -135,8 +136,12 @@ export function ConversationList({
                 {s.title}
               </span>
               {s.muted && (
-                <span aria-label={t.chat.muted} title={t.chat.muted} className="shrink-0 text-xs">
-                  🔕
+                <span
+                  aria-label={t.chat.muted}
+                  title={t.chat.muted}
+                  className="shrink-0 text-zinc-500"
+                >
+                  <BellOffIcon className="h-3.5 w-3.5" />
                 </span>
               )}
               {s.unread > 0 && (

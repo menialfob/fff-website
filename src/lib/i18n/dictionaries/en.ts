@@ -514,6 +514,25 @@ export const en: typeof da = {
         "1. Tap the Share button at the bottom of Safari.\n2. Choose \u201cAdd to Home Screen\u201d.\n3. Open FFF from your home screen and come back here to turn on notifications.",
       testTitle: "FFF",
       testBody: "It works! You'll now get notifications. \ud83c\udf89",
+      prefsTitle: "What do you want to hear about?",
+      prefsHint:
+        "Applies to all your devices. You can also mute a single conversation from inside the chat.",
+      prefsAllOff: "Everything is off \u2014 you won't get any notifications.",
+      prefsFailed: "Couldn't save \u2014 please try again.",
+      mutedTitle: "Muted conversations",
+      mutedHint:
+        "You get no notifications from these \u2014 except when someone mentions you. Mute a conversation with the bell at the top of the chat.",
+      mutedNone:
+        "No conversations are muted. Tap the bell at the top of a chat to mute it.",
+      categories: {
+        chatChannel: "Messages in channels",
+        chatDirect: "Direct messages and groups",
+        mention: "When someone mentions you",
+        forum: "New forum threads and replies",
+        calendar: "New calendar events",
+        files: "New files",
+        members: "New members",
+      },
     },
   },
   klub100: {
@@ -804,6 +823,7 @@ export const en: typeof da = {
   },
   errors: {
     invalidInput: "Invalid input.",
+    actionFailed: "Something went wrong \u2014 please try again.",
     userExists: "A user with that email already exists.",
     invalidPassword: "Invalid input (password must be at least 8 characters).",
     passwordTooShort: "New password must be at least 8 characters.",
