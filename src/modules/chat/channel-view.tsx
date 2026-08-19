@@ -911,9 +911,13 @@ export function ConversationView({
     // Fill the space between the sticky app header (h-16 + safe-area) and the
     // fixed mobile tab bar. Cancel the shared <main> bottom padding (-mb-28) so
     // the column reaches the tab bar without adding page scroll. When the
-    // keyboard is closed, reserve the tab bar's height as bottom padding so the
-    // composer stays above it; when it's open we size to the visual viewport
+    // keyboard is closed, reserve the tab bar as bottom padding so the composer
+    // stays above it; when it's open we size to the visual viewport
     // (panelHeight) and drop that reserve since the keyboard covers the tab bar.
+    // The reserve is 4.375rem, not the bar's height: the bar measures ~61.5px
+    // (py-2.5 + a 20px icon + gap-1 + an 11px label + its top border), so 70px
+    // clears it with ~0.5rem to spare and the composer's own border stays
+    // visible instead of being tucked under the bar's edge.
     // The message list (min-h-0 + overflow) is the only thing that scrolls.
     <div
       ref={rootRef}
@@ -921,7 +925,7 @@ export function ConversationView({
       className={`-mb-28 flex flex-col md:-mb-12 md:h-[calc(100dvh-6rem)] md:pb-4 ${
         keyboardOpen
           ? "pb-[env(safe-area-inset-bottom)]"
-          : "h-[calc(100dvh-5.5rem-env(safe-area-inset-top))] pb-[calc(3.75rem+env(safe-area-inset-bottom))]"
+          : "h-[calc(100dvh-5.5rem-env(safe-area-inset-top))] pb-[calc(4.375rem+env(safe-area-inset-bottom))]"
       }`}
     >
       <header className="flex items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
