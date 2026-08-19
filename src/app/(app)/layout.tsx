@@ -25,7 +25,15 @@ export default async function AppLayout({
   ];
 
   return (
-    <div className="min-h-screen">
+    // min-h-dvh, not min-h-screen: 100vh is the *large* viewport, which ignores
+    // the on-screen keyboard even where the keyboard shrinks the layout viewport
+    // (interactive-widget=resizes-content, see the root layout). Sizing the page
+    // with it left the document at full height while the viewport shrank, so
+    // opening the keyboard made the page scrollable and Chrome scrolled it to
+    // reveal the caret — lifting the chat panel, and with it the composer, away
+    // from the tab bar that stays fixed to the shrunken viewport. 100dvh tracks
+    // the keyboard, so the page has nothing to scroll and nothing drifts.
+    <div className="min-h-dvh">
       <ServiceWorkerRegister />
       <AppBadge />
       <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-canvas pt-[env(safe-area-inset-top)]">

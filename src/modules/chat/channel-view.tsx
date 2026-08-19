@@ -1172,7 +1172,11 @@ export function ConversationView({
           pending={pending}
         />
       ) : (
-        <div className="flex flex-col gap-1.5 pb-[env(safe-area-inset-bottom)]">
+        // No safe-area padding here: the panel root already reserves the tab
+        // bar's full height *including* its own inset (and applies the inset
+        // alone when the keyboard covers the tab bar), so repeating it floated
+        // the composer an inset above the bar instead of resting on it.
+        <div className="flex flex-col gap-1.5">
           {drafts.length > 0 && (
             <div className="flex gap-2 overflow-x-auto px-1 py-1">
               {drafts.map((d) => (
