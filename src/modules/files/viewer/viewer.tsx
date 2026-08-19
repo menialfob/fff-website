@@ -6,6 +6,7 @@ import { useI18n } from "@/lib/i18n/client";
 import { formatSize } from "@/lib/format";
 import { XIcon } from "@/components/icons";
 import { SaveButton } from "@/components/save-button";
+import { useScrollLock } from "@/lib/scroll-lock";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import { ImagePane } from "./image-pane";
 import { DocCard, MediaPane, PdfPane } from "./panes";
@@ -88,13 +89,9 @@ export function Viewer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, prev, next]);
 
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
+  // The viewer is only mounted while it is open, so the lock lives exactly as
+  // long as it does.
+  useScrollLock(true);
 
   const file = files[index];
 
