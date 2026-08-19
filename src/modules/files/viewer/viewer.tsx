@@ -12,7 +12,7 @@ import { DocCard, MediaPane, PdfPane } from "./panes";
 import { TextPane } from "./text-pane";
 import { isTextLike } from "../kind";
 import type { FileDTO } from "../types";
-import { downloadUrl, fileUrl } from "../types";
+import { displayUrl, downloadUrl } from "../types";
 
 /**
  * Full-screen media viewer.
@@ -99,16 +99,16 @@ export function Viewer({
   const file = files[index];
 
   // Warm the neighbours so a swipe lands on a decoded image, not a spinner.
-  // Held back until the paging settles: a fast flick through a folder would
-  // otherwise start a full-size fetch for every file passed, and two dozen
-  // 10 MB downloads fighting over one mobile connection is exactly how the
-  // photo you are actually looking at ends up never arriving.
+  // The viewer-sized copy, never the original — warming megabytes nobody has
+  // asked to zoom into is how the photo actually on screen gets starved. Held
+  // back until the paging settles for the same reason: a fast flick through a
+  // folder would otherwise queue a fetch for every file passed.
   useEffect(() => {
     const timer = setTimeout(() => {
       for (const neighbour of [files[index - 1], files[index + 1]]) {
         if (neighbour?.kind === "IMAGE") {
           const img = new Image();
-          img.src = fileUrl(neighbour.id);
+          img.src = displayUrl(neighbour);
         }
       }
     }, PREFETCH_DELAY_MS);

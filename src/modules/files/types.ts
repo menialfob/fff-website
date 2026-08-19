@@ -19,6 +19,8 @@ export type FileDTO = {
   blurData: string | null;
   /** Whether ?v=thumb will return a preview rather than the original. */
   hasThumb: boolean;
+  /** Whether ?v=display will return a viewer-sized copy of a large image. */
+  hasDisplay: boolean;
   createdAt: string;
   uploadedById: string;
   uploadedByName: string;
@@ -48,6 +50,18 @@ export function fileUrl(id: string): string {
 /** The 512px preview, falling back to the original when none exists. */
 export function thumbUrl(file: Pick<FileDTO, "id" | "hasThumb">): string {
   return file.hasThumb ? `/api/files/${file.id}?v=thumb` : `/api/files/${file.id}`;
+}
+
+/**
+ * The viewer-sized copy (2048px webp), falling back to the original when the
+ * image was never big enough to be worth one. This is what the full-screen
+ * viewer shows: a camera original is tens of megabytes and arrives visibly
+ * band by band on a phone.
+ */
+export function displayUrl(file: Pick<FileDTO, "id" | "hasDisplay">): string {
+  return file.hasDisplay
+    ? `/api/files/${file.id}?v=display`
+    : `/api/files/${file.id}`;
 }
 
 /** Always an attachment, whatever the type. */

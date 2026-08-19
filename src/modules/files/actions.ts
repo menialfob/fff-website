@@ -123,6 +123,7 @@ export async function deleteFiles(fileIds: string[]): Promise<Result> {
       name: true,
       storedName: true,
       thumbName: true,
+      displayName: true,
       folderId: true,
       uploadedById: true,
     },
@@ -142,6 +143,7 @@ export async function deleteFiles(fileIds: string[]): Promise<Result> {
   for (const file of allowed) {
     await deleteObject(file.storedName);
     if (file.thumbName) await deleteObject(file.thumbName);
+    if (file.displayName) await deleteObject(file.displayName);
     await logEvent({
       actorId: session.user.id,
       action: "file.delete",

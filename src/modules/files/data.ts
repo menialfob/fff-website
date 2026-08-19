@@ -20,6 +20,7 @@ export const fileSelect = {
   durationMs: true,
   blurData: true,
   thumbName: true,
+  displayName: true,
   createdAt: true,
   uploadedById: true,
   folderId: true,
@@ -37,6 +38,7 @@ type FileRow = {
   durationMs: number | null;
   blurData: string | null;
   thumbName: string | null;
+  displayName: string | null;
   createdAt: Date;
   uploadedById: string;
   folderId: string | null;
@@ -55,6 +57,7 @@ export function toFileDTO(file: FileRow): FileDTO {
     durationMs: file.durationMs,
     blurData: file.blurData,
     hasThumb: Boolean(file.thumbName),
+    hasDisplay: Boolean(file.displayName),
     createdAt: file.createdAt.toISOString(),
     uploadedById: file.uploadedById,
     uploadedByName: file.uploadedBy?.name ?? "",
