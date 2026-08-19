@@ -106,15 +106,38 @@ sharp (`src/lib/images.ts`); videos get a poster frame captured in the browser
 (`upload-client.ts`), which also covers formats libvips cannot decode. A batch
 raises **one** push, via `notifyUploads()` once the queue drains.
 
+An image keeps up to two renditions beside the original: `thumbName` (512px,
+the grid tile) and `displayName` (2048px, what the full-screen viewer shows),
+both webp, both served by `?v=thumb` / `?v=display`, and both filled in lazily
+by the media route for files that predate them. The viewer climbs that ladder —
+thumb, display, and the original only once someone pinches to zoom — because a
+camera JPEG is tens of megabytes and WebKit paints the rows it has not yet
+received as solid grey. Decoding each rung off-screen before showing it is
+load-bearing, not an optimisation: swapping in a half-arrived image is exactly
+the bug this avoids. `processImage` derives the display copy only when asked
+(`{ display: true }`) and only when the source is larger than one, so chat —
+whose attachments are compressed in the browser first — does not pay for it.
+
 Downloads stream through the authenticated route `src/app/api/files/[id]/route.ts`
 — files are never served statically. It honours `Range` (iOS Safari will not
-scrub without `206`), serves `?v=thumb` and `?dl=1`, and renders bytes inline
-only for an allow-list of types: anything else, `.svg` and `.html` above all,
+scrub without `206`), serves `?v=thumb`, `?v=display` and `?dl=1`, and renders
+bytes inline only for an allow-list of types: anything else, `.svg` and `.html` above all,
 is forced to download so an upload cannot run as first-party script.
 
-Upload size is capped in `next.config.ts` (`serverActions.bodySizeLimit`), in
-the deploy Caddyfile (`request_body max_size`) and in
-`src/modules/files/types.ts` (`MAX_FILE_SIZE`); keep the three in sync.
+Upload size is capped in four places, and they must stay in sync:
+`next.config.ts` (`serverActions.bodySizeLimit` **and**
+`experimental.middlewareClientMaxBodySize`), the deploy Caddyfile
+(`request_body max_size`) and `src/modules/files/types.ts` (`MAX_FILE_SIZE`).
+
+`middlewareClientMaxBodySize` is the one that bites. Because the middleware
+matches every route, Next clones each upload body through it — and the default
+clones only the first **10 MB**, then ends the stream without failing the
+request. The route reads a short body and stores it as a whole file: a 14 MB
+photo becomes a 10 MB one that still decodes, still thumbnails, and still looks
+like a photo, with a grey band where the rows that never arrived should be. The
+upload route now compares the bytes it received against the `x-file-size` the
+browser declared and rejects a mismatch, so a cap reintroduced anywhere in the
+chain (a proxy, a future config) fails loudly instead of storing corruption.
 
 **Nothing may navigate the window to a file URL.** The site installs to the home
 screen (`display: "standalone"`), so there is no browser chrome: a plain

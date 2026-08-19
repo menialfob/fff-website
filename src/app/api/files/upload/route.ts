@@ -69,6 +69,17 @@ export async function POST(request: Request) {
       { status: size === 0 ? 400 : 413 },
     );
   }
+  // Fewer bytes arrived than the browser said it was sending, so something
+  // between the two ended the stream early. A short read is not a smaller
+  // file: a JPEG cut off two thirds of the way down still decodes, still
+  // thumbnails, and still looks like a photo — with a grey band where the
+  // rows that never arrived should be. Refusing it is the only way the member
+  // finds out, so the upload fails and retries instead of silently storing a
+  // corrupt file forever.
+  if (declaredSize > 0 && size !== declaredSize) {
+    await deleteObject(storedName);
+    return NextResponse.json({ error: "truncated" }, { status: 400 });
+  }
 
   const kind = kindFor(mimeType, name);
 
@@ -77,13 +88,21 @@ export async function POST(request: Request) {
   // ./preview, which is also the fallback for images sharp cannot decode
   // (HEIC, most notably, is absent from the stock libvips build).
   let thumbName: string | null = null;
+  let displayName: string | null = null;
   let blurData: string | null = null;
   let width: number | null = null;
   let height: number | null = null;
   if (kind === "IMAGE") {
-    const processed = await processImage(await readUpload(storedName));
+    // The display copy is what the viewer shows; the original is only fetched
+    // when someone zooms past what it can resolve.
+    const processed = await processImage(await readUpload(storedName), {
+      display: true,
+    });
     if (processed) {
       thumbName = await saveProcessedUpload(processed.thumb, ".webp");
+      displayName = processed.display
+        ? await saveProcessedUpload(processed.display, ".webp")
+        : null;
       blurData = processed.blurData;
       width = processed.width;
       height = processed.height;
@@ -104,6 +123,7 @@ export async function POST(request: Request) {
       size,
       kind,
       thumbName,
+      displayName,
       blurData,
       width,
       height,
@@ -133,6 +153,7 @@ export async function POST(request: Request) {
     durationMs: item.durationMs,
     blurData: item.blurData,
     hasThumb: Boolean(item.thumbName),
+    hasDisplay: Boolean(item.displayName),
     createdAt: item.createdAt.toISOString(),
     uploadedById: item.uploadedById,
     uploadedByName: item.uploadedBy.name,

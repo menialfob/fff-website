@@ -23,12 +23,21 @@ export async function processAvatar(input: Buffer): Promise<Buffer> {
 
 export const ATTACHMENT_THUMB_SIZE = 512;
 const BLUR_SIZE = 16;
+/**
+ * Longest edge of the copy the full-screen viewer actually shows. A phone at
+ * 390pt/3× wants ~1200 device pixels, so 2048 stays sharp there and leaves
+ * headroom for a pinch — while weighing a few hundred KB against the 10 MB a
+ * camera original costs. The original is fetched only once someone zooms in.
+ */
+export const DISPLAY_MAX_EDGE = 2048;
 
 export type ProcessedImage = {
   width: number;
   height: number;
   thumb: Buffer;
   blurData: string;
+  /** Viewer-sized webp, or null when the source is already no larger. */
+  display: Buffer | null;
 };
 
 /**
@@ -37,15 +46,30 @@ export type ProcessedImage = {
  * webp thumbnail (first frame for animated GIFs) and a 16px blur placeholder
  * as an inline data URL. Returns null when the input can't be decoded as an
  * image — the caller then treats the upload as a plain file.
+ *
+ * Pass `display` to also get the viewer-sized copy; the files section wants
+ * one, chat (whose attachments are compressed in the browser first) does not.
  */
 export async function processImage(
   input: Buffer,
+  options: { display?: boolean } = {},
 ): Promise<ProcessedImage | null> {
   try {
     const img = sharp(input, { failOn: "error" }).rotate();
     const meta = await img.metadata();
     if (!meta.width || !meta.height) return null;
-    const [thumb, blur] = await Promise.all([
+    // metadata() reports the stored pixel grid, not the oriented one, so a
+    // photo shot in portrait comes back landscape with an EXIF tag saying to
+    // turn it. .rotate() applies that tag; the dimensions we hand out have to
+    // agree with the result, or every aspect-ratio box is on its side.
+    const turned = (meta.orientation ?? 1) >= 5;
+    const width = turned ? meta.height : meta.width;
+    const height = turned ? meta.width : meta.height;
+
+    const wantsDisplay =
+      options.display === true && Math.max(width, height) > DISPLAY_MAX_EDGE;
+
+    const [thumb, blur, display] = await Promise.all([
       img
         .clone()
         .resize(ATTACHMENT_THUMB_SIZE, ATTACHMENT_THUMB_SIZE, {
@@ -59,12 +83,23 @@ export async function processImage(
         .resize(BLUR_SIZE, BLUR_SIZE, { fit: "inside" })
         .webp({ quality: 40 })
         .toBuffer(),
+      wantsDisplay
+        ? img
+            .clone()
+            .resize(DISPLAY_MAX_EDGE, DISPLAY_MAX_EDGE, {
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .webp({ quality: 82 })
+            .toBuffer()
+        : Promise.resolve(null),
     ]);
     return {
-      width: meta.width,
-      height: meta.height,
+      width,
+      height,
       thumb,
       blurData: `data:image/webp;base64,${blur.toString("base64")}`,
+      display,
     };
   } catch {
     return null;

@@ -632,6 +632,12 @@ model FileItem {
   // (captured in the browser at upload — the server has no ffmpeg). Missing
   // thumbnails for images are filled in lazily by the media route.
   thumbName    String?
+  // 2048px webp shown by the full-screen viewer, when the original is larger.
+  // A camera JPEG is ~10 MB; this is a few hundred KB, so a photo opens
+  // sharp straight away instead of decoding grey band by grey band. The
+  // original is fetched only when someone zooms in. Filled in lazily by the
+  // media route for files that predate it, same as thumbnails.
+  displayName  String?
   // 16px webp data URL rendered under the thumbnail so grids never reflow.
   blurData     String?
   // Intrinsic pixel size, for aspect-ratio boxes in the grid and viewer.

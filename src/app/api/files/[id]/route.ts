@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { processImage } from "@/lib/images";
+import { DISPLAY_MAX_EDGE, processImage } from "@/lib/images";
 import {
   objectSize,
   openObject,
@@ -12,8 +12,9 @@ import {
 /**
  * Streams a stored file to a signed-in member.
  *
- *   ?v=thumb  the 512px webp preview instead of the original
- *   ?dl=1     force a download instead of rendering in place
+ *   ?v=thumb    the 512px webp preview instead of the original
+ *   ?v=display  the 2048px webp the full-screen viewer shows
+ *   ?dl=1       force a download instead of rendering in place
  *
  * Byte ranges are honoured, which is not optional: Safari on iOS refuses to
  * play — let alone scrub — media served without `206 Partial Content`.
@@ -63,31 +64,53 @@ function parseRange(
 }
 
 /**
- * Fills in a thumbnail that predates the media columns (or that failed to
- * generate at upload) the first time one is asked for, so the grid heals
- * itself instead of needing a backfill script.
+ * Fills in the renditions of an image that predates the media columns (or that
+ * failed to generate at upload) the first time one is asked for, so the
+ * section heals itself instead of needing a backfill script. Decoding the
+ * original is the expensive part, so both sizes are derived from the one pass.
+ *
+ * Only the columns that are still empty are claimed: overwriting a rendition
+ * that already exists would orphan its bytes. The intrinsics are refreshed
+ * either way — rows written before orientation was taken into account hold a
+ * portrait photo's size the wrong way round.
  */
-async function backfillThumb(file: {
+async function backfillRenditions(file: {
   id: string;
   storedName: string;
-}): Promise<string | null> {
+  thumbName: string | null;
+  displayName: string | null;
+}): Promise<{ thumbName: string | null; displayName: string | null }> {
+  const current = { thumbName: file.thumbName, displayName: file.displayName };
   try {
-    const processed = await processImage(await readUpload(file.storedName));
-    if (!processed) return null;
-    const thumbName = await saveProcessedUpload(processed.thumb, ".webp");
-    await prisma.fileItem.update({
-      where: { id: file.id },
-      data: {
-        thumbName,
-        blurData: processed.blurData,
-        width: processed.width,
-        height: processed.height,
-      },
+    const processed = await processImage(await readUpload(file.storedName), {
+      display: true,
     });
-    return thumbName;
+    if (!processed) return current;
+
+    const data: {
+      thumbName?: string;
+      displayName?: string;
+      blurData: string;
+      width: number;
+      height: number;
+    } = {
+      blurData: processed.blurData,
+      width: processed.width,
+      height: processed.height,
+    };
+    if (!current.thumbName) {
+      current.thumbName = await saveProcessedUpload(processed.thumb, ".webp");
+      data.thumbName = current.thumbName;
+    }
+    if (!current.displayName && processed.display) {
+      current.displayName = await saveProcessedUpload(processed.display, ".webp");
+      data.displayName = current.displayName;
+    }
+    await prisma.fileItem.update({ where: { id: file.id }, data });
+    return current;
   } catch {
     // Never fail the request over a missing preview — fall back to the original.
-    return null;
+    return current;
   }
 }
 
@@ -103,18 +126,35 @@ async function handle(request: Request, id: string, bodyless: boolean) {
   const params = new URL(request.url).searchParams;
   const wantsDownload = params.get("dl") === "1";
 
-  let thumbName = file.thumbName;
-  if (params.get("v") === "thumb" && !thumbName && file.kind === "IMAGE") {
-    thumbName = await backfillThumb(file);
+  const variant = params.get("v");
+  let { thumbName, displayName } = file;
+  // A rendition that was never generated is derived now, once, and kept, so
+  // files predating a column heal on first view rather than needing a script.
+  //
+  // For the display copy an empty column is not enough to go on: an image that
+  // was never bigger than one has none by design. The recorded intrinsics
+  // settle it — and a row too old to have those gets one pass to fill them in,
+  // after which this asks the right question.
+  const oversized =
+    file.width == null || Math.max(file.width, file.height ?? 0) > DISPLAY_MAX_EDGE;
+  if (
+    file.kind === "IMAGE" &&
+    ((variant === "thumb" && !thumbName) ||
+      (variant === "display" && !displayName && oversized))
+  ) {
+    ({ thumbName, displayName } = await backfillRenditions(file));
   }
-  const serveThumb = params.get("v") === "thumb" && Boolean(thumbName);
 
-  const storedName = serveThumb ? thumbName! : file.storedName;
-  // A thumbnail is our own webp; an original keeps its declared type only if
+  // Either rendition falls back to the original when we have not got one —
+  // a small image never gets a display copy, and that is the point.
+  const rendition =
+    variant === "thumb" ? thumbName : variant === "display" ? displayName : null;
+  const storedName = rendition ?? file.storedName;
+  // A rendition is our own webp; an original keeps its declared type only if
   // we are willing to render that type inline.
-  const inlineOk = serveThumb || INLINE_TYPES.has(file.mimeType.toLowerCase());
+  const inlineOk = rendition !== null || INLINE_TYPES.has(file.mimeType.toLowerCase());
   const disposition = wantsDownload || !inlineOk ? "attachment" : "inline";
-  const contentType = serveThumb
+  const contentType = rendition
     ? "image/webp"
     : inlineOk
       ? file.mimeType
@@ -130,7 +170,7 @@ async function handle(request: Request, id: string, bodyless: boolean) {
   const headers: Record<string, string> = {
     "Content-Type": contentType,
     "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(
-      serveThumb ? `${file.name}.webp` : file.name,
+      rendition ? `${file.name}.webp` : file.name,
     )}`,
     // storedName is immutable for a given id, so the bytes never change.
     "Cache-Control": "private, max-age=31536000, immutable",
