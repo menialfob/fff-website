@@ -12,7 +12,7 @@ import { DocCard, MediaPane, PdfPane } from "./panes";
 import { TextPane } from "./text-pane";
 import { isTextLike } from "../kind";
 import type { FileDTO } from "../types";
-import { downloadUrl } from "../types";
+import { downloadUrl, fileUrl } from "../types";
 
 /**
  * Full-screen media viewer.
@@ -28,6 +28,8 @@ import { downloadUrl } from "../types";
 const PAGE_PX = 60;
 /** Vertical travel that dismisses. */
 const DISMISS_PX = 120;
+/** How long the index must hold still before the neighbours are fetched. */
+const PREFETCH_DELAY_MS = 400;
 
 /**
  * The nearest ancestor that actually has somewhere to scroll. Panes that hold
@@ -97,13 +99,20 @@ export function Viewer({
   const file = files[index];
 
   // Warm the neighbours so a swipe lands on a decoded image, not a spinner.
+  // Held back until the paging settles: a fast flick through a folder would
+  // otherwise start a full-size fetch for every file passed, and two dozen
+  // 10 MB downloads fighting over one mobile connection is exactly how the
+  // photo you are actually looking at ends up never arriving.
   useEffect(() => {
-    for (const neighbour of [files[index - 1], files[index + 1]]) {
-      if (neighbour?.kind === "IMAGE") {
-        const img = new Image();
-        img.src = `/api/files/${neighbour.id}`;
+    const timer = setTimeout(() => {
+      for (const neighbour of [files[index - 1], files[index + 1]]) {
+        if (neighbour?.kind === "IMAGE") {
+          const img = new Image();
+          img.src = fileUrl(neighbour.id);
+        }
       }
-    }
+    }, PREFETCH_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [files, index]);
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -213,16 +222,19 @@ export function Viewer({
           transition: drag ? "none" : "transform 200ms",
         }}
       >
+        {/* Keyed by id so paging remounts the pane. Sharing one <img> across
+            files leaves the previous photo painted until the next one decodes,
+            which is why a fast swipe moved the counter but not the picture. */}
         {file.kind === "IMAGE" ? (
-          <ImagePane file={file} active onZoomChange={setZoomed} />
+          <ImagePane key={file.id} file={file} active onZoomChange={setZoomed} />
         ) : file.kind === "VIDEO" || file.kind === "AUDIO" ? (
-          <MediaPane file={file} />
+          <MediaPane key={file.id} file={file} />
         ) : file.kind === "PDF" ? (
-          <PdfPane file={file} />
+          <PdfPane key={file.id} file={file} />
         ) : isTextLike(file.mimeType, file.name) ? (
-          <TextPane file={file} />
+          <TextPane key={file.id} file={file} />
         ) : (
-          <DocCard file={file} />
+          <DocCard key={file.id} file={file} />
         )}
 
         {index > 0 && (

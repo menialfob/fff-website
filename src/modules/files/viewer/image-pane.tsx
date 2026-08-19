@@ -23,6 +23,44 @@ const DOUBLE_TAP_MS = 300;
 
 type Point = { x: number; y: number };
 
+/**
+ * Which bytes to paint. A 10 MB camera JPEG takes seconds to arrive on a
+ * phone, and WebKit paints the rows it has not decoded yet as a solid grey
+ * block — so the full-screen photo appeared with a grey bar across the bottom
+ * that stayed until the last byte landed. Phone-shot files were small enough
+ * for the gap to pass unnoticed; a 10 MB original from a real camera is not.
+ *
+ * So the cached 512px thumbnail goes up immediately and the original is
+ * decoded off-screen, swapped in only once it can be painted in one go. There
+ * is never a half-decoded image on screen, and a swipe lands on a picture
+ * rather than on grey.
+ */
+function useProgressiveSrc(file: FileDTO, active: boolean): string {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(false);
+    if (!active) return;
+    let cancelled = false;
+    const done = () => {
+      if (!cancelled) setReady(true);
+    };
+    const loader = new Image();
+    loader.src = fileUrl(file.id);
+    // decode() resolves only when the frame is paintable; onload is the
+    // fallback for the browsers (and the odd rejection) that will not.
+    loader.decode().then(done, () => {
+      if (loader.complete && loader.naturalWidth > 0) done();
+      else loader.onload = done;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, file.id]);
+
+  return ready || !file.hasThumb ? fileUrl(file.id) : thumbUrl(file);
+}
+
 export function ImagePane({
   file,
   active,
@@ -40,6 +78,7 @@ export function ImagePane({
   const pinchStart = useRef<{ distance: number; scale: number } | null>(null);
   const panStart = useRef<{ pointer: Point; offset: Point } | null>(null);
   const lastTap = useRef(0);
+  const src = useProgressiveSrc(file, active);
 
   const reset = useCallback(() => {
     setScale(1);
@@ -143,7 +182,7 @@ export function ImagePane({
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- auth-gated dynamic media route */}
       <img
-        src={active ? fileUrl(file.id) : thumbUrl(file)}
+        src={src}
         alt={file.name}
         draggable={false}
         onClick={(e) => e.stopPropagation()}
