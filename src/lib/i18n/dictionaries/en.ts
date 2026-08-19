@@ -514,6 +514,20 @@ export const en: typeof da = {
         "1. Tap the Share button at the bottom of Safari.\n2. Choose \u201cAdd to Home Screen\u201d.\n3. Open FFF from your home screen and come back here to turn on notifications.",
       testTitle: "FFF",
       testBody: "It works! You'll now get notifications. \ud83c\udf89",
+      prefsTitle: "What do you want to hear about?",
+      prefsHint:
+        "Applies to all your devices. You can also mute a single conversation from inside the chat.",
+      prefsAllOff: "Everything is off \u2014 you won't get any notifications.",
+      prefsFailed: "Couldn't save \u2014 please try again.",
+      categories: {
+        chatChannel: "Messages in channels",
+        chatDirect: "Direct messages and groups",
+        mention: "When someone mentions you",
+        forum: "New forum threads and replies",
+        calendar: "New calendar events",
+        files: "New files",
+        members: "New members",
+      },
     },
   },
   klub100: {

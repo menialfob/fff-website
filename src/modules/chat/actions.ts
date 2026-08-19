@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
 import { sendPushToUsers } from "@/lib/push";
+import { chatCategory } from "@/lib/push-categories";
 import { emitEvent, onlineUserIds } from "@/lib/realtime";
 import type { Session } from "next-auth";
 import {
@@ -180,6 +181,7 @@ export async function sendMessage(
     ? `${session.user.name}: ${text}`
     : `${session.user.name}: ${attachmentPreviewLabel(dto.attachments, t)}`;
   await sendPushToUsers(plainRecipients, {
+    category: chatCategory(conversation.type),
     title: pushTitle(conversation, session.user.name ?? ""),
     body: pushBody.slice(0, 160),
     url: `/chat/${slug}`,
@@ -187,6 +189,9 @@ export async function sendMessage(
   });
   if (mentionRecipients.length > 0) {
     await sendPushToUsers(mentionRecipients, {
+      // Being named is personal: it already bypasses a muted conversation, so
+      // it answers to the mention toggle alone, not the chat ones.
+      category: "mention",
       title: fmt(t.chat.mentionedYou, { name: session.user.name ?? "" }),
       body: text.slice(0, 160),
       url: `/chat/${slug}?m=${created.id}`,
@@ -473,6 +478,7 @@ export async function createPoll(
   );
   const slug = conversationSlug(conversation);
   await sendPushToUsers(recipients, {
+    category: chatCategory(conversation.type),
     title: pushTitle(conversation, session.user.name ?? ""),
     body: `📊 ${q}`.slice(0, 160),
     url: `/chat/${slug}`,
@@ -535,6 +541,9 @@ export async function shareEventToChat(
     onlineUserIds(),
   );
   await sendPushToUsers(recipients, {
+    // An event card is a chat message that happens to open the calendar, so
+    // the conversation's toggle governs it — not the calendar one.
+    category: chatCategory(conversation.type),
     title: pushTitle(conversation, session.user.name ?? ""),
     body: `📅 ${event.title}`.slice(0, 160),
     url: `/calendar/${eventId}?d=${date}`,

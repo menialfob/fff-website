@@ -521,6 +521,20 @@ export const da = {
         "1. Tryk på Del-knappen nederst i Safari.\n2. Vælg “Føj til hjemmeskærm”.\n3. Åbn FFF fra hjemmeskærmen og kom tilbage hertil for at slå notifikationer til.",
       testTitle: "FFF",
       testBody: "Det virker! Du får nu notifikationer. 🎉",
+      prefsTitle: "Hvad vil du have besked om?",
+      prefsHint:
+        "Gælder på alle dine enheder. Du kan også slå en enkelt samtale fra inde i chatten.",
+      prefsAllOff: "Alt er slået fra — du får ingen notifikationer.",
+      prefsFailed: "Kunne ikke gemme — prøv igen.",
+      categories: {
+        chatChannel: "Beskeder i kanaler",
+        chatDirect: "Private beskeder og grupper",
+        mention: "Når nogen nævner dig",
+        forum: "Nye tråde og svar i forum",
+        calendar: "Nye begivenheder i kalenderen",
+        files: "Nye filer",
+        members: "Nye medlemmer",
+      },
     },
   },
   klub100: {

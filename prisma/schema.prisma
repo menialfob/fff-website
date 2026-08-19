@@ -69,6 +69,8 @@ model User {
   // Web Push (browser notification) subscriptions — one per installed
   // browser/device the member enabled notifications on.
   pushSubscriptions PushSubscription[]
+  // Which kinds of notification the member wants (per account, not device).
+  pushPreferences   PushPreference[]
   // Chat: messages authored, reactions given, polls created + voted on,
   // per-conversation read cursors, and DM/group memberships.
   messages         Message[]
@@ -142,6 +144,28 @@ model PushSubscription {
   lastSeenAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// One notification category the member has an opinion about. Categories are
+// the string-literal union in src/lib/push-categories.ts (chat, mentions,
+// forum, calendar, …) — a free-text column rather than an enum so a new
+// module only has to extend that list, exactly like SectionView.section.
+//
+// Rows are written only when a member touches a toggle: a missing row means
+// "on", so both new members and newly added categories start opted in and
+// nobody silently stops hearing about a feature that ships later.
+//
+// Preferences are per account, not per device — the filtering happens on the
+// server before a push is sent (see src/lib/push.ts), because a push that
+// arrives and shows no notification costs the subscription itself.
+model PushPreference {
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  category  String
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, category])
 }
 
 // ── Chat ───────────────────────────────────────────────────────────────────

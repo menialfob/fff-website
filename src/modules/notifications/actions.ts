@@ -5,6 +5,8 @@ import { getBadgeCount } from "@/lib/badge";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
 import { sendPushToUsers } from "@/lib/push";
+import { isPushCategory } from "@/lib/push-categories";
+import { setPushPreference as writePushPreference } from "@/lib/push-prefs";
 
 type ActionResult = { ok?: true; error?: string };
 
@@ -70,6 +72,9 @@ export async function sendTestNotification(): Promise<ActionResult> {
   const t = await getDict();
   const session = await requireSession();
   await sendPushToUsers([session.user.id], {
+    // Asked for by hand, so no category toggle may swallow it — the whole
+    // point is to prove the device receives pushes at all.
+    category: "always",
     title: t.profile.notifications.testTitle,
     body: t.profile.notifications.testBody,
     url: "/",
@@ -86,4 +91,20 @@ export async function sendTestNotification(): Promise<ActionResult> {
 export async function getPendingCount(): Promise<number> {
   const session = await requireSession();
   return getBadgeCount(session.user.id);
+}
+
+/**
+ * Flip one notification category for the current member. Preferences belong to
+ * the account rather than the device, so this applies to every browser and
+ * phone they have enabled notifications on.
+ */
+export async function setPushPreference(
+  category: string,
+  enabled: boolean,
+): Promise<ActionResult> {
+  const t = await getDict();
+  const session = await requireSession();
+  if (!isPushCategory(category)) return { error: t.errors.invalidInput };
+  await writePushPreference(session.user.id, category, enabled);
+  return { ok: true };
 }

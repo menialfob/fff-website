@@ -89,6 +89,10 @@ Premium for playback hosting — only the party host needs to connect. See
 - The same numbers add up to the count on the installed app's icon, and each
   badge-raising event (new thread or reply, new event, new upload, new member)
   also sends a **push notification** to everyone else.
+- Each member decides which of those they want on their phone: the profile has
+  a list of **notification toggles** (channel messages, DMs, mentions, forum,
+  calendar, files, new members) that applies to all their devices. Switching
+  one off only silences the push — the in-app badges keep counting.
 
 ### Admin
 

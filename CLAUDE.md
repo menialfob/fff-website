@@ -65,6 +65,23 @@ SVG icons in `src/components/icons.tsx` — use these instead of unicode
 glyphs or new one-off styles. Navigation is a bottom tab bar on mobile and
 header pills on desktop (`src/components/nav.tsx`).
 
+**Push notifications.** Everything is sent through `sendPushToUsers()`
+(`src/lib/push.ts`); `notifyMembers()` (`src/lib/notify.ts`) wraps it for the
+badge-raising events outside chat. Every payload names a **category** from
+`src/lib/push-categories.ts`, and members switch categories off in their
+profile (`PushPreference`, one row per touched toggle — a missing row means on,
+so new members and newly added categories start opted in).
+
+Filter **server-side, before sending** — never in `public/sw.js`. A
+`userVisibleOnly` subscription owes the browser a notification per push, so a
+push that arrives and shows nothing makes Chrome post its own "site updated in
+the background" notice and makes Safari cancel the subscription after a few.
+Adding a category therefore means: extend `PUSH_CATEGORIES`, add its label to
+both dictionaries under `profile.notifications.categories` (the type checks
+this), and pass it at the send site. The four section categories share their
+ids with `Section` in `src/lib/activity.ts` on purpose, so a toggle silences
+exactly the events behind that badge — the badges themselves keep counting.
+
 **File storage.** `src/lib/storage.ts` is the **only** module allowed to touch
 `fs` — everything else addresses bytes through it. Its contract is deliberately
 S3-shaped so the planned migration is a change to that one file: `storedName`

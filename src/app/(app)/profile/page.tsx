@@ -9,6 +9,8 @@ import { AvatarForm, PasswordForm, ProfileForm } from "@/modules/profile/profile
 import { avatarUrlFor } from "@/components/avatar";
 import { CalendarFeed } from "@/modules/profile/calendar-feed";
 import { NotificationSettings } from "@/modules/notifications/notification-settings";
+import { NotificationPreferences } from "@/modules/notifications/notification-preferences";
+import { getPushPreferences } from "@/lib/push-prefs";
 
 export default async function ProfilePage() {
   const session = await requireSession();
@@ -17,6 +19,7 @@ export default async function ProfilePage() {
     where: { id: session.user.id },
   });
 
+  const pushPreferences = await getPushPreferences(user.id);
   const origin = await siteOrigin();
   const feedPath = user.calendarToken
     ? `/api/calendar/feed/${user.calendarToken}`
@@ -60,6 +63,11 @@ export default async function ProfilePage() {
         <NotificationSettings
           vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""}
         />
+        {/* Which events to be told about is an account-level choice, so it
+            sits below the per-device switch rather than inside it. */}
+        <div className="mt-5 border-t border-white/[0.06] pt-5">
+          <NotificationPreferences initial={pushPreferences} />
+        </div>
       </section>
       <section className={`${cardPad} mb-6`}>
         <h2 className="mb-1 text-lg font-semibold text-white">
