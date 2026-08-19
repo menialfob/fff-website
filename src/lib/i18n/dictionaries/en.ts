@@ -519,6 +519,11 @@ export const en: typeof da = {
         "Applies to all your devices. You can also mute a single conversation from inside the chat.",
       prefsAllOff: "Everything is off \u2014 you won't get any notifications.",
       prefsFailed: "Couldn't save \u2014 please try again.",
+      mutedTitle: "Muted conversations",
+      mutedHint:
+        "You get no notifications from these \u2014 except when someone mentions you. Mute a conversation with the bell at the top of the chat.",
+      mutedNone:
+        "No conversations are muted. Tap the bell at the top of a chat to mute it.",
       categories: {
         chatChannel: "Messages in channels",
         chatDirect: "Direct messages and groups",
@@ -818,6 +823,7 @@ export const en: typeof da = {
   },
   errors: {
     invalidInput: "Invalid input.",
+    actionFailed: "Something went wrong \u2014 please try again.",
     userExists: "A user with that email already exists.",
     invalidPassword: "Invalid input (password must be at least 8 characters).",
     passwordTooShort: "New password must be at least 8 characters.",

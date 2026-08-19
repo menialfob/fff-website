@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
 import { btnDangerOutline, btnPrimary, btnSecondary, errorText, input } from "@/components/ui";
 import { Avatar } from "@/components/avatar";
+import { BellIcon, BellOffIcon } from "@/components/icons";
 import {
   addMembers,
   leaveGroup,
   removeMember,
   renameGroup,
 } from "./conversation-actions";
-import { addableMembers, toggleMute } from "./actions";
+import { addableMembers, setConversationMuted } from "./actions";
 
 type Member = { id: string; name: string; avatarUrl: string | null };
 
@@ -29,6 +30,7 @@ export function ConversationInfo({
   viewerId,
   isAdmin,
   muted,
+  onMutedChange,
   onClose,
 }: {
   conversationId: string;
@@ -39,6 +41,8 @@ export function ConversationInfo({
   viewerId: string;
   isAdmin: boolean;
   muted: boolean;
+  /** Owned by the chat view so this sheet and the header bell stay in step. */
+  onMutedChange: (muted: boolean) => void;
   onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -48,7 +52,6 @@ export function ConversationInfo({
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState(conversationName);
   const [adding, setAdding] = useState(false);
-  const [isMuted, setIsMuted] = useState(muted);
   const [candidates, setCandidates] = useState<Member[] | null>(null);
   const [toAdd, setToAdd] = useState<Set<string>>(new Set());
 
@@ -61,11 +64,17 @@ export function ConversationInfo({
     addableMembers(conversationId).then(setCandidates).catch(() => {});
   }, [adding, candidates, conversationId]);
 
-  function run(action: () => Promise<{ error?: string }>, after?: () => void) {
+  function run(
+    action: () => Promise<{ error?: string }>,
+    after?: () => void,
+    onFailure?: () => void,
+  ) {
     startTransition(async () => {
-      const res = await action();
-      if (res.error) setError(res.error);
-      else {
+      const res = await action().catch(() => ({ error: t.errors.actionFailed }));
+      if (res.error) {
+        setError(res.error);
+        onFailure?.();
+      } else {
         setError(undefined);
         after?.();
       }
@@ -252,15 +261,23 @@ export function ConversationInfo({
         <button
           type="button"
           disabled={pending}
-          onClick={() =>
+          onClick={() => {
+            const next = !muted;
+            onMutedChange(next);
             run(
-              () => toggleMute(conversationId),
-              () => setIsMuted((v) => !v),
-            )
-          }
+              () => setConversationMuted(conversationId, next),
+              undefined,
+              () => onMutedChange(!next),
+            );
+          }}
           className={`${btnSecondary} mb-4 w-full`}
         >
-          {isMuted ? `🔔 ${t.chat.unmute}` : `🔕 ${t.chat.mute}`}
+          {muted ? (
+            <BellIcon className="h-4 w-4" />
+          ) : (
+            <BellOffIcon className="h-4 w-4" />
+          )}
+          {muted ? t.chat.unmute : t.chat.mute}
         </button>
 
         {error && (

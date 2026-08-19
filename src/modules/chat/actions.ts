@@ -708,32 +708,33 @@ export async function searchChatMessages(query: string) {
 /**
  * Mute/unmute a conversation for the viewer: normal pushes stop, mention
  * pushes and unread counts are unaffected (Messenger behavior).
+ *
+ * Takes the wanted state rather than flipping the stored one, so the three
+ * places that offer the control (chat header, conversation info, the muted
+ * list in the profile) can update optimistically without two quick taps —
+ * or two open surfaces — landing on the opposite of what the member sees.
  */
-export async function toggleMute(conversationId: string): Promise<ActionResult> {
+export async function setConversationMuted(
+  conversationId: string,
+  muted: boolean,
+): Promise<ActionResult> {
   const session = await requireSession();
   const gate = await conversationGate(conversationId, session);
   if (gate.error) return { error: gate.error };
-  const where = {
-    userId_conversationId: { userId: session.user.id, conversationId },
-  };
-  const existing = await prisma.conversationRead.findUnique({ where });
-  if (existing) {
-    await prisma.conversationRead.update({
-      where,
-      data: { muted: !existing.muted },
-    });
-  } else {
-    // First interaction: create the cursor muted, but at epoch so unread
-    // counting is unaffected.
-    await prisma.conversationRead.create({
-      data: {
-        userId: session.user.id,
-        conversationId,
-        muted: true,
-        lastReadAt: new Date(0),
-      },
-    });
-  }
+  await prisma.conversationRead.upsert({
+    where: {
+      userId_conversationId: { userId: session.user.id, conversationId },
+    },
+    update: { muted },
+    // First interaction: create the cursor at epoch so muting a conversation
+    // the member has never opened does not also mark it read.
+    create: {
+      userId: session.user.id,
+      conversationId,
+      muted,
+      lastReadAt: new Date(0),
+    },
+  });
   return { ok: true };
 }
 

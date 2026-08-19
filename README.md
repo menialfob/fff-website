@@ -93,6 +93,9 @@ Premium for playback hosting — only the party host needs to connect. See
   a list of **notification toggles** (channel messages, DMs, mentions, forum,
   calendar, files, new members) that applies to all their devices. Switching
   one off only silences the push — the in-app badges keep counting.
+- A single conversation can be **muted** with the bell in its chat header;
+  mentions still come through. The profile lists everything currently muted,
+  so there is one place that answers "why am I not hearing about this?".
 
 ### Admin
 

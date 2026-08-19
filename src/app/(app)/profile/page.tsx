@@ -10,6 +10,8 @@ import { avatarUrlFor } from "@/components/avatar";
 import { CalendarFeed } from "@/modules/profile/calendar-feed";
 import { NotificationSettings } from "@/modules/notifications/notification-settings";
 import { NotificationPreferences } from "@/modules/notifications/notification-preferences";
+import { MutedConversations } from "@/modules/notifications/muted-conversations";
+import { mutedConversations, viewerFor } from "@/modules/chat/data";
 import { getPushPreferences } from "@/lib/push-prefs";
 
 export default async function ProfilePage() {
@@ -20,6 +22,7 @@ export default async function ProfilePage() {
   });
 
   const pushPreferences = await getPushPreferences(user.id);
+  const muted = await mutedConversations(await viewerFor(user.id), user.id);
   const origin = await siteOrigin();
   const feedPath = user.calendarToken
     ? `/api/calendar/feed/${user.calendarToken}`
@@ -67,6 +70,11 @@ export default async function ProfilePage() {
             sits below the per-device switch rather than inside it. */}
         <div className="mt-5 border-t border-white/[0.06] pt-5">
           <NotificationPreferences initial={pushPreferences} />
+        </div>
+        {/* Per-conversation mutes are the other half of "why am I not being
+            notified?", so they are answered in the same place. */}
+        <div className="mt-5 border-t border-white/[0.06] pt-5">
+          <MutedConversations initial={muted} />
         </div>
       </section>
       <section className={`${cardPad} mb-6`}>

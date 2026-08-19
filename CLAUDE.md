@@ -82,6 +82,14 @@ this), and pass it at the send site. The four section categories share their
 ids with `Section` in `src/lib/activity.ts` on purpose, so a toggle silences
 exactly the events behind that badge — the badges themselves keep counting.
 
+Chat adds a second, narrower gate on top: `ConversationRead.muted` silences one
+conversation (`setConversationMuted`, applied in `pushRecipients`), offered by
+the bell in the chat header, the conversation info sheet and the review list in
+the profile. The three surfaces share one action that takes the wanted state
+rather than flipping the stored one, so optimistic updates cannot race; the
+chat view owns the state and passes it into the info sheet. Mentions bypass
+both the mute and the chat categories — being named is addressed to you.
+
 **File storage.** `src/lib/storage.ts` is the **only** module allowed to touch
 `fs` — everything else addresses bytes through it. Its contract is deliberately
 S3-shaped so the planned migration is a change to that one file: `storedName`

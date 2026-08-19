@@ -14,6 +14,7 @@ import { dayKey, formatDayLabel, msUntilNextDay } from "@/lib/i18n";
 import type { MessageDTO, RealtimeEvent } from "@/lib/realtime";
 import { btnPrimary } from "@/components/ui";
 import { Avatar } from "@/components/avatar";
+import { BellIcon, BellOffIcon } from "@/components/icons";
 import { MessageItem } from "./message-item";
 import { PollComposer } from "./poll-composer";
 import { ConversationInfo } from "./conversation-info";
@@ -37,6 +38,7 @@ import {
   olderMessages,
   recentMessages,
   sendMessage,
+  setConversationMuted,
   sendTyping,
   toggleReaction,
   votePoll,
@@ -182,6 +184,9 @@ export function ConversationView({
   const router = useRouter();
   const now = useNow();
   const [showInfo, setShowInfo] = useState(false);
+  // Owned here rather than in the info sheet, so the header bell and the
+  // sheet's button always show the same thing.
+  const [muted, setMuted] = useState(initialMuted);
   const [messages, setMessages] = useState<MessageDTO[]>(initialMessages);
   const [hasOlder, setHasOlder] = useState(initialHasOlder);
   const [hasNewer, setHasNewer] = useState(initialHasNewer);
@@ -840,6 +845,19 @@ export function ConversationView({
     });
   }
 
+  // Optimistic: the bell flips at once and rolls back only if the write fails,
+  // so a tap feels instant on a phone with a slow connection.
+  function toggleMuted() {
+    const next = !muted;
+    setMuted(next);
+    startTransition(async () => {
+      const res = await setConversationMuted(conversationId, next).catch(
+        () => ({ error: "failed" }),
+      );
+      if (res?.error) setMuted(!next);
+    });
+  }
+
   function onCreatePoll(question: string, options: string[], multiple: boolean) {
     startTransition(async () => {
       await createPoll(conversationId, question, options, multiple);
@@ -917,15 +935,37 @@ export function ConversationView({
             {conversationName}
           </h1>
         </button>
-        <button
-          type="button"
-          onClick={() => setShowInfo(true)}
-          className="flex items-center gap-1.5 text-xs text-zinc-400 transition hover:text-zinc-200"
-          title={onlineOthers.map(nameById).filter(Boolean).join(", ")}
-        >
-          <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
-          {t.chat.online.replace("{count}", String(online.length))}
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setShowInfo(true)}
+            className="flex items-center gap-1.5 text-xs text-zinc-400 transition hover:text-zinc-200"
+            title={onlineOthers.map(nameById).filter(Boolean).join(", ")}
+          >
+            <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
+            {t.chat.online.replace("{count}", String(online.length))}
+          </button>
+          {/* One tap to silence the conversation you are actually in — the
+              moment the wish arises — instead of digging through the sheet. */}
+          <button
+            type="button"
+            onClick={toggleMuted}
+            aria-pressed={muted}
+            aria-label={muted ? t.chat.unmute : t.chat.mute}
+            title={muted ? t.chat.unmute : t.chat.mute}
+            className={`-mr-2 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition active:scale-95 ${
+              muted
+                ? "text-amber-300 hover:bg-white/10"
+                : "text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+            }`}
+          >
+            {muted ? (
+              <BellOffIcon className="h-5 w-5" />
+            ) : (
+              <BellIcon className="h-5 w-5" />
+            )}
+          </button>
+        </div>
       </header>
 
       {showInfo && (
@@ -937,7 +977,8 @@ export function ConversationView({
           online={online}
           viewerId={viewerId}
           isAdmin={isAdmin}
-          muted={initialMuted}
+          muted={muted}
+          onMutedChange={setMuted}
           onClose={() => setShowInfo(false)}
         />
       )}

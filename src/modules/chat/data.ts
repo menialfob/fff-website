@@ -626,6 +626,34 @@ export async function chatUnreadCount(
 }
 
 /**
+ * The viewer's muted conversations, for the review list in their profile —
+ * the one place that answers "what did I silence, and when did I do that?".
+ *
+ * Access-filtered like every other read: a mute row that outlived the member's
+ * access to a role-gated channel must not leak that channel's name back to
+ * them. Returns [] when nothing is muted, which is the common case.
+ */
+export async function mutedConversations(
+  viewer: Viewer,
+  userId: string,
+): Promise<{ id: string; slug: string; title: string }[]> {
+  const rows = await prisma.conversationRead.findMany({
+    where: { userId, muted: true },
+    select: { conversationId: true },
+  });
+  if (rows.length === 0) return [];
+  const mutedIds = new Set(rows.map((r) => r.conversationId));
+  const conversations = await conversationsForViewer(viewer, userId);
+  return conversations
+    .filter((c) => mutedIds.has(c.id))
+    .map((c) => ({
+      id: c.id,
+      slug: conversationSlug(c),
+      title: conversationDisplayName(c, userId),
+    }));
+}
+
+/**
  * Active member ids that should receive a push for activity in a
  * conversation: everyone with access, minus the actor, minus anyone currently
  * connected (they get the live update instead, so we don't double-notify).
