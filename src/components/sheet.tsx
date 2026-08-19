@@ -4,7 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/lib/i18n/client";
 import { btnDangerOutline, btnPrimary, btnSecondary } from "@/components/ui";
-import { useKeyboardViewport, useScrollLock } from "@/lib/scroll-lock";
+import {
+  blurFocusedField,
+  useKeyboardViewport,
+  useScrollLock,
+} from "@/lib/scroll-lock";
 
 /**
  * The app's modal surface: a bottom sheet on phones, a centred dialog from
@@ -48,6 +52,7 @@ export function Sheet({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
+        blurFocusedField();
         onClose();
         return;
       }
@@ -103,6 +108,21 @@ export function Sheet({
       style={
         keyboardHeight ? { height: keyboardHeight, bottom: "auto" } : undefined
       }
+      // Any tap in here can be the one that closes the sheet — Cancel, Save, a
+      // menu row, the backdrop, the grab handle — and a field that is unmounted
+      // while focused leaves iOS holding the viewport out of place. Blur on the
+      // way down, before any of them get to change state, unless the tap is
+      // moving to another field (which blurs it anyway).
+      onPointerDownCapture={(e) => {
+        const target = e.target;
+        if (
+          target instanceof Element &&
+          target.closest("input,textarea,[contenteditable]")
+        ) {
+          return;
+        }
+        blurFocusedField();
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={typeof title === "string" ? title : undefined}

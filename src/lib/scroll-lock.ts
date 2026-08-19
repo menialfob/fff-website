@@ -77,6 +77,33 @@ function unlock() {
   });
 }
 
+/** The focused text field, if the focus is on one. */
+export function focusedField(): HTMLElement | null {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return null;
+  const isField =
+    active instanceof HTMLInputElement ||
+    active instanceof HTMLTextAreaElement ||
+    active.isContentEditable;
+  return isField ? active : null;
+}
+
+/**
+ * Give iOS the blur it is waiting for.
+ *
+ * When a field is focused near the bottom of a locked page, iOS displaces the
+ * whole web view upwards to reveal it — the document cannot scroll, so the
+ * window does. It undoes that on blur. Unmount the field while it still holds
+ * focus, as a closing sheet does, and the blur never arrives: the displacement
+ * outlives the sheet and the keyboard, the page keeps scrolling inside it, and
+ * the tab bar stays pinned to the bottom of a viewport that is no longer where
+ * the screen is. Blurring first, while the field is still in the document, is
+ * what lets iOS put the window back.
+ */
+export function blurFocusedField() {
+  focusedField()?.blur();
+}
+
 /** Freeze the page behind a modal for as long as `active` holds. */
 export function useScrollLock(active: boolean) {
   useEffect(() => {
