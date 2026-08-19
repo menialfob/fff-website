@@ -21,6 +21,20 @@ body {
   overflow-x: clip;
 }
 
+/* No rubber-band on the document itself — installed app only. There is no
+   browser chrome to spring back against there, and an overscroll iOS fails to
+   settle leaves the layout viewport offset, which paints every position:fixed
+   element (the bottom tab bar above all) above where it belongs until the app is
+   force-quit. Scoped to standalone because in a browser tab this same property
+   is what pull-to-refresh rides on. Scroll containers inside the page keep
+   their own bounce; only the page-level one is dropped. */
+@media (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
 ::selection {
   background: rgb(251 191 36 / 0.3); /* amber-400/30 */
 }

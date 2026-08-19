@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/lib/i18n/client";
 import { btnDangerOutline, btnPrimary, btnSecondary } from "@/components/ui";
+import { useKeyboardViewport, useScrollLock } from "@/lib/scroll-lock";
 
 /**
  * The app's modal surface: a bottom sheet on phones, a centred dialog from
@@ -69,15 +70,13 @@ export function Sheet({
     return () => document.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
 
-  // Lock the page behind the sheet, restoring whatever overflow was set.
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
+  // Lock the page behind the sheet without letting the viewport drift — see
+  // src/lib/scroll-lock.ts for why the obvious body-overflow lock cannot.
+  useScrollLock(open);
+
+  // iOS draws the keyboard over the layout viewport instead of shrinking it, so
+  // without this the sheet — and any field in it — stays behind the keys.
+  const keyboardHeight = useKeyboardViewport(open);
 
   useEffect(() => {
     if (!open) {
@@ -101,6 +100,9 @@ export function Sheet({
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      style={
+        keyboardHeight ? { height: keyboardHeight, bottom: "auto" } : undefined
+      }
       role="dialog"
       aria-modal="true"
       aria-label={typeof title === "string" ? title : undefined}
@@ -114,7 +116,12 @@ export function Sheet({
       <div
         ref={panelRef}
         tabIndex={-1}
-        style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
+        style={{
+          ...(drag > 0 ? { transform: `translateY(${drag}px)` } : null),
+          // 88vh is measured against the tall viewport, which the keyboard does
+          // not shrink; cap the panel at the visible area instead.
+          ...(keyboardHeight ? { maxHeight: keyboardHeight } : null),
+        }}
         className={`relative flex max-h-[88vh] w-full flex-col rounded-t-3xl border border-white/10 bg-panel shadow-2xl shadow-black/60 outline-none transition-transform sm:max-w-lg sm:rounded-3xl ${
           drag > 0 ? "duration-0" : "duration-200"
         }`}
