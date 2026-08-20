@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { FileBrowser } from "@/modules/files/browser";
 import {
+  folderSelect,
   listAllUserFolders,
   listFolder,
   sourceOf,
@@ -20,14 +21,7 @@ export default async function FolderPage({
 
   const folder = await prisma.folder.findUnique({
     where: { id: folderId },
-    select: {
-      id: true,
-      name: true,
-      kind: true,
-      parentId: true,
-      createdById: true,
-      _count: { select: { files: true, children: true } },
-    },
+    select: folderSelect,
   });
   if (!folder) notFound();
 

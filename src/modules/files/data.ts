@@ -71,8 +71,31 @@ type FolderRow = {
   kind: FolderDTO["kind"];
   parentId: string | null;
   createdById: string | null;
+  createdAt: Date;
+  event: { date: string | null } | null;
+  occurrence: { date: string } | null;
   _count?: { files: number; children: number };
 };
+
+/**
+ * The day a folder sorts under. An attachment folder created by the calendar
+ * stands for the event itself, so it takes the event's own date: a 2020 party
+ * written up this week belongs among the other 2020 events, not at the top of
+ * the list beside today's uploads. Ordinary folders — and the forum's, whose
+ * thread has no date but the day it was started — keep their creation time.
+ *
+ * Read from the event on every listing rather than copied onto the folder, so
+ * moving an event to another date moves its folder with it.
+ */
+function folderDate(folder: FolderRow): string {
+  const eventDate = folder.occurrence?.date ?? folder.event?.date;
+  // Danish wall-clock dates are stored as "YYYY-MM-DD"; read as UTC midnight
+  // the way the rest of the calendar does, so the server's timezone cannot
+  // shift a folder into a neighbouring day.
+  return eventDate
+    ? `${eventDate}T00:00:00.000Z`
+    : folder.createdAt.toISOString();
+}
 
 export function toFolderDTO(folder: FolderRow): FolderDTO {
   return {
@@ -83,15 +106,22 @@ export function toFolderDTO(folder: FolderRow): FolderDTO {
     fileCount: folder._count?.files ?? 0,
     folderCount: folder._count?.children ?? 0,
     createdById: folder.createdById,
+    date: folderDate(folder),
   };
 }
 
-const folderSelect = {
+/** Prisma selection producing exactly what toFolderDTO needs. */
+export const folderSelect = {
   id: true,
   name: true,
   kind: true,
   parentId: true,
   createdById: true,
+  createdAt: true,
+  // Both sides of the calendar's attachment folders: ad hoc events own a
+  // series folder, recurring ones a folder per occurrence date.
+  event: { select: { date: true } },
+  occurrence: { select: { date: true } },
   _count: { select: { files: true, children: true } },
 } as const;
 
@@ -144,14 +174,20 @@ export async function listAllUserFolders(): Promise<FolderDTO[]> {
   return folders.map(toFolderDTO);
 }
 
-/** Folders owned by the calendar or the forum, shown in their own section. */
+/**
+ * Folders owned by the calendar or the forum, shown in their own section.
+ * Newest first by folderDate — the event's day, not the day someone got
+ * around to writing the event up. The browser re-sorts to whatever the reader
+ * picked; this is the order they see before touching anything.
+ */
 export async function listAttachedFolders(): Promise<FolderDTO[]> {
   const folders = await prisma.folder.findMany({
     where: { kind: "ATTACHMENT", files: { some: {} } },
-    orderBy: { createdAt: "desc" },
     select: folderSelect,
   });
-  return folders.map(toFolderDTO);
+  return folders
+    .map(toFolderDTO)
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 /**
