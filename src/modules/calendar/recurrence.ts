@@ -260,16 +260,23 @@ export function formatMinutes(minutes: number): string {
 
 /**
  * Name of the attachment folder holding one occurrence's assets, e.g.
- * "Småevent Juni 2025" — the way members refer to the instance itself, rather
+ * "Småevent Jun 2025" — the way members refer to the instance itself, rather
  * than the ISO date the occurrence is keyed by. All three recurrence patterns
  * yield at most one occurrence per month, so month + year still identifies it
  * uniquely within a series. Always Danish: the name is stored in the database
  * once, not re-rendered per reader's locale.
+ *
+ * The month is abbreviated to three letters because folder names are truncated
+ * to one line everywhere they are listed: a long one ran into the ellipsis and
+ * took the year with it ("Småevent Septem…"). Not Intl's `month: "short"`,
+ * whose Danish abbreviations carry a trailing period on every month but "maj";
+ * the first three letters of the full name are the Danish abbreviations, and
+ * the rename migration cuts them the same way.
  */
 export function occurrenceFolderName(title: string, iso: string): string {
   const parsed = parseISODate(iso);
   if (!parsed) return `${title} ${iso}`;
-  const month = monthName(parsed.month, "da");
+  const month = monthName(parsed.month, "da").slice(0, 3);
   const capitalized = month.charAt(0).toUpperCase() + month.slice(1);
   return `${title} ${capitalized} ${parsed.year}`;
 }
