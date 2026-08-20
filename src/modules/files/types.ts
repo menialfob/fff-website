@@ -35,6 +35,13 @@ export type FolderDTO = {
   fileCount: number;
   folderCount: number;
   createdById: string | null;
+  /**
+   * What the folder sorts by under "date" — the day of the calendar event it
+   * belongs to when it is an event's attachment folder, its own creation time
+   * otherwise. Always an ISO timestamp, so it is never the same thing as
+   * "when this row was written"; see folderDate in ./data.
+   */
+  date: string;
 };
 
 /** One hop of the breadcrumb trail, root-first. */

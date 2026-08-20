@@ -157,13 +157,40 @@ export function FileBrowser({
     return [...filtered].sort(compare);
   }, [files, query, compare]);
 
+  /**
+   * Folders follow the same sort, except that "size" means nothing for one —
+   * there they stay alphabetical. Under "date" they sort by folder.date, which
+   * for an event's attachment folder is the event's own day rather than the
+   * day the folder happened to be created: a party from 2020 entered last week
+   * sorts among the 2020 events, not at the top.
+   */
+  const compareFolders = useCallback(
+    (a: FolderDTO, b: FolderDTO) => {
+      const direction = ascending ? 1 : -1;
+      if (sort === "size") return a.name.localeCompare(b.name);
+      if (sort === "name") return a.name.localeCompare(b.name) * direction;
+      return (
+        (new Date(a.date).getTime() - new Date(b.date).getTime()) * direction
+      );
+    },
+    [sort, ascending],
+  );
+
   const visibleFolders = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const filtered = needle
       ? folders.filter((f) => f.name.toLowerCase().includes(needle))
       : folders;
-    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [folders, query]);
+    return [...filtered].sort(compareFolders);
+  }, [folders, query, compareFolders]);
+
+  // The calendar's and forum's folders, in their own section below the tree.
+  // They are not part of the current folder, so the search box leaves them
+  // alone — but the sort applies, and is the whole point of folder.date.
+  const visibleAttachedFolders = useMemo(
+    () => (attachedFolders ? [...attachedFolders].sort(compareFolders) : []),
+    [attachedFolders, compareFolders],
+  );
 
   const selecting = selection.size > 0;
 
@@ -335,7 +362,7 @@ export function FileBrowser({
         </ul>
       )}
 
-      {attachedFolders && attachedFolders.length > 0 && (
+      {visibleAttachedFolders.length > 0 && (
         <section className="mt-10">
           <h2 className="text-lg font-semibold text-white">
             {t.files.attachedFolders}
@@ -344,7 +371,7 @@ export function FileBrowser({
             {t.files.attachedFoldersHint}
           </p>
           <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-6">
-            {attachedFolders.map((f) => (
+            {visibleAttachedFolders.map((f) => (
               <li key={f.id}>
                 <FolderTile folder={f} />
               </li>
