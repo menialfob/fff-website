@@ -36,6 +36,13 @@ export type FolderDTO = {
   folderCount: number;
   createdById: string | null;
   /**
+   * Files somebody else has added anywhere inside this folder since the member
+   * last opened it — the number on its badge, 0 when there is nothing new. See
+   * ./unread; the server pages fill it in, so a folder mapped for a picker or
+   * a sheet is simply left at 0.
+   */
+  unread: number;
+  /**
    * What the folder sorts by under "date" — the day of the calendar event it
    * belongs to when it is an event's attachment folder, its own creation time
    * otherwise. Always an ISO timestamp, so it is never the same thing as

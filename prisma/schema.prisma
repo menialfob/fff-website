@@ -50,6 +50,7 @@ model User {
   extraRoles   UserRole[]
   auditLogs    AuditLog[]
   sectionViews SectionView[]
+  folderViews  FolderView[]
   files        FileItem[]
   folders      Folder[]
   calendarEvents CalendarEvent[]
@@ -426,12 +427,28 @@ model Folder {
   createdBy   User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdById String?
   files       FileItem[]
+  views       FolderView[]
   event       CalendarEvent?
   occurrence  CalendarOccurrence?
   forumThread ForumThread?
   createdAt   DateTime   @default(now())
 
   @@index([kind, parentId, name])
+}
+
+// Per-folder read cursor behind the unread badges in the files section: when
+// this member last opened this folder. One row per folder they have actually
+// been in — a missing row means "never opened", and the badge then counts from
+// the later of the member's join date and the folder's own creation, so a new
+// member is not greeted by a number on every folder in the archive.
+model FolderView {
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  folder   Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  folderId String
+  seenAt   DateTime @default(now())
+
+  @@id([userId, folderId])
 }
 
 enum CalendarEventKind {

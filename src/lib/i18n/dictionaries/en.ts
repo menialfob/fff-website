@@ -110,6 +110,8 @@ export const en: typeof da = {
     folderCountOne: "1 folder",
     itemCountOne: "1 item",
     itemCount: "{count} items",
+    unreadFileOne: "1 new file",
+    unreadFiles: "{count} new files",
     emptyFolderShort: "Empty",
     attachedFolders: "From the calendar and forum",
     attachedFoldersHint:

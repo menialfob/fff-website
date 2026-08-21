@@ -6,14 +6,17 @@ import {
   listAttachedFolders,
   listFolder,
 } from "@/modules/files/data";
+import { folderUnreadCounts, withUnread } from "@/modules/files/unread";
 
 export default async function FilesPage() {
   const session = await requireSession();
-  const [{ folders, files }, attachedFolders, allFolders] = await Promise.all([
-    listFolder(null),
-    listAttachedFolders(),
-    listAllUserFolders(),
-  ]);
+  const [{ folders, files }, attachedFolders, allFolders, unread] =
+    await Promise.all([
+      listFolder(null),
+      listAttachedFolders(),
+      listAllUserFolders(),
+      folderUnreadCounts(session.user.id),
+    ]);
 
   return (
     <>
@@ -21,9 +24,9 @@ export default async function FilesPage() {
       <FileBrowser
         folder={null}
         trail={[]}
-        folders={folders}
+        folders={withUnread(folders, unread)}
         files={files}
-        attachedFolders={attachedFolders}
+        attachedFolders={withUnread(attachedFolders, unread)}
         allFolders={allFolders}
         viewer={{ id: session.user.id, role: session.user.role }}
       />
