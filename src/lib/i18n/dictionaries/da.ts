@@ -115,6 +115,10 @@ export const da = {
     folderCountOne: "1 mappe",
     itemCountOne: "1 element",
     itemCount: "{count} elementer",
+    // The badge on a folder: files others added since the member last opened
+    // it, counting everything in its subfolders too.
+    unreadFileOne: "1 ny fil",
+    unreadFiles: "{count} nye filer",
     emptyFolderShort: "Tom",
     attachedFolders: "Fra kalender og forum",
     attachedFoldersHint:

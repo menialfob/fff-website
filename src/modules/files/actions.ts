@@ -359,3 +359,32 @@ export async function deleteFolder(folderId: string): Promise<Result> {
   await revalidateFolder(folder.parentId);
   return { ok: true };
 }
+
+/**
+ * Move the member's read cursor for a folder to now, clearing its unread
+ * badge. Called on mount from the folder page, the same way `<MarkSeen />`
+ * clears a section — and like it, never throws: failing to record a visit
+ * must not take the page down with it.
+ *
+ * Deliberately no revalidatePath: the page that just triggered this is the one
+ * the member is looking at, and refreshing the listing they are already
+ * reading to remove a badge that was never drawn there is pure churn. The
+ * badge lives on the *parent* listing, which `<MarkFolderSeen />` refreshes
+ * from the client when there was in fact something to clear.
+ */
+export async function markFolderSeen(
+  folderId: string,
+): Promise<{ ok: boolean }> {
+  try {
+    const session = await requireSession();
+    const now = new Date();
+    await prisma.folderView.upsert({
+      where: { userId_folderId: { userId: session.user.id, folderId } },
+      create: { userId: session.user.id, folderId, seenAt: now },
+      update: { seenAt: now },
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}

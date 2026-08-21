@@ -70,6 +70,29 @@ function SelectionDot({ selected }: { selected: boolean }) {
   );
 }
 
+/** Two digits max, so a long-unopened folder's badge stays a badge. */
+const BADGE_MAX = 99;
+
+/**
+ * How many files somebody else has added inside a folder since the member last
+ * opened it. Drawn in the files accent so it reads as the same "new for you"
+ * number as the home screen card it is nested under, and labelled for screen
+ * readers because a bare digit beside a folder name says nothing on its own.
+ */
+function UnreadBadge({ count }: { count: number }) {
+  const { t, fmt } = useI18n();
+  return (
+    <span
+      aria-label={
+        count === 1 ? t.files.unreadFileOne : fmt(t.files.unreadFiles, { count })
+      }
+      className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-sky-400 to-cyan-500 px-1.5 text-[11px] font-bold tabular-nums text-zinc-950 shadow-lg"
+    >
+      {count > BADGE_MAX ? `${BADGE_MAX}+` : count}
+    </span>
+  );
+}
+
 /**
  * What a folder holds, described in its own terms: "3 photos" reads wrong for
  * a folder of subfolders, and "1 files" reads wrong for anything.
@@ -109,7 +132,12 @@ export function FolderTile({
         href={`/files/${folder.id}`}
         className="flex aspect-square flex-col justify-between rounded-2xl border border-white/10 bg-white/[0.04] p-3 transition hover:border-white/20 hover:bg-white/[0.07] active:scale-[0.98]"
       >
-        <FolderIcon className="h-7 w-7 text-sky-300" />
+        {/* The badge sits beside the icon rather than in the corner: the
+            overflow menu already owns the top right of every tile. */}
+        <span className="flex items-center gap-1.5">
+          <FolderIcon className="h-7 w-7 shrink-0 text-sky-300" />
+          {folder.unread > 0 && <UnreadBadge count={folder.unread} />}
+        </span>
         <span className="min-w-0">
           <span className="line-clamp-2 break-words text-sm font-medium text-zinc-100">
             {folder.name}
@@ -149,6 +177,7 @@ export function FolderRow({
             {countLabel(folder.fileCount, folder.folderCount)}
           </span>
         </span>
+        {folder.unread > 0 && <UnreadBadge count={folder.unread} />}
       </Link>
       {onMenu && <MenuButton label={folder.name} onClick={onMenu} inline />}
     </li>

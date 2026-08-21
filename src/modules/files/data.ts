@@ -106,6 +106,8 @@ export function toFolderDTO(folder: FolderRow): FolderDTO {
     fileCount: folder._count?.files ?? 0,
     folderCount: folder._count?.children ?? 0,
     createdById: folder.createdById,
+    // Filled in by whoever knows who is looking; see withUnread in ./unread.
+    unread: 0,
     date: folderDate(folder),
   };
 }

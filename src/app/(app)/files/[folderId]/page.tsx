@@ -10,6 +10,8 @@ import {
   toFolderDTO,
   trailTo,
 } from "@/modules/files/data";
+import { MarkFolderSeen } from "@/modules/files/mark-folder-seen";
+import { folderUnreadCounts, withUnread } from "@/modules/files/unread";
 
 export default async function FolderPage({
   params,
@@ -25,23 +27,34 @@ export default async function FolderPage({
   });
   if (!folder) notFound();
 
-  const [{ folders, files }, trail, allFolders, source] = await Promise.all([
-    listFolder(folder.id),
-    // Attachment folders live outside the tree, so they get no trail.
-    folder.kind === "ATTACHMENT" ? Promise.resolve([]) : trailTo(folder.id),
-    listAllUserFolders(),
-    folder.kind === "ATTACHMENT" ? sourceOf(folder.id) : Promise.resolve(null),
-  ]);
+  const [{ folders, files }, trail, allFolders, source, unread] =
+    await Promise.all([
+      listFolder(folder.id),
+      // Attachment folders live outside the tree, so they get no trail.
+      folder.kind === "ATTACHMENT" ? Promise.resolve([]) : trailTo(folder.id),
+      listAllUserFolders(),
+      folder.kind === "ATTACHMENT" ? sourceOf(folder.id) : Promise.resolve(null),
+      folderUnreadCounts(session.user.id),
+    ]);
 
   return (
-    <FileBrowser
-      folder={toFolderDTO(folder)}
-      trail={trail}
-      folders={folders}
-      files={files}
-      allFolders={allFolders}
-      viewer={{ id: session.user.id, role: session.user.role }}
-      source={source}
-    />
+    <>
+      {/* Opening the folder is what reads it: keyed by id so walking into a
+          sibling starts a fresh visit rather than reusing this one. */}
+      <MarkFolderSeen
+        key={folder.id}
+        folderId={folder.id}
+        unread={unread.get(folder.id) ?? 0}
+      />
+      <FileBrowser
+        folder={toFolderDTO(folder)}
+        trail={trail}
+        folders={withUnread(folders, unread)}
+        files={files}
+        allFolders={allFolders}
+        viewer={{ id: session.user.id, role: session.user.role }}
+        source={source}
+      />
+    </>
   );
 }

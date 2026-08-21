@@ -164,6 +164,19 @@ section — when adding another module that attaches files, create its folder
 with `kind: "ATTACHMENT"`. Deleting a folder never deletes its contents: files
 and child folders are promoted to the deleted folder's parent.
 
+Every folder carries an **unread badge**: how many files somebody else has put
+anywhere inside it since the member last opened it (`FolderView` +
+`src/modules/files/unread.ts`, cleared by `<MarkFolderSeen />` on the folder
+page). The count rolls up the tree, so a photo three levels down is still
+visible from the root, and it is a second, finer cursor than the `files`
+`SectionView` behind the home screen badge — opening the section clears that
+one, opening a folder clears this one. Both count the same thing, "added after
+your cursor and not by you", so they can never disagree. A folder with no row
+counts from the later of the member's join date and the folder's creation,
+which is also what keeps the query bounded; the migration seeds a row per
+member and folder from their `files` section cursor so nobody met the feature
+with a number on every folder in the archive.
+
 Text and Markdown open in the viewer rather than downloading
 (`src/modules/files/viewer/text-pane.tsx`). Markdown is lexed with `marked` and
 rendered as React elements, never through an HTML string — an uploaded document
