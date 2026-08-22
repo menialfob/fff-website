@@ -71,7 +71,10 @@ export async function folderUnreadCounts(
   const candidates = await prisma.fileItem.findMany({
     where: {
       folderId: { not: null },
-      uploadedById: { not: userId },
+      // Not `{ not: userId }`: SQL's `NULL != 'x'` is NULL, so that would hide
+      // uploads whose author has since been deleted from every badge. Kept in
+      // step with sectionFilters in src/lib/activity.ts by design.
+      OR: [{ uploadedById: null }, { uploadedById: { not: userId } }],
       createdAt: { gt: earliest },
     },
     select: { folderId: true, createdAt: true },

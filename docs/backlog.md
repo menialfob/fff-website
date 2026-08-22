@@ -165,7 +165,7 @@ focused session. ⚠️ = needs something only the owner can do.
 
 | ID | Item | Area | Value | Effort | Manual | Status |
 |---|---|---|---|---|---|---|
-| [FFF-01](#fff-01--member-deletion-destroys-group-content-and-orphans-the-bytes) | Member deletion destroys group content, orphans bytes | Data | Critical | M | ⚠️ | Open |
+| [FFF-01](#fff-01--member-deletion-destroys-group-content-and-orphans-the-bytes) | Member deletion destroys group content, orphans bytes | Data | Critical | M | ⚠️ | Done (manual step open) |
 | [FFF-02](#fff-02--make-backups-a-running-verified-system) | Make backups a running, verified system | Ops | Critical | M | ⚠️ | Open |
 | [FFF-03](#fff-03--error-not-found-and-loading-boundaries) | Error, not-found and loading boundaries | UX | High | S | – | Open |
 | [FFF-04](#fff-04--a-first-test-suite) | A first test suite | Quality | High | M | – | Open |
@@ -221,7 +221,7 @@ Collected here so none of them get lost. Each is repeated in its item.
 | 2 | **FFF-02** | **Add the backup secrets to `/opt/fff-website/.env` on the server** over SSH. Deploy secrets live only on the server — the deploy workflow rewrites `SITE_DOMAIN`/`AUTH_URL` and nothing else, so an agent cannot put them there. |
 | 3 | **FFF-02** | **Store the restic repository password somewhere off the server** (password manager). If the box dies with the only copy of that password, the backups are unrecoverable — this is the single most important manual step in the document. |
 | 4 | **FFF-02** | **Run one restore drill** and note how long it took. A backup that has never been restored is a hypothesis. |
-| 5 | **FFF-01** | **Take a manual backup, then run the one-off orphan-sweep script against production** over SSH. It deletes files off the volume, so it should not run unattended. |
+| 5 | **FFF-01** | **Take a manual backup, then run the orphan sweep against production** over SSH: `npm run sweep-orphans` reports, `npm run sweep-orphans -- --delete` removes. It deletes files off the volume, so it should not run unattended. |
 | 6 | **FFF-08** | **Review and merge Dependabot PRs** as they arrive, and eyeball an uploaded photo on staging after the `sharp` major bump. |
 | 7 | **FFF-14** | **Collect everyone's birthdays** and enter them (or ask members to fill them in once the field exists). |
 | 8 | **FFF-16** | **Change how you add members** — you'll paste an invite link into the group chat instead of inventing a password. |
@@ -341,8 +341,10 @@ a `--delete` flag it does *not* default to).
 #### Manual steps
 
 ⚠️ **Take a backup, then run the orphan sweep against production yourself**
-over SSH once it's deployed. It deletes files off the volume — it should not
-run unattended, and it should not run before FFF-02 gives you a restore path.
+over SSH once it's deployed — `npm run sweep-orphans` to see the list,
+`npm run sweep-orphans -- --delete` to remove it. It deletes files off the
+volume — it should not run unattended, and it should not run before FFF-02
+gives you a restore path.
 
 ---
 
@@ -1452,3 +1454,4 @@ staying true.
 | Date | Change |
 |---|---|
 | 2026-08-22 | Created from `docs/website-review-2026-08.md`. 19 items, FFF-01 … FFF-19, none started. |
+| 2026-08-22 | FFF-01 implemented (A, B and C). Manual step 5 — the production sweep — is still the owner's to run. |

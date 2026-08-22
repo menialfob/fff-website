@@ -40,11 +40,13 @@ export const placements: Placement[] = ["EARLY", "MIDDLE", "LATE"];
  * rows (selected as `{ userId }`) so it can be reused in pages and actions.
  */
 export function computeIsCurator(
-  project: { createdById: string; admins: { userId: string }[] },
+  project: { createdById: string | null; admins: { userId: string }[] },
   user: { id: string; role: string },
 ): boolean {
   return (
     user.role === "ADMIN" ||
+    // Null once the creator's account is deleted: the mix survives them, and
+    // curating it falls to its project admins and the site admins.
     project.createdById === user.id ||
     project.admins.some((a) => a.userId === user.id)
   );
@@ -68,8 +70,9 @@ export type SongView = {
   seg2EndMs: number | null;
   placement: Placement | null;
   placementNote: string | null;
-  suggestedById: string;
-  suggestedByName: string;
+  /** Null once the suggester's account is deleted; the song keeps its slot. */
+  suggestedById: string | null;
+  suggestedByName: string | null;
   hasCheers: boolean;
   cheersByName: string | null;
   voteCount: number;

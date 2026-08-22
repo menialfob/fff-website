@@ -31,7 +31,7 @@ export type PlaybackSong = {
   title: string;
   artist: string;
   albumArtUrl: string | null;
-  suggestedByName: string;
+  suggestedByName: string | null;
   hasCheers: boolean;
   /** One or two segments — a 2×1-minute song earns two sips. */
   segments: PlaybackSegment[];

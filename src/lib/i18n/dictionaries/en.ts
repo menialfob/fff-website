@@ -196,6 +196,7 @@ export const en: typeof da = {
     pdfFallback: "If the PDF does not show here, open it in a new tab.",
     noPreview: "This file type cannot be shown in the browser.",
     uploadedBy: "Uploaded by {name}",
+    unknownUploader: "a deleted member",
 
     // File kinds
     kindIMAGE: "Image",
@@ -382,7 +383,8 @@ export const en: typeof da = {
     userCreated: "User created.",
     users: "Users",
     adminBadge: "Admin",
-    confirmDeleteUser: "Delete {name}? Their uploads are removed too.",
+    confirmDeleteUser:
+      "Delete {name}? Their files, posts and Klub 100 contributions stay, but attributed to nobody.",
     tabUsers: "Users",
     tabLog: "Log",
     lastLogin: "Last logged in {date}",
@@ -582,6 +584,7 @@ export const en: typeof da = {
     confirmRemoveSuggestion: "Remove your suggestion?",
     rejected: "Rejected ({count})",
     suggestedBy: "by {name}",
+    unknownMember: "a deleted member",
     // Suggest / edit dialog
     suggestSong: "Suggest a song",
     pickBestMinute: "Pick the best minute",

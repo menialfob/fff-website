@@ -9,8 +9,9 @@ import {
   saveProcessedUpload,
   saveUploadStream,
 } from "@/lib/storage";
+import { toFileDTO } from "@/modules/files/data";
 import { kindFor } from "@/modules/files/kind";
-import { MAX_FILE_SIZE, type FileDTO } from "@/modules/files/types";
+import { MAX_FILE_SIZE } from "@/modules/files/types";
 
 /**
  * Uploads one file. A plain route rather than a server action for two reasons:
@@ -142,22 +143,7 @@ export async function POST(request: Request) {
     meta: { name: item.name, size: item.size },
   });
 
-  const dto: FileDTO = {
-    id: item.id,
-    name: item.name,
-    size: item.size,
-    mimeType: item.mimeType,
-    kind: item.kind,
-    width: item.width,
-    height: item.height,
-    durationMs: item.durationMs,
-    blurData: item.blurData,
-    hasThumb: Boolean(item.thumbName),
-    hasDisplay: Boolean(item.displayName),
-    createdAt: item.createdAt.toISOString(),
-    uploadedById: item.uploadedById,
-    uploadedByName: item.uploadedBy.name,
-    folderId: item.folderId,
-  };
-  return NextResponse.json(dto);
+  // Mapped by the same function the pages use, so the shape the uploader
+  // splices into its grid cannot drift from the one a reload produces.
+  return NextResponse.json(toFileDTO(item));
 }

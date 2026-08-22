@@ -471,7 +471,9 @@ function NowPlaying({
               {song.artist}
             </p>
             <p className="mt-1 text-zinc-500">
-              {fmt(t.klub100.suggestedByLine, { name: song.suggestedByName })}
+              {fmt(t.klub100.suggestedByLine, {
+                name: song.suggestedByName ?? t.klub100.unknownMember,
+              })}
             </p>
           </div>
 

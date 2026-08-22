@@ -949,6 +949,8 @@ function ItemMenu({
   const name =
     target?.kind === "file" ? target.file.name : (target?.folder.name ?? "");
   // Deleting is the one thing not open to everyone: there is no undo.
+  // An orphaned file (uploader deleted) matches nobody, so only an admin can
+  // delete it — the same rule the server applies in deleteFiles.
   const canDelete =
     target?.kind === "file"
       ? isAdmin || target.file.uploadedById === viewer.id

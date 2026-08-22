@@ -30,14 +30,28 @@ export default async function AdminPage() {
       }),
     ]);
 
-  const files = new Map(
-    fileStats.map((s) => [
-      s.uploadedById,
-      { count: s._count, bytes: s._sum.size ?? 0 },
-    ]),
+  // Content left behind by a deleted member groups under a null author. It is
+  // nobody's now, so it is dropped from the per-user tallies rather than
+  // silently added to somebody else's.
+  const byAuthor = <T,>(rows: { authorId: string | null; value: T }[]) =>
+    new Map(
+      rows
+        .filter((r): r is { authorId: string; value: T } => r.authorId !== null)
+        .map((r) => [r.authorId, r.value]),
+    );
+
+  const files = byAuthor(
+    fileStats.map((s) => ({
+      authorId: s.uploadedById,
+      value: { count: s._count, bytes: s._sum.size ?? 0 },
+    })),
   );
-  const songs = new Map(songStats.map((s) => [s.suggestedById, s._count]));
-  const cheers = new Map(cheersStats.map((s) => [s.recordedById, s._count]));
+  const songs = byAuthor(
+    songStats.map((s) => ({ authorId: s.suggestedById, value: s._count })),
+  );
+  const cheers = byAuthor(
+    cheersStats.map((s) => ({ authorId: s.recordedById, value: s._count })),
+  );
 
   // userId → { section → last-seen date }
   const seenByUser = new Map<string, Record<string, Date>>();

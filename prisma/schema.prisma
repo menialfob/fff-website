@@ -662,8 +662,12 @@ model FileItem {
   height       Int?
   // Playback length of video/audio, measured client-side at upload.
   durationMs   Int?
-  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
-  uploadedById String
+  // Files are group content and outlive their uploader: a photo inside
+  // somebody else's event or thread must not vanish when its uploader's
+  // account is deleted. An orphaned file is attributed to nobody and only an
+  // admin can delete it.
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedById String?
   folder       Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   folderId     String?
   createdAt    DateTime @default(now())
@@ -688,8 +692,10 @@ enum Klub100Placement {
 model Klub100Project {
   id          String        @id @default(cuid())
   name        String
-  createdBy   User          @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  createdById String
+  // A mix is built collectively — everyone's songs, cheers and votes hang off
+  // it — so it outlives the member who started it.
+  createdBy   User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
   songs       Klub100Song[]
   admins      Klub100ProjectAdmin[]
   playbackState Klub100PlaybackState?
@@ -715,8 +721,8 @@ model Klub100DefaultCheers {
   storedName   String         @unique
   mimeType     String
   size         Int
-  recordedBy   User           @relation(fields: [recordedById], references: [id], onDelete: Cascade)
-  recordedById String
+  recordedBy   User?          @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedById String?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 }
@@ -750,8 +756,10 @@ model Klub100Song {
   id            String            @id @default(cuid())
   project       Klub100Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId     String
-  suggestedBy   User              @relation(fields: [suggestedById], references: [id], onDelete: Cascade)
-  suggestedById String
+  // An accepted song holds a numbered slot on the tracklist; deleting the
+  // member who suggested it would leave a gap, so the row stays, unattributed.
+  suggestedBy   User?             @relation(fields: [suggestedById], references: [id], onDelete: SetNull)
+  suggestedById String?
   status        Klub100SongStatus @default(SUGGESTED)
   // 1-based tracklist position while ACCEPTED, kept contiguous; null otherwise.
   position      Int?
@@ -792,8 +800,8 @@ model Klub100Cheers {
   storedName   String      @unique
   mimeType     String
   size         Int
-  recordedBy   User        @relation(fields: [recordedById], references: [id], onDelete: Cascade)
-  recordedById String
+  recordedBy   User?       @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  recordedById String?
   createdAt    DateTime    @default(now())
 }
 

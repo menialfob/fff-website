@@ -6,6 +6,7 @@ import { z } from "zod";
 import { logEvent } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { deleteObject } from "@/lib/storage";
 import { getDict } from "@/lib/i18n/server";
 import { fmt } from "@/lib/i18n";
 import { notifyMembers } from "@/lib/notify";
@@ -71,6 +72,17 @@ export async function createUser(formData: FormData) {
   return { ok: true };
 }
 
+/**
+ * Removes an account. What the member contributed is group content and stays
+ * — files, events, threads, posts, chat messages, and their Klub 100 mixes,
+ * songs and cheers all fall back to no author (`onDelete: SetNull`), so a
+ * photo inside somebody else's event and a song holding a numbered tracklist
+ * slot both survive their uploader.
+ *
+ * Their avatar is the one thing that goes, and it has to be swept out of
+ * storage by hand: nothing else points at those bytes once the row is gone,
+ * and a `/data` volume has no way to find them again.
+ */
 export async function deleteUser(userId: string) {
   const session = await requireAdmin();
   const t = await getDict();
@@ -81,6 +93,10 @@ export async function deleteUser(userId: string) {
   if (!user) return { error: t.errors.userNotFound };
 
   await prisma.user.delete({ where: { id: userId } });
+  // Row first, bytes second — the same order every other delete path uses. A
+  // failure here leaks bytes the orphan sweep can still find; the reverse
+  // would leave a row pointing at an avatar that no longer exists.
+  if (user.avatarStoredName) await deleteObject(user.avatarStoredName);
   await logEvent({
     actorId: session.user.id,
     action: "user.delete",

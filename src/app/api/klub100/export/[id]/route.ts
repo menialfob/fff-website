@@ -75,8 +75,10 @@ export async function GET(
     placement: song.placement,
     placementNote: song.placementNote,
     cheersFile,
-    cheersBy: song.cheers?.recordedBy.name ?? null,
-    suggestedBy: song.suggestedBy.name,
+    // Null where the member behind the row has been deleted: the song and its
+    // recording are group content and stay, attributed to nobody.
+    cheersBy: song.cheers?.recordedBy?.name ?? null,
+    suggestedBy: song.suggestedBy?.name ?? null,
     votes: song.votes.length,
   });
 
@@ -119,12 +121,12 @@ export async function GET(
       {
         project: {
           name: project.name,
-          createdBy: project.createdBy.name,
+          createdBy: project.createdBy?.name ?? null,
           exportedAt: new Date().toISOString(),
           fadeInMs: project.fadeInMs,
           fadeOutMs: project.fadeOutMs,
           defaultCheersFile,
-          defaultCheersBy: project.defaultCheers?.recordedBy.name ?? null,
+          defaultCheersBy: project.defaultCheers?.recordedBy?.name ?? null,
         },
         tracklist: tracklistEntries,
         pool: poolEntries,
@@ -171,7 +173,7 @@ function toCsv(
     placement: string | null;
     placementNote: string | null;
     cheersFile: string | null;
-    suggestedBy: string;
+    suggestedBy: string | null;
     votes: number;
   }[],
 ): string {

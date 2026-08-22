@@ -22,8 +22,13 @@ export type FileDTO = {
   /** Whether ?v=display will return a viewer-sized copy of a large image. */
   hasDisplay: boolean;
   createdAt: string;
-  uploadedById: string;
-  uploadedByName: string;
+  /**
+   * Null once the uploader's account has been deleted — the file itself is
+   * group content and stays. Nobody but an admin may delete an orphaned file,
+   * and the UI names it after `files.unknownUploader`.
+   */
+  uploadedById: string | null;
+  uploadedByName: string | null;
   folderId: string | null;
 };
 

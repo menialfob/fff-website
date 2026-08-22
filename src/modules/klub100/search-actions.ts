@@ -44,7 +44,10 @@ export async function searchSongs(projectId: string, query: string) {
     },
   });
   const byTrackId = new Map(
-    existing.map((s) => [s.spotifyTrackId, s.suggestedBy.name]),
+    existing.map((s) => [
+      s.spotifyTrackId,
+      s.suggestedBy?.name ?? t.klub100.unknownMember,
+    ]),
   );
 
   return {

@@ -78,9 +78,9 @@ export default async function Klub100ProjectPage({
     placement: s.placement,
     placementNote: s.placementNote,
     suggestedById: s.suggestedById,
-    suggestedByName: s.suggestedBy.name,
+    suggestedByName: s.suggestedBy?.name ?? null,
     hasCheers: Boolean(s.cheers),
-    cheersByName: s.cheers?.recordedBy.name ?? null,
+    cheersByName: s.cheers?.recordedBy?.name ?? null,
     voteCount: s.votes.length,
     votedByMe: s.votes.some((v) => v.userId === session.user.id),
   }));
@@ -108,7 +108,9 @@ export default async function Klub100ProjectPage({
           {project.name}
         </h1>
         <span className="text-sm text-zinc-500">
-          {fmt(t.klub100.by, { name: project.createdBy.name })}
+          {fmt(t.klub100.by, {
+            name: project.createdBy?.name ?? t.klub100.unknownMember,
+          })}
         </span>
       </div>
 
@@ -175,7 +177,8 @@ export default async function Klub100ProjectPage({
                 ? {
                     // Version stamp so a replaced clip is not served from cache.
                     url: `/api/klub100/default-cheers/${project.id}?v=${project.defaultCheers.updatedAt.getTime()}`,
-                    recordedByName: project.defaultCheers.recordedBy.name,
+                    recordedByName:
+                      project.defaultCheers.recordedBy?.name ?? null,
                   }
                 : null
             }
@@ -184,7 +187,7 @@ export default async function Klub100ProjectPage({
           />
           <ProjectAdminManager
             projectId={project.id}
-            creator={{ id: project.createdBy.id, name: project.createdBy.name }}
+            creator={project.createdBy}
             adminUserIds={project.admins.map((a) => a.userId)}
             members={members}
           />

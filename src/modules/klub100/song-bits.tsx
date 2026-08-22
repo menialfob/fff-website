@@ -55,7 +55,11 @@ export function SongMeta({ song }: { song: SongView }) {
             {segmentLabel(song)}
           </span>
           <PlacementBadge song={song} />
-          <span>{fmt(t.klub100.suggestedBy, { name: song.suggestedByName })}</span>
+          <span>
+            {fmt(t.klub100.suggestedBy, {
+              name: song.suggestedByName ?? t.klub100.unknownMember,
+            })}
+          </span>
         </p>
         {song.placementNote && (
           <p className="truncate text-xs italic text-zinc-500">

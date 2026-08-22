@@ -46,7 +46,7 @@ export default async function Klub100PlayPage({
     title: s.title,
     artist: s.artist,
     albumArtUrl: s.albumArtUrl,
-    suggestedByName: s.suggestedBy.name,
+    suggestedByName: s.suggestedBy?.name ?? null,
     hasCheers: Boolean(s.cheers),
     segments: [
       { startMs: s.seg1StartMs, endMs: s.seg1EndMs },

@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { createReadStream, createWriteStream } from "fs";
-import { mkdir, readFile, stat, unlink, writeFile } from "fs/promises";
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
@@ -103,6 +103,40 @@ export async function saveProcessedUpload(
   const storedName = `${randomUUID()}${ext}`;
   await writeFile(storedPath(storedName), bytes);
   return storedName;
+}
+
+/** One entry of {@link listObjects} — S3's Key / Size / LastModified. */
+export type ObjectSummary = {
+  storedName: string;
+  size: number;
+  modifiedAt: Date;
+};
+
+/**
+ * Every object in the store. The only way to see what storage holds that the
+ * database does not — used by `npm run sweep-orphans` to find bytes left
+ * behind by deletions that predate their teardown. Maps onto ListObjectsV2;
+ * keys are flat, so anything that is not a plain file at the top level (a
+ * stray directory, a symlink) is skipped rather than reported as an object.
+ */
+export async function listObjects(): Promise<ObjectSummary[]> {
+  const entries = await readdir(uploadDir, { withFileTypes: true }).catch(
+    (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return [];
+      throw err;
+    },
+  );
+  const objects: ObjectSummary[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const info = await stat(storedPath(entry.name));
+    objects.push({
+      storedName: entry.name,
+      size: info.size,
+      modifiedAt: info.mtime,
+    });
+  }
+  return objects;
 }
 
 /** Removes an object. Missing objects are not an error. */
