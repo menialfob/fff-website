@@ -31,6 +31,10 @@ under *Manual steps*. Nothing marked ⚠️ can be finished by an agent alone.
 hour rediscovering. `CLAUDE.md` in the repo root is the authoritative version
 — this is the short brief.*
 
+**Read `CLAUDE.md`; don't write to it.** It is kept deliberately lean and the
+owner edits it. No item below asks you to extend it — put what you learned in
+a code comment next to the thing it explains, or here.
+
 ### What the site is
 
 **FFF — Fælles Formiddags Fædre** is a private, login-protected clubhouse for
@@ -536,7 +540,8 @@ upload a file → see it in the folder.
 - `package.json` — `vitest` + a `test` script
 - a `vitest.config.ts`
 - `.github/workflows/ci.yml` — add `npm test`
-- `CLAUDE.md` and `README.md` — they both currently say there is no test suite
+- `README.md` — it currently says there is no test suite (`CLAUDE.md` says so
+  too, but that file is kept deliberately lean — leave it to the owner)
 
 #### Watch out for
 
@@ -884,7 +889,6 @@ Either way:
 - wherever it gets started (an instrumentation hook, or the app layout — must
   run once, not per request)
 - `package.json` if `node-cron` is added
-- `CLAUDE.md` — document the scheduler alongside the other architecture notes
 
 #### Watch out for
 
@@ -1439,8 +1443,8 @@ staying true.
 
 - `README.md` (Files section; check Chat and Home too)
 - `docs/klub100-prd.md` (the status header, §10's framing)
-- `CLAUDE.md` and `README.md` if FFF-04 has landed (both claim there is no test
-  suite)
+- `README.md` if FFF-04 has landed (it claims there is no test suite; so does
+  `CLAUDE.md`, but that one is the owner's to change)
 
 #### Acceptance
 
@@ -1455,3 +1459,4 @@ staying true.
 |---|---|
 | 2026-08-22 | Created from `docs/website-review-2026-08.md`. 19 items, FFF-01 … FFF-19, none started. |
 | 2026-08-22 | FFF-01 implemented (A, B and C). Manual step 5 — the production sweep — is still the owner's to run. |
+| 2026-08-22 | `CLAUDE.md` is read-only for agents: the three items that asked for edits to it now point at `README.md` instead. |

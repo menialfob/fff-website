@@ -23,7 +23,6 @@ npm run lint         # eslint
 npm run typecheck    # tsc --noEmit
 npm run db:migrate   # prisma migrate dev — run after changing prisma/schema.prisma
 npm run create-user -- --email a@b.c --name "Name" --password secret123 --admin
-npm run sweep-orphans     # report stored objects no db row points at (--delete to remove)
 ```
 
 There is no test suite yet. Verify changes with `npm run lint`,
@@ -194,27 +193,6 @@ renders attachments with the same grid and viewer everywhere.
 one volume (`/data`), and `docker-entrypoint.sh` runs `prisma migrate deploy`
 on startup — schema changes must always be accompanied by a committed
 migration (`npm run db:migrate`).
-
-**Group content outlives its author.** Every relation from a member to
-something they contributed — files, folders, events, threads, posts, chat
-messages, Klub 100 mixes, songs and cheers — is `onDelete: SetNull`, so
-deleting an account never deletes a photo inside somebody else's event or
-punches a gap in a numbered tracklist. Two consequences to keep in mind when
-adding a feature:
-
-- **Every author id is nullable, and `{ not: userId }` silently drops NULL
-  rows** — in SQL `NULL != 'x'` is NULL, not true. A filter meaning "not mine"
-  must be `OR: [{ authorId: null }, { authorId: { not: userId } }]`, or content
-  from a deleted member stops counting for everyone (see `sectionFilters` in
-  `src/lib/activity.ts` and `folderUnreadCounts` in
-  `src/modules/files/unread.ts`, which must stay identical).
-- **"Owner or admin" checks narrow to admin-only** for orphaned rows, which is
-  the intended behaviour — nobody is left to claim them.
-
-The cascade is therefore not a teardown: a delete path that removes rows
-holding storage keys must delete those objects itself (`deleteUser` does this
-for the member's avatar). `npm run sweep-orphans` is the safety net that finds
-bytes on the volume no row points at any more.
 
 ## Deployment pipeline
 
