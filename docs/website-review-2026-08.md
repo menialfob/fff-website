@@ -240,6 +240,38 @@ the admin page, and push a `files`-category notification to admins at 80%.
 Storage behind the existing `src/lib/storage.ts` boundary) — the gauge is what
 tells you when to take it.
 
+### 2.8 Nothing keeps dependencies current, and some of them parse hostile bytes
+
+There is no `dependabot.yml` and no Renovate config; `.github/` holds three
+workflows and nothing else. GitHub is reporting **27 Dependabot alerts on
+`main` (3 critical, 14 high)**, and `npm audit` against the committed lockfile
+finds 12 — two critical, nine high — several of them in *production*
+dependencies rather than build tooling:
+
+| Package | Installed | Why it matters here |
+|---|---|---|
+| `@auth/core` (via `next-auth@5.0.0-beta.31`) | critical ×3 | The whole site is one login. The advisories are an email-normalizer homoglyph bypass, an uncaught exception in `getToken()` on a malformed `Bearer` header, and unbound OAuth state/nonce/PKCE cookies |
+| `next@15.5.19` | high ×8 | Includes a Server Actions DoS in the App Router, SSRF via rewrites, and *unauthenticated disclosure of internal Server Function endpoints* — and this app is built almost entirely out of server actions |
+| `sharp@0.34.5` | high | Inherits four libvips CVEs, and `src/lib/images.ts` runs sharp over **member-uploaded images** — the one production dependency that decodes attacker-supplied bytes |
+| `postcss` (via `next`) | high ×4 | Build-time only: path traversal and arbitrary `.map` disclosure via `sourceMappingURL` |
+
+Realistically the exposure is modest: every route is behind a login, the group
+is closed, the credentials provider does its own lowercase + `findUnique`
+rather than leaning on the vulnerable normalizer, and there are no OAuth
+providers registered with next-auth (the Spotify flow is hand-rolled). But
+sharp is a genuine "untrusted input meets native code" path, and the point of
+patching is not to reason case-by-case about each advisory every time.
+
+**Recommendation.** Add `.github/dependabot.yml` — weekly, grouped, npm plus
+`github-actions` — so this stays a five-minute chore instead of an audit. Then
+clear the backlog: `npm audit fix` handles `@auth/core`, `postcss` and the
+transitive dev packages without a major bump; `sharp@0.35.x` is flagged
+breaking but the app uses only `rotate`/`resize`/`webp`/`metadata`, so it
+should be a lockfile change plus one careful look at `src/lib/images.ts`.
+Next 15.5.19 → the current 15.x patch clears most of the eight. The CI
+workflow already runs `npm ci` — adding `npm audit --omit=dev
+--audit-level=high` there keeps the backlog from rebuilding.
+
 ---
 
 ## 3. Build next — ranked by what the club gets
@@ -459,7 +491,7 @@ Global search (§3.3) · the photo timeline (§3.5) · member profile pages and
 birthdays (§3.4).
 
 **Ongoing, threaded through the above.**
-Vitest over the six risky files (§2.4) · the five-tab nav (§4.1) · chat's
+Dependabot plus one backlog clear-out (§2.8) · Vitest over the six risky files (§2.4) · the five-tab nav (§4.1) · chat's
 icons (§4.2) · the login audit and throttle (§2.5) · session revocation
 (§2.6) · README and PRD refresh (§4.3) · the invite flow (§3.6).
 
