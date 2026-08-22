@@ -1,5 +1,11 @@
 # Website review — August 2026
 
+> **Working from this?** Don't. Every finding below is written up as an
+> actionable, individually-referenceable brief in **[`docs/backlog.md`](./backlog.md)**
+> (items `FFF-01` … `FFF-19`), with file references, acceptance criteria, traps
+> and the steps only the owner can take. This document is the dated snapshot
+> that produced that list — read it for the *reasoning*, work from the backlog.
+
 A full read of the codebase (~31 000 lines across 7 modules), the PRDs, the
 deployment setup and the design system, with recommendations ranked by what
 they're worth to the club.
