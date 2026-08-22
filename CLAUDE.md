@@ -200,21 +200,3 @@ Push to `main` → `.github/workflows/deploy.yml` builds the image, pushes to
 ghcr.io, and SSHes into the server to `docker compose pull && up -d`. PRs and
 non-main branches run `ci.yml` (lint, typecheck, build). The server-side
 compose file and Caddyfile live in `deploy/`.
-
-## Improvement backlog
-
-`docs/backlog.md` holds the known, agreed work — items `FFF-01` … `FFF-19`,
-each a self-contained brief with file references, an approach, acceptance
-criteria, the traps specific to that change, and any step only the owner can
-take. **If you are asked to work on an `FFF-nn`, read that file first.** Its
-"Orientation for a new session" section is the short version of everything
-here plus the branching/verification workflow.
-
-Two things it records that are easy to trip over and are not visible in the
-code: there is **no scheduler anywhere in the app** (`FFF-10` adds one, and
-`FFF-11`/`14`/`15` depend on it), and **every non-main push redeploys the one
-shared staging container** at `test.<domain>`, so two branches in flight fight
-over it.
-
-`docs/website-review-2026-08.md` is the dated review those items came from —
-read it for the reasoning, work from the backlog.
