@@ -9,7 +9,9 @@ type Member = { id: string; name: string };
 
 /**
  * Curator-only panel to grant/revoke project-admin rights to site members.
- * The creator is always an implicit admin and is shown but not removable.
+ * The creator is always an implicit admin and is shown but not removable —
+ * unless their account has been deleted, in which case the mix has no creator
+ * left and the row is dropped.
  */
 export function ProjectAdminManager({
   projectId,
@@ -18,7 +20,7 @@ export function ProjectAdminManager({
   members,
 }: {
   projectId: string;
-  creator: Member;
+  creator: Member | null;
   adminUserIds: string[];
   members: Member[];
 }) {
@@ -35,7 +37,7 @@ export function ProjectAdminManager({
 
   const adminIdSet = new Set(adminUserIds);
   const addable = members
-    .filter((m) => m.id !== creator.id && !adminIdSet.has(m.id))
+    .filter((m) => m.id !== creator?.id && !adminIdSet.has(m.id))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const run = (action: () => Promise<{ error?: string }>) =>
@@ -61,14 +63,16 @@ export function ProjectAdminManager({
       </p>
 
       <ul className={listCard}>
-        <li className="flex items-center gap-3 px-4 py-3">
-          <span className="min-w-0 flex-1 truncate font-medium text-zinc-100">
-            {creator.name}
-          </span>
-          <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-0.5 text-xs text-amber-300">
-            {t.klub100.creator}
-          </span>
-        </li>
+        {creator && (
+          <li className="flex items-center gap-3 px-4 py-3">
+            <span className="min-w-0 flex-1 truncate font-medium text-zinc-100">
+              {creator.name}
+            </span>
+            <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-0.5 text-xs text-amber-300">
+              {t.klub100.creator}
+            </span>
+          </li>
+        )}
         {admins.map((m) => (
           <li key={m.id} className="flex items-center gap-3 px-4 py-3">
             <span className="min-w-0 flex-1 truncate font-medium text-zinc-100">

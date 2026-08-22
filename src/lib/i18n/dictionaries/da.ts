@@ -204,6 +204,9 @@ export const da = {
       "Kan PDF'en ikke vises her, så åbn den i en ny fane.",
     noPreview: "Denne filtype kan ikke vises i browseren.",
     uploadedBy: "Lagt op af {name}",
+    // Stands in for the uploader when their account has been deleted — the
+    // file itself is group content and stays.
+    unknownUploader: "et slettet medlem",
 
     // File kinds
     kindIMAGE: "Billede",
@@ -391,7 +394,8 @@ export const da = {
     userCreated: "Brugeren er oprettet.",
     users: "Brugere",
     adminBadge: "Admin",
-    confirmDeleteUser: "Slet {name}? Deres uploads bliver også fjernet.",
+    confirmDeleteUser:
+      "Slet {name}? Deres filer, indlæg og Klub 100-bidrag bliver liggende, men uden navn på.",
     tabUsers: "Brugere",
     tabLog: "Log",
     lastLogin: "Sidst logget ind {date}",
@@ -590,6 +594,9 @@ export const da = {
     confirmRemoveSuggestion: "Fjern dit forslag?",
     rejected: "Afviste ({count})",
     suggestedBy: "af {name}",
+    // Stands in for a member whose account has been deleted — their mixes,
+    // songs and cheers stay in the project, attributed to nobody.
+    unknownMember: "et slettet medlem",
     // Suggest / edit dialog
     suggestSong: "Foreslå en sang",
     pickBestMinute: "Vælg det bedste minut",

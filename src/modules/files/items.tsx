@@ -281,7 +281,7 @@ export function FileRow({
   onToggle: () => void;
   onMenu: () => void;
 }) {
-  const { formatDate, locale } = useI18n();
+  const { t, formatDate, locale } = useI18n();
   const press = useLongPress(onToggle);
 
   return (
@@ -325,7 +325,7 @@ export function FileRow({
             {formatSize(file.size)}
             {file.durationMs != null && ` · ${formatDuration(file.durationMs)}`}
             {" · "}
-            {file.uploadedByName} ·{" "}
+            {file.uploadedByName ?? t.files.unknownUploader} ·{" "}
             {formatDate(new Date(file.createdAt), locale)}
           </span>
         </span>

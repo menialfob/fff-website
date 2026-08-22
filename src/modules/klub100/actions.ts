@@ -195,7 +195,7 @@ export async function suggestSong(input: SuggestSongInput) {
   if (existing) {
     return {
       error: fmt(t.errors.alreadySuggestedBy, {
-        name: existing.suggestedBy.name,
+        name: existing.suggestedBy?.name ?? t.klub100.unknownMember,
       }),
     };
   }

@@ -40,7 +40,7 @@ type FileRow = {
   thumbName: string | null;
   displayName: string | null;
   createdAt: Date;
-  uploadedById: string;
+  uploadedById: string | null;
   folderId: string | null;
   uploadedBy: { name: string } | null;
 };
@@ -60,7 +60,8 @@ export function toFileDTO(file: FileRow): FileDTO {
     hasDisplay: Boolean(file.displayName),
     createdAt: file.createdAt.toISOString(),
     uploadedById: file.uploadedById,
-    uploadedByName: file.uploadedBy?.name ?? "",
+    // Null when the uploader's account is gone; the client names it.
+    uploadedByName: file.uploadedBy?.name ?? null,
     folderId: file.folderId,
   };
 }

@@ -66,9 +66,14 @@ function sectionFilters(userId: string, since: (s: Section) => Date) {
       createdAt: { gt: since("calendar") },
       createdById: { not: userId },
     },
+    // `{ not: userId }` alone would drop files whose uploader has since been
+    // deleted: in SQL `NULL != 'x'` is NULL, not true, so an orphaned upload
+    // would stop counting for everybody. The same shape is repeated in
+    // src/modules/files/unread.ts — the badge and the list behind it must
+    // filter identically or they disagree.
     files: {
       createdAt: { gt: since("files") },
-      uploadedById: { not: userId },
+      OR: [{ uploadedById: null }, { uploadedById: { not: userId } }],
     },
     // Deactivated accounts are not news; neither is your own arrival.
     members: {

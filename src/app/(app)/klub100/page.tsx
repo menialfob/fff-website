@@ -74,7 +74,8 @@ export default async function Klub100Page() {
                     </span>
                     <span className="text-sm text-zinc-500">
                       {fmt(t.klub100.byOn, {
-                        name: project.createdBy.name,
+                        name:
+                          project.createdBy?.name ?? t.klub100.unknownMember,
                         date: formatDate(project.createdAt, locale),
                       })}
                     </span>

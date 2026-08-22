@@ -21,7 +21,8 @@ import { DEFAULT_FADE_MS, FADE_STEP_MS, MAX_FADE_MS } from "./shared";
 
 export type DefaultCheersView = {
   url: string;
-  recordedByName: string;
+  /** Null once the member who recorded the clip has been deleted. */
+  recordedByName: string | null;
 } | null;
 
 /**
@@ -102,7 +103,7 @@ function DefaultCheersCard({
       <p className="mt-1 text-sm text-zinc-400">
         {defaultCheers
           ? fmt(t.klub100.defaultCheersRecordedBy, {
-              name: defaultCheers.recordedByName,
+              name: defaultCheers.recordedByName ?? t.klub100.unknownMember,
             })
           : t.klub100.defaultCheersNoneYet}
       </p>

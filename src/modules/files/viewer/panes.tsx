@@ -135,7 +135,9 @@ export function DocCard({ file }: { file: FileDTO }) {
           {kindLabel(t, file)} · {formatSize(file.size)}
         </p>
         <p className="mt-0.5 text-sm text-zinc-500">
-          {fmt(t.files.uploadedBy, { name: file.uploadedByName })} ·{" "}
+          {fmt(t.files.uploadedBy, {
+            name: file.uploadedByName ?? t.files.unknownUploader,
+          })}{" · "}
           {formatDate(new Date(file.createdAt), locale)}
         </p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">

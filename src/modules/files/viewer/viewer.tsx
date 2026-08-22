@@ -263,7 +263,9 @@ export function Viewer({
       </div>
 
       <footer className="shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-center text-xs text-zinc-500">
-        {fmt(t.files.uploadedBy, { name: file.uploadedByName })}
+        {fmt(t.files.uploadedBy, {
+          name: file.uploadedByName ?? t.files.unknownUploader,
+        })}
       </footer>
     </div>,
     document.body,

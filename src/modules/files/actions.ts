@@ -131,6 +131,8 @@ export async function deleteFiles(fileIds: string[]): Promise<Result> {
   if (files.length === 0) return { error: t.errors.fileNotFound };
 
   const isAdmin = session.user.role === "ADMIN";
+  // A file whose uploader has been deleted has no owner left to claim it, so
+  // it narrows to admins — deliberately, not by accident of the null compare.
   const allowed = files.filter(
     (f) => isAdmin || f.uploadedById === session.user.id,
   );

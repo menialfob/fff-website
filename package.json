@@ -13,6 +13,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "create-user": "tsx scripts/create-user.ts",
+    "sweep-orphans": "tsx scripts/sweep-orphans.ts",
     "predev": "node scripts/copy-emoji-data.mjs",
     "prebuild": "node scripts/copy-emoji-data.mjs"
   },
