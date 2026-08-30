@@ -17,6 +17,7 @@ import {
 } from "@/components/icons";
 import {
   PlaybackEngine,
+  volumeControlSupported,
   type EngineState,
   type PlaybackSong,
 } from "./playback-engine";
@@ -57,6 +58,7 @@ export function PlayScreen(props: PlayScreenProps) {
   const { projectId, songs } = props;
   const { t } = useI18n();
   const [ios, setIos] = useState(false);
+  const [canFade, setCanFade] = useState(true);
   const [device, setDevice] = useState<{
     status: "pending" | "ready" | "failed";
     message?: string;
@@ -72,6 +74,7 @@ export function PlayScreen(props: PlayScreenProps) {
 
   useEffect(() => {
     setIos(isIos());
+    setCanFade(volumeControlSupported());
   }, []);
 
   // Create the SDK device during pre-flight (no gesture needed) so the
@@ -162,6 +165,7 @@ export function PlayScreen(props: PlayScreenProps) {
       <PreFlight
         {...props}
         ios={ios}
+        canFade={canFade}
         device={device}
         cheers={cheers}
         resumeIndex={resumeIndex}
@@ -188,13 +192,17 @@ function PreFlight({
   spotify,
   tracklistTarget,
   hasOwnDefaultCheers,
+  fadeInMs,
+  fadeOutMs,
   ios,
+  canFade,
   device,
   cheers,
   resumeIndex,
   onStart,
 }: PlayScreenProps & {
   ios: boolean;
+  canFade: boolean;
   device: { status: "pending" | "ready" | "failed"; message?: string };
   cheers: CheersProgress | null;
   resumeIndex: number;
@@ -217,6 +225,10 @@ function PreFlight({
       </h2>
 
       {ios && <Check ok={false} warn label={t.klub100.iosWarning} />}
+
+      {!canFade && (fadeInMs > 0 || fadeOutMs > 0) && (
+        <Check ok={false} warn label={t.klub100.fadesUnavailable} />
+      )}
 
       <Check
         ok={songs.length >= tracklistTarget}

@@ -128,11 +128,16 @@ declare global {
 // --- Tuning -----------------------------------------------------------------
 
 /**
- * How often a fade writes a new volume. The ramp is anchored to the wall
- * clock rather than counted in steps, so a slow `setVolume` round trip or a
- * late timer skips ahead instead of stretching the fade past the cut point.
+ * Shortest gap between two volume writes in a fade, and the ceiling on how
+ * many a single fade may make. `setVolume` is not free — the SDK mirrors it
+ * onto the account's Connect state — and Spotify rate-limits volume control
+ * hard enough to answer 403 "Cannot control device volume". Ten steps over a
+ * second was already enough to sound smooth (PRD §11), so the ramp stays in
+ * that neighbourhood however long the fade is; what changed is that the ramp
+ * is positioned by the clock, not by counting the steps.
  */
-const FADE_TICK_MS = 25;
+const FADE_STEP_MS = 60;
+const FADE_MAX_STEPS = 16;
 /** How often the local segment clock is checked against the cut point. */
 const CUT_TICK_MS = 25;
 /** How often the SDK is asked for state (a round trip — kept sparse). */
@@ -166,6 +171,29 @@ const PLAY_RETRY_DELAYS_MS = [0, 600, 1_500];
 const DEVICE_READY_WAIT_MS = 10_000;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Whether this browser lets script set playback volume at all.
+ *
+ * iOS keeps media volume on the hardware buttons: `HTMLMediaElement.volume`
+ * is not settable there and always reads back 1 — Apple documents it, and
+ * every iOS browser inherits it because they are all WebKit. The Spotify SDK
+ * plays through a media element, so on an iPhone or iPad `setVolume()` is a
+ * no-op and no fade is possible, on any account or network.
+ *
+ * Knowing that is better than pretending: a fade that cannot happen should
+ * not still cost the last second of every segment, and the pre-flight should
+ * say so rather than leave the host wondering why the sliders do nothing.
+ */
+export function volumeControlSupported(): boolean {
+  try {
+    const probe = document.createElement("audio");
+    probe.volume = 0.5;
+    return Math.abs(probe.volume - 0.5) < 0.01;
+  } catch {
+    return false;
+  }
+}
 
 let sdkLoader: Promise<void> | null = null;
 
@@ -222,6 +250,8 @@ export class PlaybackEngine {
   private fatalError: string | null = null;
   /** Bumped by every fadeTo so a superseded fade stops writing volumes. */
   private fadeToken = 0;
+  /** False on iOS, where volume is the hardware buttons' business alone. */
+  private canFade = volumeControlSupported();
 
   private state: EngineState = {
     phase: "idle",
@@ -590,9 +620,14 @@ export class PlaybackEngine {
     const trackUri = `spotify:track:${song.spotifyTrackId}`;
     // Segments shorter than the fade window get proportionally shorter
     // fades instead of being eaten by them (PRD §9 default: clamp here).
-    // A configured 0 stays 0 — that is the curator asking for a hard cut.
+    // A configured 0 stays 0 — that is the curator asking for a hard cut —
+    // and so does every fade where the platform refuses volume control,
+    // because holding the last second of the segment back for a fade nobody
+    // can hear only loses a second of the song.
     const clampFade = (ms: number) =>
-      ms <= 0 ? 0 : Math.max(100, Math.min(ms, Math.floor(segLen / 3)));
+      ms <= 0 || !this.canFade
+        ? 0
+        : Math.max(100, Math.min(ms, Math.floor(segLen / 3)));
     const fadeIn = clampFade(this.fadeInMs);
     const fadeOut = clampFade(this.fadeOutMs);
     /** Courtesy duck when the host skips — never longer than the fade-out. */
@@ -797,6 +832,9 @@ export class PlaybackEngine {
       if (state.position > seg.startMs) progressed = true;
     }
 
+    // The segment is over as far as the room is concerned; the fade-out is
+    // its tail, not a part the bar should still be filling.
+    this.emit({ segmentProgressMs: segLen });
     await this.fadeTo(0, fadeOut);
     await player.pause().catch(() => {});
     return "completed";
@@ -821,27 +859,22 @@ export class PlaybackEngine {
       }
       // Tighter than the segment poll: every millisecond spent here is a
       // millisecond of the fade-in the room hears as silence.
-      await sleep(50);
+      await sleep(100);
     }
     return null;
   }
 
   /**
-   * setVolume ramp with a squared curve (perceptually smoother than linear),
-   * interpolated on elapsed wall-clock time rather than counted in steps.
-   *
-   * That distinction is the whole point. `setVolume` is a round trip to the
-   * SDK's iframe, and `setTimeout` only ever fires late, so a fade built as
-   * "N steps, sleep d/N between them" runs for however long its steps happen
-   * to take — reliably longer than the fade the curator configured, and long
-   * enough that a fade-out started at the cut point was still going when the
-   * segment was already meant to be over. Anchoring on the clock instead
-   * means a slow step skips ahead in the ramp rather than extending it, so
-   * the fade always lands where it was asked to.
+   * setVolume ramp with a squared curve (perceptually smoother than linear).
+   * Each step's level comes from elapsed wall-clock time rather than from a
+   * step counter, so a slow round trip or a late timer moves the ramp along
+   * instead of stretching it: a fade-out started at the cut point ends at the
+   * cut point, which is what a fade counted in steps could not promise.
    *
    * A zero-length fade is a straight jump — that is a curator asking for a
-   * hard cut. Starting a fade supersedes any fade still in flight, so a skip
-   * pressed mid-fade-in ducks out instead of fighting it.
+   * hard cut, and it is also what every fade becomes on a platform that
+   * refuses volume control. Starting a fade supersedes any fade still in
+   * flight, so a skip pressed mid-fade-in ducks out instead of fighting it.
    */
   private async fadeTo(target: number, durationMs: number) {
     const token = ++this.fadeToken;
@@ -850,6 +883,11 @@ export class PlaybackEngine {
       await this.setLevel(target);
       return;
     }
+    const steps = Math.max(
+      2,
+      Math.min(FADE_MAX_STEPS, Math.round(durationMs / FADE_STEP_MS)),
+    );
+    const stepMs = durationMs / steps;
     const startedAt = performance.now();
     for (;;) {
       if (this.stopped || this.fadeToken !== token) return;
@@ -857,21 +895,19 @@ export class PlaybackEngine {
         1,
         (performance.now() - startedAt) / durationMs,
       );
-      const level = from + (target - from) * progress;
-      if (progress >= 1) {
-        await this.setLevel(level);
-        return;
-      }
-      // Deliberately not awaited: the SDK round trip must not become part
-      // of the fade's length. Commands to one iframe stay ordered.
-      void this.setLevel(level);
-      await sleep(FADE_TICK_MS);
+      await this.setLevel(from + (target - from) * progress);
+      if (progress >= 1) return;
+      await sleep(stepMs);
     }
   }
 
   private setLevel(level: number): Promise<void> {
     const clamped = Math.max(0, Math.min(1, level));
     this.level = clamped;
+    // On a platform that pins playback volume to the hardware buttons the
+    // call cannot do anything, and the SDK would still forward it to the
+    // account's Connect state — so don't make it at all.
+    if (!this.canFade) return Promise.resolve();
     return (
       this.player?.setVolume(clamped * clamped).catch(() => {}) ??
       Promise.resolve()

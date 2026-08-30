@@ -700,6 +700,8 @@ export const en: typeof da = {
       "{count} songs are missing cheers — the default will play",
     cheersBuffering: "Buffering cheers recordings… {loaded}/{total}",
     cheersBuffered: "Every cheers recording is buffered in the browser",
+    fadesUnavailable:
+      "This device does not let web pages control playback volume (iPhone and iPad keep it on the hardware buttons), so fading in and out is not possible — segments will cut instead. A laptop or Android device can fade.",
     spotifyNotConfigured:
       "Spotify isn't configured on the server (SPOTIFY_CLIENT_ID)",
     spotifyNotConnectedCheck: "Spotify account not connected",

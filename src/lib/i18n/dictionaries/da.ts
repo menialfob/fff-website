@@ -707,6 +707,8 @@ export const da = {
       "{count} sange mangler en skål — standarden bliver brugt",
     cheersBuffering: "Henter skål-optagelser… {loaded}/{total}",
     cheersBuffered: "Alle skål-optagelser ligger klar i browseren",
+    fadesUnavailable:
+      "Denne enhed lader ikke websider styre lydstyrken (iPhone og iPad holder den på knapperne), så ind- og udtoning er ikke mulig — segmenterne klippes i stedet. En laptop eller Android-enhed kan tone.",
     spotifyNotConfigured:
       "Spotify er ikke sat op på serveren (SPOTIFY_CLIENT_ID)",
     spotifyNotConnectedCheck: "Spotify-kontoen er ikke forbundet",
