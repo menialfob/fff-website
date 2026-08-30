@@ -1,10 +1,18 @@
 import { getDict } from "@/lib/i18n/server";
+import { safeCallbackPath } from "@/lib/callback-url";
 import { Brand } from "@/components/ui";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { LoginForm } from "./login-form";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
   const t = await getDict();
+  // The middleware parks the page a member was trying to reach here, so a deep
+  // link into the app survives the detour through the form.
+  const callbackUrl = safeCallbackPath((await searchParams).callbackUrl);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-4">
@@ -18,7 +26,7 @@ export default async function LoginPage() {
           </div>
           <p className="mt-2 text-sm text-zinc-400">{t.login.tagline}</p>
         </div>
-        <LoginForm />
+        <LoginForm callbackUrl={callbackUrl} />
       </div>
       <LocaleSwitcher />
     </main>
