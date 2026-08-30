@@ -2,14 +2,21 @@
  * Client-side sequencer for live Klub 100 playback (phase-2 PRD §2).
  *
  * Runs entirely in the host's browser: each song's cheers clip plays from
- * our own storage through one HTMLAudioElement, then the song segment plays
- * through the Spotify Web Playback SDK (faded in/out via setVolume), and
- * after each transition progress is persisted server-side for crash-safe
- * resume.
+ * our own storage through `CheersPlayer` (downloaded during pre-flight and
+ * decoded before it is due), then the song segment plays through the Spotify
+ * Web Playback SDK (faded in/out via setVolume), and after each transition
+ * progress is persisted server-side for crash-safe resume.
  *
  * The single "Start the mix" click is the one user gesture that unlocks
- * both audio paths (player.activateElement() + a muted prime of the cheers
- * element) for the whole ~2 h run.
+ * both audio paths (player.activateElement() + CheersPlayer.prime()) for the
+ * whole ~2 h run.
+ *
+ * Timing is anchored to the wall clock, never counted in ticks: the SDK's
+ * `getCurrentState()` is a round trip that can only be polled sparsely, so
+ * the segment's position is extrapolated locally between polls and the fades
+ * interpolate on elapsed milliseconds. Counting fixed steps instead — the
+ * first version did — made every fade as long as its timers happened to take
+ * and let the cut point drift past the end of the segment.
  *
  * Hardening principles for the live run (a room of 50+ people is watching):
  *  - Transient trouble (network blip, dropped play command, stale token,
@@ -21,6 +28,13 @@
  *    hanging or chain-skipping songs — progress is persisted, so a reload
  *    picks up from the same song.
  */
+
+import {
+  CheersPlayer,
+  type CheersPlayback,
+  type CheersProgress,
+  type CheersTarget,
+} from "./cheers-player";
 
 export type PlaybackSegment = { startMs: number; endMs: number };
 
@@ -113,9 +127,18 @@ declare global {
 
 // --- Tuning -----------------------------------------------------------------
 
-const FADE_STEPS = 10;
-/** Position poll interval while a segment plays (bounds cut-point overshoot). */
+/**
+ * How often a fade writes a new volume. The ramp is anchored to the wall
+ * clock rather than counted in steps, so a slow `setVolume` round trip or a
+ * late timer skips ahead instead of stretching the fade past the cut point.
+ */
+const FADE_TICK_MS = 25;
+/** How often the local segment clock is checked against the cut point. */
+const CUT_TICK_MS = 25;
+/** How often the SDK is asked for state (a round trip — kept sparse). */
 const TICK_MS = 200;
+/** How often the now-playing progress bar is refreshed. */
+const PROGRESS_EMIT_MS = 100;
 /** How long we give Spotify to actually start a track before re-sending. */
 const START_TIMEOUT_MS = 10_000;
 /** The play command itself is occasionally dropped — one full re-send round. */
@@ -129,15 +152,18 @@ const STALL_LIMIT_MS = 15_000;
 const EXTERNAL_PAUSE_LIMIT_MS = 1_500;
 /** A wrong track that never becomes ours → the play command misfired. */
 const WRONG_TRACK_LIMIT_MS = 3_000;
-/** A cheers clip whose clock stops this long is treated as finished. */
-const CHEERS_STALL_LIMIT_MS = 10_000;
+/** How often the cheers loop checks for the clip ending / a control press. */
+const CHEERS_TICK_MS = 50;
+/**
+ * Longest the mix waits for a cheers clip pre-flight never finished
+ * downloading. Past it the clip streams from the network like it used to.
+ */
+const CHEERS_WAIT_BUDGET_MS = 2_000;
 /** Backoff schedule for token fetches and play commands (ms before try N). */
 const TOKEN_RETRY_DELAYS_MS = [0, 800, 2_000];
 const PLAY_RETRY_DELAYS_MS = [0, 600, 1_500];
 /** How long requestPlay waits for an SDK mid-reconnect before commanding it. */
 const DEVICE_READY_WAIT_MS = 10_000;
-/** Parallel downloads while pre-caching cheers clips during pre-flight. */
-const PREFETCH_CONCURRENCY = 4;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -167,6 +193,8 @@ export type EngineCallbacks = {
   /** Fire-and-forget server persistence; failures must not stop the party. */
   persistProgress: (songId: string, segmentNo: number) => void;
   clearProgress: () => void;
+  /** Pre-flight buffering of the cheers clips, for the checklist. */
+  onCheersProgress?: (progress: CheersProgress) => void;
 };
 
 export class PlaybackEngine {
@@ -181,11 +209,10 @@ export class PlaybackEngine {
   private player: SpotifyPlayer | null = null;
   private deviceId: string | null = null;
   private deviceReady = false;
-  private cheersAudio: HTMLAudioElement | null = null;
+  private cheers = new CheersPlayer();
+  private cheersPlayback: CheersPlayback | null = null;
   private apiToken: { value: string; expiresAt: number } | null = null;
   private apiTokenFetch: Promise<string> | null = null;
-  /** songId (or "default") → object URL of the pre-downloaded cheers clip. */
-  private cheersCache = new Map<string, string>();
 
   /** Current SDK volume level (0–1, pre-curve) so fades start where they are. */
   private level = 1;
@@ -193,6 +220,8 @@ export class PlaybackEngine {
   private skipRequested = false;
   private userPaused = false;
   private fatalError: string | null = null;
+  /** Bumped by every fadeTo so a superseded fade stops writing volumes. */
+  private fadeToken = 0;
 
   private state: EngineState = {
     phase: "idle",
@@ -237,10 +266,13 @@ export class PlaybackEngine {
    * before the host presses start.
    */
   async init(): Promise<{ ok: true } | { error: string }> {
-    // Pre-cache every cheers clip while the host reads the checklist, so
-    // mid-party cheers never depend on the network. Best-effort: anything
-    // not cached streams from the URL at play time like before.
-    void this.prefetchCheers();
+    // Download every cheers clip while the host reads the checklist, so no
+    // clip is ever streamed mid-party — a clip that stalls halfway through
+    // is a cheers cut off halfway through. Best-effort: anything that does
+    // not arrive streams from its URL at play time like before.
+    void this.cheers.prefetch(this.cheersTargets(), (progress) =>
+      this.callbacks.onCheersProgress?.(progress),
+    );
 
     try {
       await loadSdkScript();
@@ -305,31 +337,22 @@ export class PlaybackEngine {
     return { ok: true };
   }
 
-  private async prefetchCheers() {
-    const targets = [
+  /** The clip a song cheers with — its own, or the project's default. */
+  private cheersTarget(song: PlaybackSong): CheersTarget {
+    return song.hasCheers
+      ? { key: song.id, url: this.cheersUrl(song.id) }
+      : { key: "default", url: this.defaultCheersUrl };
+  }
+
+  /** Every distinct clip the mix will need, in the order it needs them. */
+  private cheersTargets(): CheersTarget[] {
+    const targets: CheersTarget[] = [
       { key: "default", url: this.defaultCheersUrl },
-      ...this.songs
-        .filter((s) => s.hasCheers)
-        .map((s) => ({ key: s.id, url: this.cheersUrl(s.id) })),
     ];
-    const worker = async () => {
-      for (;;) {
-        const target = targets.shift();
-        if (!target || this.stopped) return;
-        try {
-          const res = await fetch(target.url);
-          if (!res.ok) continue;
-          const blob = await res.blob();
-          if (this.stopped) return;
-          this.cheersCache.set(target.key, URL.createObjectURL(blob));
-        } catch {
-          // Leave it to stream from the network at play time.
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: PREFETCH_CONCURRENCY }, () => worker()),
-    );
+    for (const song of this.songs) {
+      if (song.hasCheers) targets.push(this.cheersTarget(song));
+    }
+    return targets;
   }
 
   /** The one user gesture. Runs the whole mix from songs[fromIndex]. */
@@ -338,25 +361,16 @@ export class PlaybackEngine {
     this.emit({ phase: "starting", songIndex: fromIndex });
 
     // Unlock both audio paths while we hold the gesture's activation. The
-    // cheers element's muted prime must begin synchronously, before any
-    // await, or strict autoplay policies (iOS above all) may treat later
-    // play() calls as un-gestured and reject every cheers clip.
-    const audio = new Audio();
-    this.cheersAudio = audio;
-    audio.src = this.cheersCache.get("default") ?? this.defaultCheersUrl;
-    audio.volume = 0;
-    const prime = audio.play().catch(() => {
-      // Priming is best-effort; the real play() below will surface errors.
-    });
+    // cheers prime must begin synchronously, before any await, or strict
+    // autoplay policies (iOS above all) may treat later playback as
+    // un-gestured and reject every cheers clip.
+    this.cheers.prime();
     try {
       await this.player.activateElement();
     } catch {
       // Older SDK builds lack activateElement — connect()'s audio setup
       // combined with the click is usually enough; let playback try.
     }
-    await prime;
-    audio.pause();
-    audio.volume = 1;
 
     try {
       await this.run(fromIndex);
@@ -379,8 +393,9 @@ export class PlaybackEngine {
         this.callbacks.persistProgress(song.id, s + 1);
         this.emit({ songIndex: i, segmentIndex: s });
 
-        // Cheers first — "skål!", sip, then the song drops.
-        const cheers = await this.playCheers(song);
+        // Cheers first — "skål!", sip, then the song drops. The clip after
+        // this one is decoded while this one plays and the segment runs.
+        const cheers = await this.playCheers(song, this.songs[i + 1]);
         if (this.stopped || this.fatalError) return;
         if (cheers === "skipped") break; // host pressed skip → next song
 
@@ -412,7 +427,7 @@ export class PlaybackEngine {
     this.userPaused = true;
     this.emit({ paused: true });
     if (this.state.phase === "segment") void this.player?.pause().catch(() => {});
-    if (this.state.phase === "cheers") this.cheersAudio?.pause();
+    if (this.state.phase === "cheers") this.cheersPlayback?.pause();
   }
 
   resume() {
@@ -420,7 +435,7 @@ export class PlaybackEngine {
     this.userPaused = false;
     this.emit({ paused: false });
     if (this.state.phase === "segment") void this.player?.resume().catch(() => {});
-    if (this.state.phase === "cheers") void this.cheersAudio?.play().catch(() => {});
+    if (this.state.phase === "cheers") this.cheersPlayback?.resume();
   }
 
   /** Jump past the rest of the current song, segments and cheers included. */
@@ -432,11 +447,11 @@ export class PlaybackEngine {
   /** Tear-down on unmount / leaving the page. */
   stop() {
     this.stopped = true;
-    this.cheersAudio?.pause();
+    this.cheersPlayback?.stop();
+    this.cheersPlayback = null;
+    this.cheers.destroy();
     void this.player?.pause().catch(() => {});
     this.player?.disconnect();
-    for (const url of this.cheersCache.values()) URL.revokeObjectURL(url);
-    this.cheersCache.clear();
   }
 
   private fail(message: string) {
@@ -596,16 +611,16 @@ export class PlaybackEngine {
       return "skipped";
     }
 
-    await this.setLevel(0);
+    await this.fadeTo(0, 0);
 
     // Ask Spotify to start the track. The command is occasionally accepted
     // but never acted on, so one silent full re-send round before giving up.
-    let started = false;
-    for (let round = 0; round < START_ROUNDS && !started; round++) {
+    let startPosition: number | null = null;
+    for (let round = 0; round < START_ROUNDS && startPosition === null; round++) {
       const requested = await this.requestPlay(trackUri, seg.startMs);
       if (requested === "fatal") return "failed";
       if (requested === "refused") return "failed";
-      started = await this.waitForTrackStart(trackUri);
+      startPosition = await this.waitForTrackStart(trackUri);
       if (this.stopped || this.fatalError) return "failed";
       if (this.skipRequested) {
         this.skipRequested = false;
@@ -613,9 +628,15 @@ export class PlaybackEngine {
         return "skipped";
       }
     }
-    if (!started) return "failed";
+    if (startPosition === null) return "failed";
 
-    await this.fadeTo(1, fadeIn);
+    // The track is audible from here, so the fade-in starts here — and the
+    // local clock is anchored on the same reading, so the cut point is
+    // measured from the moment sound actually began.
+    let anchorPosition = startPosition;
+    let anchorAt = performance.now();
+    let lastPollAt = anchorAt;
+    void this.fadeTo(1, fadeIn);
 
     // Watch the position until the cut point (minus the fade-out window).
     // `progressed` gates the "ended early" fallback below: even after
@@ -630,7 +651,12 @@ export class PlaybackEngine {
     let wrongTrackSince: number | null = null;
     let externallyPausedSince: number | null = null;
     let lastPosition = -1;
-    let lastMovementAt = Date.now();
+    let lastMovementAt = performance.now();
+    let lastProgressEmitAt = 0;
+
+    /** Where the track is right now, extrapolated from the last SDK reading. */
+    const estimatedPosition = (now: number) =>
+      anchorPosition < 0 ? null : anchorPosition + (now - anchorAt);
 
     while (true) {
       if (this.stopped) return "skipped";
@@ -643,13 +669,54 @@ export class PlaybackEngine {
       }
       if (this.userPaused) {
         nullSince = wrongTrackSince = externallyPausedSince = null;
-        lastMovementAt = Date.now(); // paused time is not a stall
+        // Paused time is neither a stall nor progress: drop the local clock
+        // and re-anchor from the first reading after the resume.
+        anchorPosition = -1;
+        lastPollAt = 0;
+        lastMovementAt = performance.now();
         await sleep(TICK_MS);
         continue;
       }
 
+      const now = performance.now();
+
+      // The cut point is checked against the local clock on every tick.
+      // Waiting for the next SDK poll instead would put the start of the
+      // fade-out up to a poll interval late — enough of the fade to land
+      // past the end of the segment, which is what made a configured fade
+      // sound like a hard cut.
+      const estimated = estimatedPosition(now);
+      if (estimated !== null) {
+        // The cut point is worth checking 40 times a second; the progress
+        // bar is not — re-rendering the now-playing screen that often is
+        // visible jank on a phone.
+        if (now - lastProgressEmitAt >= PROGRESS_EMIT_MS) {
+          lastProgressEmitAt = now;
+          this.emit({
+            segmentProgressMs: Math.max(
+              0,
+              Math.min(estimated - seg.startMs, segLen),
+            ),
+          });
+        }
+        if (estimated >= seg.endMs - fadeOut) break;
+      }
+
+      if (now - lastPollAt < TICK_MS) {
+        // Wake often near the cut point and lazily away from it: the
+        // fade-out has to start on time, but for the minute before it there
+        // is nothing to do between SDK polls.
+        const untilPoll = TICK_MS - (now - lastPollAt);
+        const untilCut =
+          estimated === null ? TICK_MS : seg.endMs - fadeOut - estimated;
+        await sleep(Math.max(CUT_TICK_MS, Math.min(untilPoll, untilCut)));
+        continue;
+      }
+      // Timestamp the reading before the round trip: the SDK's position is
+      // as of some moment during the call, so treating it as current on
+      // return would under-count elapsed time and cut late every poll.
+      lastPollAt = now;
       const state = await player.getCurrentState().catch(() => null);
-      const now = Date.now();
 
       if (!state) {
         // Our device is no longer the active one: Spotify Connect takeover
@@ -658,21 +725,20 @@ export class PlaybackEngine {
         // this segment, surface a resumable error instead of hanging in
         // silence forever.
         nullSince ??= now;
-        if (now - nullSince > NULL_STATE_LIMIT_MS) {
+        if (performance.now() - nullSince > NULL_STATE_LIMIT_MS) {
           if (reclaimed) {
             this.fail(this.messages.deviceLost);
             return "failed";
           }
           reclaimed = true;
           nullSince = null;
-          const back = await this.requestPlay(
-            trackUri,
-            seg.startMs + this.state.segmentProgressMs,
-          );
+          const resumeAt = seg.startMs + this.state.segmentProgressMs;
+          const back = await this.requestPlay(trackUri, resumeAt);
           if (back !== "ok") return "failed"; // fatal already set on "fatal"
-          await this.setLevel(1);
+          anchorPosition = resumeAt;
+          anchorAt = performance.now();
+          await this.fadeTo(1, 0);
         }
-        await sleep(TICK_MS);
         continue;
       }
       nullSince = null;
@@ -688,8 +754,9 @@ export class PlaybackEngine {
           return "completed";
         }
         wrongTrackSince ??= now;
-        if (now - wrongTrackSince > WRONG_TRACK_LIMIT_MS) return "failed";
-        await sleep(TICK_MS);
+        if (performance.now() - wrongTrackSince > WRONG_TRACK_LIMIT_MS) {
+          return "failed";
+        }
         continue;
       }
       wrongTrackSince = null;
@@ -702,19 +769,22 @@ export class PlaybackEngine {
         // sustained window so the host sees "paused" and can press resume,
         // instead of staring at a silently frozen progress bar.
         externallyPausedSince ??= now;
-        if (now - externallyPausedSince > EXTERNAL_PAUSE_LIMIT_MS && state.position > 0) {
+        if (
+          performance.now() - externallyPausedSince > EXTERNAL_PAUSE_LIMIT_MS &&
+          state.position > 0
+        ) {
           externallyPausedSince = null;
           this.userPaused = true;
           this.emit({ paused: true });
         }
-        await sleep(TICK_MS);
+        // The local clock must not run on while the audio does not.
+        anchorPosition = -1;
         continue;
       }
       externallyPausedSince = null;
 
-      this.emit({
-        segmentProgressMs: Math.max(0, Math.min(state.position - seg.startMs, segLen)),
-      });
+      anchorPosition = state.position;
+      anchorAt = now;
       if (state.position !== lastPosition) {
         lastPosition = state.position;
         lastMovementAt = now;
@@ -725,8 +795,6 @@ export class PlaybackEngine {
         return "failed";
       }
       if (state.position > seg.startMs) progressed = true;
-      if (state.position >= seg.endMs - fadeOut) break;
-      await sleep(TICK_MS);
     }
 
     await this.fadeTo(0, fadeOut);
@@ -734,54 +802,94 @@ export class PlaybackEngine {
     return "completed";
   }
 
-  private async waitForTrackStart(trackUri: string): Promise<boolean> {
-    const deadline = Date.now() + START_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      if (this.stopped || this.fatalError || this.skipRequested) return false;
+  /**
+   * Waits for our track to actually be playing, returning the position it
+   * was at — the anchor the segment's local clock and its fade-in are both
+   * measured from. Null when the track never started.
+   */
+  private async waitForTrackStart(trackUri: string): Promise<number | null> {
+    const deadline = performance.now() + START_TIMEOUT_MS;
+    while (performance.now() < deadline) {
+      if (this.stopped || this.fatalError || this.skipRequested) return null;
       const state = await this.player!.getCurrentState().catch(() => null);
       if (
         state &&
         !state.paused &&
         state.track_window.current_track?.uri === trackUri
       ) {
-        return true;
+        return state.position;
       }
-      await sleep(100);
+      // Tighter than the segment poll: every millisecond spent here is a
+      // millisecond of the fade-in the room hears as silence.
+      await sleep(50);
     }
-    return false;
+    return null;
   }
 
   /**
-   * Stepped setVolume fade with a squared curve (perceptually smoother than
-   * linear). ~10 steps over the fade window — the spike's zipper-noise
-   * criterion. A zero-length fade is a straight jump to the target level.
+   * setVolume ramp with a squared curve (perceptually smoother than linear),
+   * interpolated on elapsed wall-clock time rather than counted in steps.
+   *
+   * That distinction is the whole point. `setVolume` is a round trip to the
+   * SDK's iframe, and `setTimeout` only ever fires late, so a fade built as
+   * "N steps, sleep d/N between them" runs for however long its steps happen
+   * to take — reliably longer than the fade the curator configured, and long
+   * enough that a fade-out started at the cut point was still going when the
+   * segment was already meant to be over. Anchoring on the clock instead
+   * means a slow step skips ahead in the ramp rather than extending it, so
+   * the fade always lands where it was asked to.
+   *
+   * A zero-length fade is a straight jump — that is a curator asking for a
+   * hard cut. Starting a fade supersedes any fade still in flight, so a skip
+   * pressed mid-fade-in ducks out instead of fighting it.
    */
   private async fadeTo(target: number, durationMs: number) {
+    const token = ++this.fadeToken;
     const from = this.level;
-    if (from === target) return;
-    if (durationMs <= 0) {
+    if (durationMs <= 0 || from === target) {
       await this.setLevel(target);
       return;
     }
-    for (let step = 1; step <= FADE_STEPS; step++) {
-      if (this.stopped) return;
-      const l = from + ((target - from) * step) / FADE_STEPS;
-      await this.setLevel(l);
-      if (step < FADE_STEPS) await sleep(durationMs / FADE_STEPS);
+    const startedAt = performance.now();
+    for (;;) {
+      if (this.stopped || this.fadeToken !== token) return;
+      const progress = Math.min(
+        1,
+        (performance.now() - startedAt) / durationMs,
+      );
+      const level = from + (target - from) * progress;
+      if (progress >= 1) {
+        await this.setLevel(level);
+        return;
+      }
+      // Deliberately not awaited: the SDK round trip must not become part
+      // of the fade's length. Commands to one iframe stay ordered.
+      void this.setLevel(level);
+      await sleep(FADE_TICK_MS);
     }
   }
 
-  private async setLevel(level: number) {
-    this.level = level;
-    await this.player!.setVolume(level * level).catch(() => {});
+  private setLevel(level: number): Promise<void> {
+    const clamped = Math.max(0, Math.min(1, level));
+    this.level = clamped;
+    return (
+      this.player?.setVolume(clamped * clamped).catch(() => {}) ??
+      Promise.resolve()
+    );
   }
 
   // --- Cheers ---------------------------------------------------------------
 
-  private async playCheers(song: PlaybackSong): Promise<"completed" | "skipped"> {
-    const audio = this.cheersAudio;
-    if (!audio) return "completed";
-
+  /**
+   * Plays a song's cheers clip end to end. The clip is normally already
+   * downloaded and decoded, so this is a scheduled buffer with a known
+   * duration rather than a media element racing the network — the reason a
+   * cheers no longer gets cut off halfway through.
+   */
+  private async playCheers(
+    song: PlaybackSong,
+    nextSong: PlaybackSong | undefined,
+  ): Promise<"completed" | "skipped"> {
     if ((await this.holdWhilePaused()) === "abort") return "completed";
     if (this.skipRequested) {
       this.skipRequested = false;
@@ -789,46 +897,31 @@ export class PlaybackEngine {
     }
 
     this.emit({ phase: "cheers", usingDefaultCheers: !song.hasCheers });
-    const cacheKey = song.hasCheers ? song.id : "default";
-    audio.src =
-      this.cheersCache.get(cacheKey) ??
-      (song.hasCheers ? this.cheersUrl(song.id) : this.defaultCheersUrl);
+    const playback = await this.cheers.play(
+      this.cheersTarget(song),
+      CHEERS_WAIT_BUDGET_MS,
+    );
+    this.cheersPlayback = playback;
+    if (this.userPaused) playback.pause();
+    // Decode the next clip now: this cheers plus the segment behind it is a
+    // minute of slack, and decoding is the only work left before it plays.
+    if (nextSong) void this.cheers.warm(this.cheersTarget(nextSong));
 
-    let finished = false;
-    audio.onended = () => (finished = true);
-    audio.onerror = () => (finished = true); // a broken clip must not stall the mix
-    try {
-      await audio.play();
-    } catch {
-      return "completed";
-    }
+    const finish = (result: "completed" | "skipped") => {
+      playback.stop();
+      this.cheersPlayback = null;
+      return result;
+    };
 
-    // Watchdog: a clip whose download wedges (playback clock stuck) must
-    // not hang the party — treat it as finished and move on.
-    let lastTime = -1;
-    let lastMovementAt = Date.now();
-    while (!finished) {
-      if (this.stopped) return "skipped";
-      if (this.fatalError) {
-        audio.pause();
-        return "completed"; // run() bails right after
-      }
+    for (;;) {
+      if (this.stopped) return finish("skipped");
+      if (this.fatalError) return finish("completed"); // run() bails right after
       if (this.skipRequested) {
         this.skipRequested = false;
-        audio.pause();
-        return "skipped";
+        return finish("skipped");
       }
-      if (this.userPaused) {
-        lastMovementAt = Date.now();
-      } else if (audio.currentTime !== lastTime) {
-        lastTime = audio.currentTime;
-        lastMovementAt = Date.now();
-      } else if (Date.now() - lastMovementAt > CHEERS_STALL_LIMIT_MS) {
-        audio.pause();
-        return "completed";
-      }
-      await sleep(100);
+      if (!this.userPaused && playback.isFinished()) return finish("completed");
+      await sleep(CHEERS_TICK_MS);
     }
-    return "completed";
   }
 }

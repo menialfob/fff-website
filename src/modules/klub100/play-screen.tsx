@@ -20,6 +20,7 @@ import {
   type EngineState,
   type PlaybackSong,
 } from "./playback-engine";
+import type { CheersProgress } from "./cheers-player";
 import {
   clearPlaybackProgress,
   savePlaybackProgress,
@@ -61,6 +62,7 @@ export function PlayScreen(props: PlayScreenProps) {
     message?: string;
   }>({ status: "pending" });
   const [started, setStarted] = useState(false);
+  const [cheers, setCheers] = useState<CheersProgress | null>(null);
   const [engineState, setEngineState] = useState<EngineState | null>(null);
   const engineRef = useRef<PlaybackEngine | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -105,6 +107,7 @@ export function PlayScreen(props: PlayScreenProps) {
         clearProgress: () => {
           void clearPlaybackProgress(projectId).catch(() => {});
         },
+        onCheersProgress: setCheers,
       },
     });
     engineRef.current = engine;
@@ -160,6 +163,7 @@ export function PlayScreen(props: PlayScreenProps) {
         {...props}
         ios={ios}
         device={device}
+        cheers={cheers}
         resumeIndex={resumeIndex}
         onStart={start}
       />
@@ -186,11 +190,13 @@ function PreFlight({
   hasOwnDefaultCheers,
   ios,
   device,
+  cheers,
   resumeIndex,
   onStart,
 }: PlayScreenProps & {
   ios: boolean;
   device: { status: "pending" | "ready" | "failed"; message?: string };
+  cheers: CheersProgress | null;
   resumeIndex: number;
   onStart: (fromIndex: number) => void;
 }) {
@@ -257,6 +263,21 @@ function PreFlight({
           </>
         )}
       </Check>
+
+      {songs.length > 0 && (
+        <Check
+          ok={cheers !== null && cheers.loaded >= cheers.total}
+          warn
+          label={
+            cheers && cheers.loaded >= cheers.total
+              ? t.klub100.cheersBuffered
+              : fmt(t.klub100.cheersBuffering, {
+                  loaded: cheers?.loaded ?? 0,
+                  total: cheers?.total ?? songs.length,
+                })
+          }
+        />
+      )}
 
       <Check
         ok={spotify.connected && spotify.premium}

@@ -698,6 +698,8 @@ export const en: typeof da = {
     missingCheersOne: "1 song is missing cheers — the default will play",
     missingCheersMany:
       "{count} songs are missing cheers — the default will play",
+    cheersBuffering: "Buffering cheers recordings… {loaded}/{total}",
+    cheersBuffered: "Every cheers recording is buffered in the browser",
     spotifyNotConfigured:
       "Spotify isn't configured on the server (SPOTIFY_CLIENT_ID)",
     spotifyNotConnectedCheck: "Spotify account not connected",

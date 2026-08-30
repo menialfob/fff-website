@@ -705,6 +705,8 @@ export const da = {
     missingCheersOne: "1 sang mangler en skål — standarden bliver brugt",
     missingCheersMany:
       "{count} sange mangler en skål — standarden bliver brugt",
+    cheersBuffering: "Henter skål-optagelser… {loaded}/{total}",
+    cheersBuffered: "Alle skål-optagelser ligger klar i browseren",
     spotifyNotConfigured:
       "Spotify er ikke sat op på serveren (SPOTIFY_CLIENT_ID)",
     spotifyNotConnectedCheck: "Spotify-kontoen er ikke forbundet",
