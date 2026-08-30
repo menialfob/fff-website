@@ -149,8 +149,16 @@ const START_TIMEOUT_MS = 10_000;
 /** The play command itself is occasionally dropped — one full re-send round. */
 const START_ROUNDS = 2;
 const SDK_READY_TIMEOUT_MS = 15_000;
-/** Consecutive null SDK states before we treat the device as lost/taken over. */
+/** Consecutive null SDK states before we try to pull playback back. */
 const NULL_STATE_LIMIT_MS = 4_000;
+/**
+ * How many times one segment may reclaim playback before the device counts as
+ * gone for good. The SDK drops and reconnects on its own — most of all on
+ * iOS — so one blip should not end the party; but each reclaim costs seconds
+ * of silence, and standing in silence is its own way of ruining the evening,
+ * so the patience stops well short of a hang.
+ */
+const RECLAIM_ATTEMPTS = 2;
 /** No position movement while nominally playing → the stream is stuck. */
 const STALL_LIMIT_MS = 15_000;
 /** Sustained externally-paused readings before we mirror them into the UI. */
@@ -169,6 +177,8 @@ const TOKEN_RETRY_DELAYS_MS = [0, 800, 2_000];
 const PLAY_RETRY_DELAYS_MS = [0, 600, 1_500];
 /** How long requestPlay waits for an SDK mid-reconnect before commanding it. */
 const DEVICE_READY_WAIT_MS = 10_000;
+/** …and how long it waits once for a device Spotify has just 404'd on. */
+const DEVICE_RECONNECT_WAIT_MS = 5_000;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -560,6 +570,7 @@ export class PlaybackEngine {
     }
 
     let sawTransientOnly = true;
+    let waitedForDevice = false;
     for (let attempt = 0; attempt < PLAY_RETRY_DELAYS_MS.length; attempt++) {
       if (PLAY_RETRY_DELAYS_MS[attempt] > 0) await sleep(PLAY_RETRY_DELAYS_MS[attempt]);
       if (this.stopped || this.fatalError) return "fatal";
@@ -590,10 +601,22 @@ export class PlaybackEngine {
         continue;
       }
       if (res.status === 404) {
-        // "Device not found" — ours evaporated. Retry in case the SDK is
-        // mid-reconnect; if it stays gone this is systemic, not the song's
-        // fault.
-        if (attempt + 1 < PLAY_RETRY_DELAYS_MS.length) continue;
+        // "Device not found" — ours evaporated. Spotify will not know it
+        // again until the SDK reconnects and announces itself, so wait for
+        // that rather than firing the next attempt into the same void; if it
+        // stays gone this is systemic, not the song's fault.
+        if (attempt + 1 < PLAY_RETRY_DELAYS_MS.length) {
+          if (!waitedForDevice) {
+            waitedForDevice = true;
+            this.deviceReady = false;
+            const deadline = Date.now() + DEVICE_RECONNECT_WAIT_MS;
+            while (!this.deviceReady && Date.now() < deadline) {
+              if (this.stopped || this.fatalError) return "fatal";
+              await sleep(200);
+            }
+          }
+          continue;
+        }
         this.fail(this.messages.deviceLost);
         return "fatal";
       }
@@ -681,7 +704,7 @@ export class PlaybackEngine {
     // cheers — the intermittent skip hosts were seeing. Only trust it once we
     // have actually observed the track making progress.
     let progressed = false;
-    let reclaimed = false;
+    let reclaims = 0;
     let nullSince: number | null = null;
     let wrongTrackSince: number | null = null;
     let externallyPausedSince: number | null = null;
@@ -761,11 +784,11 @@ export class PlaybackEngine {
         // silence forever.
         nullSince ??= now;
         if (performance.now() - nullSince > NULL_STATE_LIMIT_MS) {
-          if (reclaimed) {
+          if (reclaims >= RECLAIM_ATTEMPTS) {
             this.fail(this.messages.deviceLost);
             return "failed";
           }
-          reclaimed = true;
+          reclaims++;
           nullSince = null;
           const resumeAt = seg.startMs + this.state.segmentProgressMs;
           const back = await this.requestPlay(trackUri, resumeAt);

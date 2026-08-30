@@ -24,6 +24,12 @@
  * Everything degrades: a browser without `AudioContext`, a codec Web Audio
  * cannot decode, or a clip the pre-flight never managed to fetch all fall back
  * to the old media-element path rather than losing the cheers entirely.
+ *
+ * The context is suspended the moment a clip ends and resumed just before the
+ * next one. Cheers and song never overlap, so nothing is lost by it — and on
+ * iOS, where an open `AudioContext` and the Spotify SDK's media element are
+ * two claims on one audio session, leaving ours open across a whole segment
+ * is a way to have the session taken off the player mid-song.
  */
 
 export type CheersTarget = { key: string; url: string };
@@ -179,6 +185,17 @@ export class CheersPlayer {
   }
 
   /**
+   * Hands the audio session back between clips. `play()` resumes the context
+   * again, and a resume that fails drops the clip to the element path rather
+   * than losing it.
+   */
+  private release(): void {
+    if (this.ctx?.state === "running") {
+      void this.ctx.suspend().catch(() => {});
+    }
+  }
+
+  /**
    * True when the context can actually play right now. A suspended context
    * accepts a scheduled buffer and simply never plays it, so a clip must
    * never be handed to one — that is a mix standing in silence, waiting for
@@ -321,6 +338,7 @@ export class CheersPlayer {
           // Already ended.
         }
         gain.disconnect();
+        this.release();
       },
     };
   }
