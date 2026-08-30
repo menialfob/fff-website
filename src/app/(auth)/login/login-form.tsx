@@ -5,7 +5,7 @@ import { useI18n } from "@/lib/i18n/client";
 import { btnPrimary, errorText, input, label } from "@/components/ui";
 import { authenticate } from "./actions";
 
-export function LoginForm() {
+export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
   const { t } = useI18n();
   const [errorMessage, formAction, isPending] = useActionState(
     authenticate,
@@ -14,6 +14,7 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="space-y-4">
+      <input type="hidden" name="callbackUrl" value={callbackUrl} />
       <div>
         <label htmlFor="email" className={label}>
           {t.login.email}

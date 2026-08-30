@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
+import { safeCallbackPath } from "@/lib/callback-url";
 import type { ExtraRole } from "@/lib/roles";
 
 /**
@@ -21,7 +22,13 @@ export const authConfig = {
       const isLoggedIn = !!auth?.user;
       const isOnLogin = nextUrl.pathname.startsWith("/login");
       if (isOnLogin) {
-        if (isLoggedIn) return Response.redirect(new URL("/", nextUrl));
+        // Follow the deep link the member was after rather than dropping them
+        // on the dashboard — this is the same `callbackUrl` NextAuth parks
+        // here when it bounces an unauthenticated request below.
+        if (isLoggedIn) {
+          const target = safeCallbackPath(nextUrl.searchParams.get("callbackUrl"));
+          return Response.redirect(new URL(target, nextUrl));
+        }
         return true;
       }
       return isLoggedIn;
