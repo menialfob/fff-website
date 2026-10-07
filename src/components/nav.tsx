@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { fmt } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/client";
-import { moduleAccents } from "@/components/ui";
+import { CountBadge, moduleAccents } from "@/components/ui";
+import { useBadgeCounts } from "@/modules/notifications/app-badge";
+import type { ModuleBadgeCounts } from "@/lib/badge";
 import {
   CalendarIcon,
   ChatBubblesIcon,
@@ -39,6 +42,11 @@ const navIcons: Record<NavItem["id"], (p: { className?: string }) => React.React
   admin: ShieldIcon,
 };
 
+/** The home screen isn't a module, so it carries no badge of its own. */
+function badgeCount(badges: ModuleBadgeCounts, id: NavItem["id"]): number {
+  return id === "dashboard" ? 0 : (badges[id] ?? 0);
+}
+
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
@@ -47,6 +55,7 @@ function isActive(pathname: string, href: string): boolean {
 export function DesktopNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const badges = useBadgeCounts();
 
   return (
     <div className="hidden items-center gap-1 md:flex">
@@ -65,6 +74,14 @@ export function DesktopNav({ items }: { items: NavItem[] }) {
           >
             <Icon className="h-4 w-4" />
             {t.modules[item.id].label}
+            <CountBadge
+              count={badgeCount(badges, item.id)}
+              accent={moduleAccents[item.id]}
+              label={fmt(t.dashboard.recentActivity.badge, {
+                count: badgeCount(badges, item.id),
+              })}
+              className="h-5 min-w-5 px-1 text-[11px]"
+            />
           </Link>
         );
       })}
@@ -76,6 +93,7 @@ export function DesktopNav({ items }: { items: NavItem[] }) {
 export function MobileTabBar({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const badges = useBadgeCounts();
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-canvas pb-[env(safe-area-inset-bottom)] md:hidden">
@@ -91,7 +109,17 @@ export function MobileTabBar({ items }: { items: NavItem[] }) {
                 active ? moduleAccents[item.id].text : "text-zinc-500"
               }`}
             >
-              <Icon className="h-5 w-5" />
+              <span className="relative">
+                <Icon className="h-5 w-5" />
+                <CountBadge
+                  count={badgeCount(badges, item.id)}
+                  accent={moduleAccents[item.id]}
+                  label={fmt(t.dashboard.recentActivity.badge, {
+                    count: badgeCount(badges, item.id),
+                  })}
+                  className="absolute -right-3 -top-2 h-[18px] min-w-[18px] px-1 text-[10px] ring-2 ring-canvas"
+                />
+              </span>
               <span className="truncate">{t.modules[item.id].label}</span>
             </Link>
           );
