@@ -142,3 +142,38 @@ export function Brand({ className = "" }: { className?: string }) {
     </span>
   );
 }
+
+/* --- unread badges --------------------------------------------------------- */
+
+/** Two digits max, so a long-absent member's badge can't stretch its host. */
+export const BADGE_MAX = 99;
+
+export function badgeText(count: number): string {
+  return count > BADGE_MAX ? `${BADGE_MAX}+` : String(count);
+}
+
+/**
+ * The numbered bubble for a module's unread count — on the home screen cards
+ * and in the navigation. Tinted with the module's accent gradient.
+ */
+export function CountBadge({
+  count,
+  accent,
+  label,
+  className = "",
+}: {
+  count: number;
+  accent: ModuleAccent;
+  label: string;
+  className?: string;
+}) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={`flex items-center justify-center rounded-full bg-gradient-to-r ${accent.gradient} font-bold text-zinc-950 shadow-lg ${className}`}
+      aria-label={label}
+    >
+      {badgeText(count)}
+    </span>
+  );
+}

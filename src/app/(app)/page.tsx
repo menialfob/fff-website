@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { modulesForUser, type ModuleId } from "@/modules/registry";
 import { fmt, formatDate } from "@/lib/i18n";
 import { getDict, getLocale } from "@/lib/i18n/server";
-import { cardHover, listCard, moduleAccents } from "@/components/ui";
+import { CountBadge, cardHover, listCard, moduleAccents } from "@/components/ui";
 import {
   getRecentActivity,
   type ActivityItem,
@@ -38,9 +38,6 @@ const sectionIcons: Record<Section, (p: { className?: string }) => React.ReactNo
   members: UsersIcon,
 };
 
-/** Two digits max, so a long-absent member's badge can't stretch the card. */
-const BADGE_MAX = 99;
-
 export default async function DashboardPage() {
   const session = await auth();
   const role = session?.user?.role ?? "MEMBER";
@@ -67,14 +64,12 @@ export default async function DashboardPage() {
           const count = badges[m.id] ?? 0;
           return (
             <Link key={m.id} href={m.href} className={`${cardHover} group relative p-5`}>
-              {count > 0 && (
-                <span
-                  className={`absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-gradient-to-r ${accent.gradient} px-1.5 text-xs font-bold text-zinc-950 shadow-lg`}
-                  aria-label={fmt(t.dashboard.recentActivity.badge, { count })}
-                >
-                  {count > BADGE_MAX ? `${BADGE_MAX}+` : count}
-                </span>
-              )}
+              <CountBadge
+                count={count}
+                accent={accent}
+                label={fmt(t.dashboard.recentActivity.badge, { count })}
+                className="absolute right-3 top-3 h-6 min-w-6 px-1.5 text-xs"
+              />
               <span
                 className={`mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${accent.gradient} text-white shadow-lg transition group-hover:scale-105`}
               >

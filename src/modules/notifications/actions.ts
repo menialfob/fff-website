@@ -1,7 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/auth";
-import { getBadgeCount } from "@/lib/badge";
+import { getModuleBadgeCounts, type ModuleBadgeCounts } from "@/lib/badge";
 import { prisma } from "@/lib/db";
 import { getDict } from "@/lib/i18n/server";
 import { sendPushToUsers } from "@/lib/push";
@@ -84,13 +84,14 @@ export async function sendTestNotification(): Promise<ActionResult> {
 }
 
 /**
- * How many things are pending for the current member, for the app-icon badge
- * (see `<AppBadge />`). Read-only, so it returns the number itself instead of
- * the usual `{ ok, error }` action result.
+ * What is pending for the current member, per module — for the navigation
+ * badges and (summed) the app-icon badge (see `<BadgeProvider />`). Read-only,
+ * so it returns the counts themselves instead of the usual `{ ok, error }`
+ * action result.
  */
-export async function getPendingCount(): Promise<number> {
+export async function getPendingCounts(): Promise<ModuleBadgeCounts> {
   const session = await requireSession();
-  return getBadgeCount(session.user.id);
+  return getModuleBadgeCounts(session.user.id);
 }
 
 /**
