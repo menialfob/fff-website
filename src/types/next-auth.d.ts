@@ -16,10 +16,13 @@ declare module "next-auth" {
   }
 }
 
-declare module "next-auth/jwt" {
+// next-auth/jwt only re-exports JWT; the interface lives (and merges) here.
+declare module "@auth/core/jwt" {
   interface JWT {
     id?: string;
     role?: "ADMIN" | "MEMBER";
     extraRoles?: ExtraRole[];
+    /** Epoch ms of the last check against the user row (see auth.ts). */
+    checkedAt?: number;
   }
 }

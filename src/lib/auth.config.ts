@@ -2,8 +2,9 @@ import type { NextAuthConfig } from "next-auth";
 import type { ExtraRole } from "@/lib/roles";
 
 /**
- * Edge-safe auth config (no database imports) shared between the middleware
- * and the full NextAuth setup in auth.ts.
+ * Database-free part of the auth config: pages, session lifetime and the
+ * route/session callbacks. auth.ts adds the Credentials provider and the
+ * database-backed `jwt` callback that keeps the token in step with the user row.
  */
 export const authConfig = {
   pages: {
@@ -11,10 +12,11 @@ export const authConfig = {
   },
   session: {
     strategy: "jwt",
-    // Role and deactivation changes only take effect when the JWT is
-    // re-minted at login — a modest lifetime caps how long a stale token
-    // (e.g. of a deactivated user) keeps working.
-    maxAge: 7 * 24 * 60 * 60,
+    // Sliding: the middleware re-issues the cookie on every request, so this is
+    // how long a member may stay away before having to log in again. It no
+    // longer bounds stale access — role and deactivation changes reach the
+    // token within REVALIDATE_MS (auth.ts) whatever its age.
+    maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
@@ -25,14 +27,6 @@ export const authConfig = {
         return true;
       }
       return isLoggedIn;
-    },
-    jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = user.role;
-        token.extraRoles = user.extraRoles;
-      }
-      return token;
     },
     session({ session, token }) {
       if (token.id) session.user.id = token.id as string;
