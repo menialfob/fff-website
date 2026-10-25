@@ -30,13 +30,22 @@ There is no test suite yet. Verify changes with `npm run lint`,
 
 ## Architecture
 
-**Auth is split across two files** because Prisma cannot run in edge
-middleware: `src/lib/auth.config.ts` is the edge-safe config (route
-authorization, JWT/session callbacks) used by `src/middleware.ts`;
-`src/lib/auth.ts` adds the Credentials provider (bcrypt + Prisma) and exports
-`auth`, `signIn`, `signOut`, plus the `requireSession()` / `requireAdmin()`
-guards used in server actions. The middleware protects **everything** except
-`/login`, `/api/auth`, and static assets — new pages are private by default.
+**Auth is split across two files**: `src/lib/auth.config.ts` holds the
+database-free config (pages, session lifetime, route authorization, session
+callback); `src/lib/auth.ts` adds the Credentials provider (bcrypt + Prisma)
+and the database-backed `jwt` callback, and exports `auth`, `signIn`,
+`signOut`, plus the `requireSession()` / `requireAdmin()` guards used in server
+actions. The middleware protects **everything** except `/login`, `/api/auth`,
+and static assets — new pages are private by default.
+
+Sessions are JWTs with a **30-day sliding** lifetime: the middleware re-issues
+the cookie on every request, so members are only logged out after a month away.
+Because tokens live that long, the `jwt` callback re-reads the user row at most
+every 60 s (`REVALIDATE_MS`) — a deactivated user's cookie is cleared and a
+role or name change reaches the session without a re-login. That is why
+`src/middleware.ts` runs on the **Node runtime** (`runtime: "nodejs"`) rather
+than the edge: it needs Prisma, and it is the only place the refreshed or
+cleared cookie can be written back (server components cannot set cookies).
 
 **Modular features.** Each feature lives in `src/modules/<id>/` (server
 actions, client components) with its pages in `src/app/(app)/<id>/` and an

@@ -12,8 +12,57 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
+// How often a session re-reads its user row. Sessions are long-lived, so this
+// — not the session lifetime — is what bounds how long a deactivated member
+// keeps access or a role change takes to arrive.
+const REVALIDATE_MS = 60 * 1000;
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+        token.extraRoles = user.extraRoles;
+        token.checkedAt = Date.now();
+        return token;
+      }
+      if (!token.id || Date.now() - (token.checkedAt ?? 0) < REVALIDATE_MS) {
+        return token;
+      }
+
+      let current;
+      try {
+        current = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: {
+            name: true,
+            email: true,
+            role: true,
+            isActive: true,
+            extraRoles: { select: { role: true } },
+          },
+        });
+      } catch (error) {
+        // Auth.js deletes the cookie when this callback throws — a database
+        // hiccup must not log everyone out, so keep the token and retry on the
+        // next request.
+        console.error("Session revalidation failed", error);
+        return token;
+      }
+      // Returning null clears the session cookie.
+      if (!current || !current.isActive) return null;
+
+      token.name = current.name;
+      token.email = current.email;
+      token.role = current.role;
+      token.extraRoles = current.extraRoles.map((r) => r.role);
+      token.checkedAt = Date.now();
+      return token;
+    },
+  },
   providers: [
     Credentials({
       credentials: {
